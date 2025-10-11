@@ -20,18 +20,26 @@ class HomeController extends GetxController
   RxBool isGetFirstTime = false.obs;
   RxList<cate.Category> categoriesList = <cate.Category>[].obs;
   RxBool isLoadingCategories = false.obs;
-  
+
   // تخزين التصنيفات الفرعية لكل تصنيف رئيسي
   final RxMap<int, List<SubcategoryLevelOne>> subCategoriesMap = <int, List<SubcategoryLevelOne>>{}.obs;
-  
+
   // تتبع حالة التحميل لكل تصنيف
   final RxMap<int, bool> isLoadingSubcategoriesMap = <int, bool>{}.obs;
+
+  RxList<SubcategoryLevelOne> subCategories = <SubcategoryLevelOne>[].obs;
+  RxBool isLoadingSubcategoryLevelOne = false.obs;
+
+  // التخزين الجديد للتصنيفات الفرعية من المستوى الثاني
+  final RxMap<int, List<SubcategoryLevelTwo>> subCategoriesLevelTwoMap = <int, List<SubcategoryLevelTwo>>{}.obs;
+  final RxMap<int, bool> isLoadingSubcategoriesLevelTwoMap = <int, bool>{}.obs;
   
   RxList<SubcategoryLevelTwo> subCategoriesLevelTwo = <SubcategoryLevelTwo>[].obs;
   RxBool isLoadingSubcategoryLevelTwo = false.obs;
+  
   RxList<Attribute> attributes = <Attribute>[].obs;
   RxBool isLoadingAttributes = false.obs;
-  
+
   Rx<String?> nameOfMainCate = Rx<String?>(null);
   Rx<int?> idOfMainCate = Rx<int?>(null);
   Rx<String?> nameOfSubCate = Rx<String?>(null);
@@ -42,11 +50,26 @@ class HomeController extends GetxController
   // تخزين مؤقت للتصنيفات الرئيسية
   final RxMap<int, cate.Category> _categoriesCache = <int, cate.Category>{}.obs;
 
+  // ================= caching & period tracking ================
+  final Map<int, String> lastAdsPeriodForCategory = {};
+  final Map<int, String> lastAdsPeriodForSubOne = {};
+  final Map<int, String> lastAdsPeriodForSubTwo = {};
+
+  var currentAdsPeriod = ''.obs;
+
+  // تتبع الحالة الحالية
+  Rx<int?> currentCategoryId = Rx<int?>(null);
+  Rx<int?> currentSubCategoryId = Rx<int?>(null);
+
+  final String _baseUrl = "https://stayinme.arabiagroup.net/lar_stayInMe/public/api";
+
   @override
   void onInit() {
     super.onInit();
-    fetchCategories(Get.find<ChangeLanguageController>().currentLocale.value.languageCode);
-    isGetFirstTime.value = true;
+    if (!isGetFirstTime.value) {
+      fetchCategories(Get.find<ChangeLanguageController>().currentLocale.value.languageCode);
+      isGetFirstTime.value = true;
+    }
   }
 
   void clearDeif() {
@@ -58,40 +81,68 @@ class HomeController extends GetxController
     idOFSubTwo.value = null;
   }
 
-  // ==================== [واجهة API] ====================
-  final String _baseUrl = "https://stayinme.arabiagroup.net/lar_stayInMe/public/api";
+  // ==================== [الدوال الجديدة المطلوبة] ====================
 
+  void clearCategoryData(int categoryId) {
+    subCategoriesMap.remove(categoryId);
+    lastAdsPeriodForCategory.remove(categoryId);
+    isLoadingSubcategoriesMap.remove(categoryId);
+  }
 
-  // ==================== [دوال جلب البيانات] ====================
-  Future<void> fetchCategories(String language) async {
+  void clearSubCategoryData(int subCategoryId) {
+    subCategoriesLevelTwoMap.remove(subCategoryId);
+    lastAdsPeriodForSubOne.remove(subCategoryId);
+    isLoadingSubcategoriesLevelTwoMap.remove(subCategoryId);
+    subCategoriesLevelTwo.clear();
+  }
+
+  // الدوال الجديدة التي تستدعيها الواجهة
+  bool isSubCategoriesLevelTwoLoading(int subCategoryId) {
+    return isLoadingSubcategoriesLevelTwoMap[subCategoryId] ?? false;
+  }
+
+  List<SubcategoryLevelTwo> getSubCategoriesLevelTwoForSubCategory(int subCategoryId) {
+    return subCategoriesLevelTwoMap[subCategoryId] ?? [];
+  }
+
+  int getSubCategoriesLevelTwoCountForSubCategory(int subCategoryId) {
+    final list = getSubCategoriesLevelTwoForSubCategory(subCategoryId);
+    return list.fold(0, (sum, subCategory) => sum + subCategory.adsCount);
+  }
+
+  // ==================== [دوال جلب البيانات المعدلة] ====================
+
+  Future<void> fetchCategories(String language, {String? adsPeriod}) async {
     categoriesList.clear();
     isLoadingCategories.value = true;
+    currentAdsPeriod.value = adsPeriod ?? '';
 
     try {
-      final response = await http.get(Uri.parse(
-        '$_baseUrl/categories/$language'
-      ));
+      Uri uri = Uri.parse('$_baseUrl/categories/$language');
+
+      if (adsPeriod != null && adsPeriod.isNotEmpty) {
+        uri = uri.replace(queryParameters: {'ads_period': adsPeriod});
+      }
+
+      final response = await http.get(uri);
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> jsonResponse = json.decode(response.body);
-        
+
         if (jsonResponse['status'] == 'success') {
           final List<dynamic> data = jsonResponse['data'] as List<dynamic>;
           categoriesList.value = data
-              .map((category) =>cate. Category.fromJson(category as Map<String, dynamic>))
+              .map((category) => cate.Category.fromJson(category as Map<String, dynamic>))
               .toList();
 
-          // تحديث الذاكرة المؤقتة
           for (var category in categoriesList) {
             _categoriesCache[category.id] = category;
           }
-          
-          // فتح جميع التصنيفات تلقائياً عند جلب البيانات
+
           expandedCategoryIds.value = categoriesList.map((c) => c.id).toList();
-          
-          // جلب التصنيفات الفرعية لجميع التصنيفات الرئيسية
+
           for (final category in categoriesList) {
-            fetchSubcategories(category.id, Get.find<ChangeLanguageController>().currentLocale.value.languageCode);
+            fetchSubcategories(category.id, Get.find<ChangeLanguageController>().currentLocale.value.languageCode, adsPeriod: adsPeriod);
           }
         } else {
           print("Success false: ${jsonResponse['message']}");
@@ -99,45 +150,70 @@ class HomeController extends GetxController
       } else {
         print("Error ${response.statusCode}: ${response.body}");
       }
-    } catch (e) {
-      print("Error fetching categories: $e");
+    } catch (e, st) {
+      print("Error fetching categories: $e\n$st");
     } finally {
       isLoadingCategories.value = false;
     }
   }
 
-  RxList<SubcategoryLevelOne> subCategories = <SubcategoryLevelOne>[].obs;
-  RxBool isLoadingSubcategoryLevelOne = false.obs;
+  Future<void> fetchSubcategories(int categoryId, String language, {String? adsPeriod, bool force = false}) async {
+    final String period = adsPeriod ?? '';
 
-  Future<void> fetchSubcategories(int categoryId, String language) async {
+    final bool needsRefresh = force ||
+        currentCategoryId.value != categoryId ||
+        lastAdsPeriodForCategory[categoryId] != period ||
+        !subCategoriesMap.containsKey(categoryId) ||
+        subCategoriesMap[categoryId]?.isEmpty == true;
+
+    if (!needsRefresh && subCategoriesMap.containsKey(categoryId)) {
+      subCategories.value = subCategoriesMap[categoryId]!;
+      return;
+    }
+
+    currentCategoryId.value = categoryId;
+    lastAdsPeriodForCategory[categoryId] = period;
+    currentAdsPeriod.value = period;
+
     isLoadingSubcategoriesMap[categoryId] = true;
     isLoadingSubcategoryLevelOne.value = true;
 
     try {
-      final response = await http.get(Uri.parse(
-        '$_baseUrl/subcategories?category_id=$categoryId&language=$language',
-      ));
+      Map<String, String> queryParams = {
+        'category_id': categoryId.toString(),
+        'language': language,
+      };
+
+      if (period.isNotEmpty) {
+        queryParams['ads_period'] = period;
+      }
+
+      final uri = Uri.parse('$_baseUrl/subcategories').replace(queryParameters: queryParams);
+      final response = await http.get(uri);
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> jsonMap = json.decode(response.body);
 
         if (jsonMap['success'] == true) {
           final List<dynamic> list = jsonMap['data'] as List<dynamic>;
-          subCategoriesMap[categoryId] = list
-              .map((e) => SubcategoryLevelOne.fromJson(e as Map<String, dynamic>))
-              .toList();
+          final fetched = list.map((e) => SubcategoryLevelOne.fromJson(e as Map<String, dynamic>)).toList();
 
-          subCategories.value = list
-              .map((e) => SubcategoryLevelOne.fromJson(e as Map<String, dynamic>))
-              .toList();
+          subCategoriesMap[categoryId] = fetched;
+          subCategories.value = fetched;
         } else {
           subCategoriesMap[categoryId] = [];
+          subCategories.value = [];
         }
       } else {
-        print('Error ${response.statusCode}');
+        print('Error ${response.statusCode} when fetching subcategories for category $categoryId');
+        subCategoriesMap[categoryId] = [];
+        subCategories.value = [];
       }
-    } catch (e) {
-      print('Exception fetchSubcategories: $e');
+    } catch (e, st) {
+      print('Exception fetchSubcategories($categoryId): $e\n$st');
+      lastAdsPeriodForCategory.remove(categoryId);
+      subCategoriesMap[categoryId] = [];
+      subCategories.value = [];
     } finally {
       isLoadingSubcategoriesMap[categoryId] = false;
       isLoadingSubcategoryLevelOne.value = false;
@@ -145,86 +221,131 @@ class HomeController extends GetxController
     }
   }
 
-  Future<void> fetchSubcategoriesLevelTwo(int Theid, String language) async {
-    subCategoriesLevelTwo.clear();
+  Future<void> fetchSubcategoriesLevelTwo(int subOneId, String language, {String? adsPeriod, bool force = false}) async {
+    final String period = adsPeriod ?? '';
+
+    final bool needsRefresh = force ||
+        currentSubCategoryId.value != subOneId ||
+        lastAdsPeriodForSubOne[subOneId] != period ||
+        !subCategoriesLevelTwoMap.containsKey(subOneId) ||
+        subCategoriesLevelTwoMap[subOneId]?.isEmpty == true;
+
+    if (!needsRefresh && subCategoriesLevelTwoMap.containsKey(subOneId)) {
+      subCategoriesLevelTwo.value = subCategoriesLevelTwoMap[subOneId]!;
+      return;
+    }
+
+    currentSubCategoryId.value = subOneId;
+    lastAdsPeriodForSubOne[subOneId] = period;
+    currentAdsPeriod.value = period;
+
+    isLoadingSubcategoriesLevelTwoMap[subOneId] = true;
     isLoadingSubcategoryLevelTwo.value = true;
 
     try {
-      final response = await http.get(Uri.parse(
-        '$_baseUrl/subcategories-level-two?sub_category_level_one_id=$Theid&language=${Get.find<ChangeLanguageController>().currentLocale.value.languageCode}',
-      ));
+      Map<String, String> queryParams = {
+        'sub_category_level_one_id': subOneId.toString(),
+        'language': language,
+      };
+
+      if (period.isNotEmpty) {
+        queryParams['ads_period'] = period;
+      }
+
+      final uri = Uri.parse('$_baseUrl/subcategories-level-two').replace(queryParameters: queryParams);
+      final response = await http.get(uri);
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> jsonMap = json.decode(response.body);
 
         if (jsonMap['success'] == true) {
           final List<dynamic> list = jsonMap['data'] as List<dynamic>;
-          subCategoriesLevelTwo.value = list
-              .map((e) => SubcategoryLevelTwo.fromJson(e as Map<String, dynamic>))
-              .toList();
+          final fetched = list.map((e) => SubcategoryLevelTwo.fromJson(e as Map<String, dynamic>)).toList();
+
+          subCategoriesLevelTwoMap[subOneId] = fetched;
+          subCategoriesLevelTwo.value = fetched;
         } else {
+          subCategoriesLevelTwoMap[subOneId] = [];
           subCategoriesLevelTwo.clear();
         }
       } else {
-        print('Error ${response.statusCode}');
+        print('Error ${response.statusCode} when fetching subcategories level two for subOne $subOneId');
+        subCategoriesLevelTwoMap[subOneId] = [];
+        subCategoriesLevelTwo.clear();
       }
-    } catch (e) {
-      print('Exception fetchSubcategoriesLevelTwo: $e');
+    } catch (e, st) {
+      print('Exception fetchSubcategoriesLevelTwo($subOneId): $e\n$st');
+      lastAdsPeriodForSubOne.remove(subOneId);
+      subCategoriesLevelTwoMap[subOneId] = [];
+      subCategoriesLevelTwo.clear();
     } finally {
+      isLoadingSubcategoriesLevelTwoMap[subOneId] = false;
       isLoadingSubcategoryLevelTwo.value = false;
+      subCategoriesLevelTwoMap.refresh();
     }
   }
 
-  // دالة آمنة للحصول على التصنيف الرئيسي
+  // ==================== [الدوال المساعدة الموجودة] ====================
+
+  List<SubcategoryLevelOne> getSubCategoriesForCategory(int categoryId) {
+    return subCategoriesMap[categoryId] ?? [];
+  }
+
+  bool isSubCategoriesLoading(int categoryId) {
+    return isLoadingSubcategoriesMap[categoryId] ?? false;
+  }
+
+  int getSubCategoriesCountForCategory(int categoryId) {
+    final list = getSubCategoriesForCategory(categoryId);
+    return list.fold(0, (sum, subCategory) => sum + subCategory.adsCount);
+  }
+
+  // ==================== [بقية الدوال الموجودة] ====================
+
   Future<cate.Category> getMainCategory(int categoryId) async {
-    // التحقق من وجود التصنيف في الذاكرة المؤقتة
     if (_categoriesCache.containsKey(categoryId)) {
       return _categoriesCache[categoryId]!;
     }
-    
-    // إذا لم يتم تحميل التصنيفات بعد
+
     if (categoriesList.isEmpty) {
       await fetchCategories(Get.find<ChangeLanguageController>().currentLocale.value.languageCode);
     }
-    
-    // البحث في القائمة بعد التحميل
+
     final category = categoriesList.firstWhere(
       (c) => c.id == categoryId,
       orElse: () => cate.Category(
-        id: 0,
-        translations: [ cate.Translation(name: "Unknown",language: 'ar',id: 0,description: '',categoryId: 0)],
-        adsCount: 0,
-        image: "",
-        slug: '',
-        date: ''
-      ),
+          id: 0,
+          translations: [
+            cate.Translation(name: "Unknown", language: 'ar', id: 0, description: '', categoryId: 0)
+          ],
+          adsCount: 0,
+          image: "",
+          slug: '',
+          date: ''),
     );
-    
-    // تخزين في الذاكرة المؤقتة
+
     _categoriesCache[categoryId] = category;
     return category;
   }
 
-  // ==================== [دوال التحكم في التصنيفات] ====================
   bool isCategoryExpanded(int categoryId) {
     return expandedCategoryIds.contains(categoryId);
   }
-  
+
   void toggleCategory(int categoryId) {
     if (expandedCategoryIds.contains(categoryId)) {
       expandedCategoryIds.remove(categoryId);
     } else {
       expandedCategoryIds.add(categoryId);
-      
+
       if (!subCategoriesMap.containsKey(categoryId)) {
         fetchSubcategories(
-          categoryId,
-          Get.find<ChangeLanguageController>().currentLocale.value.languageCode
-        );
+            categoryId, Get.find<ChangeLanguageController>().currentLocale.value.languageCode,
+            adsPeriod: currentAdsPeriod.value);
       }
     }
   }
-  
+
   bool isSubCategoryExpanded(int subCategoryId) {
     return expandedSubCategoryIds.contains(subCategoryId);
   }
@@ -237,24 +358,21 @@ class HomeController extends GetxController
     }
   }
 
-  // ==================== [الدوال الجانبية] ====================
   final RxList<SubcategoryLevelOne> sidebarSubcategories = <SubcategoryLevelOne>[].obs;
   final RxBool isLoadingSidebar = false.obs;
 
   Future<void> fetchSidebarCategories(String language) async {
     isLoadingSidebar.value = true;
     try {
-      final response = await http.get(Uri.parse(
-        '$_baseUrl/categories/$language'
-      ));
+      final response = await http.get(Uri.parse('$_baseUrl/categories/$language'));
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> jsonResponse = json.decode(response.body);
-        
+
         if (jsonResponse['status'] == 'success') {
           final List<dynamic> data = jsonResponse['data'] as List<dynamic>;
           categoriesList.value = data
-              .map((category) =>cate. Category.fromJson(category as Map<String, dynamic>))
+              .map((category) => cate.Category.fromJson(category as Map<String, dynamic>))
               .toList();
         } else {
           print("Success false: ${jsonResponse['message']}");
@@ -262,8 +380,8 @@ class HomeController extends GetxController
       } else {
         print("Error ${response.statusCode}: ${response.body}");
       }
-    } catch (e) {
-      print("Error fetching sidebar categories: $e");
+    } catch (e, st) {
+      print("Error fetching sidebar categories: $e\n$st");
     } finally {
       isLoadingSidebar.value = false;
     }
@@ -272,9 +390,7 @@ class HomeController extends GetxController
   Future<void> fetchSidebarSubcategories(int categoryId, String language) async {
     sidebarSubcategories.clear();
     try {
-      final response = await http.get(Uri.parse(
-        '$_baseUrl/subcategories?category_id=$categoryId&language=$language',
-      ));
+      final response = await http.get(Uri.parse('$_baseUrl/subcategories?category_id=$categoryId&language=$language'));
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> jsonMap = json.decode(response.body);
@@ -286,8 +402,8 @@ class HomeController extends GetxController
               .toList();
         }
       }
-    } catch (e) {
-      print('Exception fetchSidebarSubcategories: $e');
+    } catch (e, st) {
+      print('Exception fetchSidebarSubcategories: $e\n$st');
     }
   }
 
@@ -295,5 +411,62 @@ class HomeController extends GetxController
 
   void toggleDrawerType(bool isServices) {
     isServicesOrSettings.value = isServices;
+  }
+
+  Future<void> fetchAttributes(int categoryId, String language) async {
+    attributes.clear();
+
+    if (attributes.isEmpty) {
+      isLoadingAttributes.value = true;
+      try {
+        final uri = Uri.parse(
+            '$_baseUrl/categories/$categoryId/attributes?lang=${Get.find<ChangeLanguageController>().currentLocale.value.languageCode}');
+        final response = await http.get(uri);
+
+        if (response.statusCode == 200) {
+          final data = json.decode(response.body);
+
+          if (data != null && data is Map<String, dynamic> && data['success'] == true) {
+            final List<dynamic> list = data['attributes'];
+            attributes.value = list
+                .map((json) => Attribute.fromJson(json as Map<String, dynamic>))
+                .toList();
+          } else {
+            attributes.clear();
+          }
+        } else {
+          print('HTTP ${response.statusCode}');
+        }
+      } catch (e, st) {
+        print(e);
+      } finally {
+        isLoadingAttributes.value = false;
+      }
+    }
+  }
+
+  int get totalSubCategoriesAdsCount {
+    return subCategories.fold(0, (sum, subCategory) => sum + subCategory.adsCount);
+  }
+
+  void resetSubcategoriesForCategory(int categoryId) {
+    lastAdsPeriodForCategory.remove(categoryId);
+    subCategoriesMap[categoryId]?.clear();
+    subCategoriesMap.refresh();
+    subCategories.clear();
+  }
+
+  void resetSubcategoriesLevelTwoForSubOne(int subOneId) {
+    lastAdsPeriodForSubOne.remove(subOneId);
+    subCategoriesLevelTwoMap.remove(subOneId);
+    subCategoriesLevelTwo.clear();
+  }
+
+  void resetAdsPeriod() {
+    currentAdsPeriod.value = '';
+  }
+
+  void setAdsPeriod(String period) {
+    currentAdsPeriod.value = period;
   }
 }

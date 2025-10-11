@@ -15,6 +15,7 @@ import '../../core/constant/images_path.dart';
 import '../../core/services/appservices.dart';
 
 // شاشات التفاصيل — عدّل المسارات لو عندك أسماء مختلفة
+import 'package:tappuu_website/mobile/viewAdsScreen/AdDetailsScreen.dart';
 
 import 'AdDetailsScreen_desktop.dart';
 

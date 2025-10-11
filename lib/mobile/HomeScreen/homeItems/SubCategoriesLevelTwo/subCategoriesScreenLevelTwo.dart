@@ -25,9 +25,9 @@ class SubCategoriesScreenLeveLTwo extends StatefulWidget {
   final String slugMainCate;
   final int MainId;
   final int allSubOnecount;
-  final HomeController controller = Get.find<HomeController>();
+  final String? adsPeriod;
 
-  SubCategoriesScreenLeveLTwo({
+  const SubCategoriesScreenLeveLTwo({
     super.key,
     required this.SubCateId,
     required this.subCateName,
@@ -35,7 +35,8 @@ class SubCategoriesScreenLeveLTwo extends StatefulWidget {
     required this.MainId,
     required this.allSubOnecount,
     required this.slugMainCate,
-    required this.subCateSlug
+    required this.subCateSlug,
+    this.adsPeriod,
   });
 
   @override
@@ -43,27 +44,51 @@ class SubCategoriesScreenLeveLTwo extends StatefulWidget {
 }
 
 class _SubCategoriesScreenLeveLTwoState extends State<SubCategoriesScreenLeveLTwo> {
+  final HomeController controller = Get.find<HomeController>();
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   @override
   void initState() {
     super.initState();
+    _initializeData();
+  }
+
+  void _initializeData() {
     final langCode = Get.find<ChangeLanguageController>().currentLocale.value.languageCode;
-    widget.controller.fetchSubcategoriesLevelTwo(widget.SubCateId, langCode);
+    
+    // إعادة تعيين البيانات السابقة إذا كان التصنيف الفرعي مختلف
+    if (controller.currentSubCategoryId.value != widget.SubCateId) {
+      controller.clearSubCategoryData(widget.SubCateId);
+    }
+    
+    // جلب البيانات الجديدة
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      controller.fetchSubcategoriesLevelTwo(
+        widget.SubCateId, 
+        langCode, 
+        adsPeriod: widget.adsPeriod,
+        force: true
+      );
+    });
+
     _updateBrowserUrl();
   }
 
   void _updateBrowserUrl() {
     String urlPath = '';
-    
-    if (widget.slugMainCate != null && widget.slugMainCate.isNotEmpty) {
+
+    if (widget.slugMainCate.isNotEmpty) {
       urlPath += '/${widget.slugMainCate}';
     }
-    
-    if (widget.subCateSlug != null && widget.subCateSlug.isNotEmpty) {
+
+    if (widget.subCateSlug.isNotEmpty) {
       urlPath += '/${widget.subCateSlug}';
     }
-    
+
+    if (widget.adsPeriod != null && widget.adsPeriod!.isNotEmpty) {
+      urlPath += '?ads_period=${widget.adsPeriod}';
+    }
+
     html.window.history.replaceState({}, '', urlPath);
   }
 
@@ -71,18 +96,21 @@ class _SubCategoriesScreenLeveLTwoState extends State<SubCategoriesScreenLeveLTw
   Widget build(BuildContext context) {
     final isDarkMode = Get.find<ThemeController>().isDarkMode.value;
     final bgColor = AppColors.background(isDarkMode);
-    
+
     return Scaffold(
       key: _scaffoldKey,
       drawer: Menubar(),
       backgroundColor: bgColor,
-      appBar: _buildAppBar(context, _scaffoldKey),
+      appBar: _buildAppBar(context),
       body: _buildBody(bgColor),
     );
   }
 
-  PreferredSizeWidget _buildAppBar(BuildContext context, GlobalKey<ScaffoldState> _scaffoldKey) {
+  PreferredSizeWidget _buildAppBar(BuildContext context) {
     final isDarkMode = Get.find<ThemeController>().isDarkMode.value;
+    final String subtitle = _getAppBarTitle();
+    final bool showSubtitle = subtitle.trim().isNotEmpty;
+
     return AppBar(
       backgroundColor: AppColors.primary,
       leading: IconButton(
@@ -91,7 +119,11 @@ class _SubCategoriesScreenLeveLTwoState extends State<SubCategoriesScreenLeveLTw
           size: 20.w,
           color: AppColors.onSurfaceDark,
         ),
-        onPressed: () => Get.back(),
+        onPressed: () {
+          // مسح بيانات التصنيف الفرعي الحالي عند الرجوع
+          controller.clearSubCategoryData(widget.SubCateId);
+          Get.back();
+        },
       ),
       actions: [
         InkWell(
@@ -107,179 +139,68 @@ class _SubCategoriesScreenLeveLTwoState extends State<SubCategoriesScreenLeveLTw
         SizedBox(width: 8.w),
       ],
       centerTitle: true,
-      title: Text(
-        widget.subCateName,
-        style: TextStyle(
-          fontSize: AppTextStyles.xlarge,
-          fontWeight: FontWeight.w700,
-          fontFamily: AppTextStyles.appFontFamily,
-          color: AppColors.onSurfaceDark,
-        ),
+      title: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Text(
+            widget.subCateName,
+            style: TextStyle(
+              fontSize: AppTextStyles.xlarge,
+              fontWeight: FontWeight.w700,
+              fontFamily: AppTextStyles.appFontFamily,
+              color: AppColors.onSurfaceDark,
+            ),
+          ),
+          if (showSubtitle) ...[
+            SizedBox(height: 2.h),
+            Text(
+              subtitle,
+              style: TextStyle(
+                fontSize: AppTextStyles.medium,
+                fontWeight: FontWeight.w600,
+                fontFamily: AppTextStyles.appFontFamily,
+                color: AppColors.onSurfaceDark.withOpacity(0.9),
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ],
       ),
       elevation: 0,
     );
   }
 
-  Widget _buildFilterIcon() {
-    return SizedBox(
-      width: 40.w,
-      height: 40.h,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Icon(
-            Icons.filter_list,
-            size: 22.w,
-            color: AppColors.onSurfaceDark,
-          ),
-          Positioned(
-            right: 6.w,
-            bottom: 8.h,
-            child: Transform.rotate(
-              angle: 0.0,
-              child: Icon(
-                Icons.refresh,
-                size: 12.w,
-                color: AppColors.onSurfaceDark,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
+  String _getAppBarTitle() {
+    if (widget.adsPeriod == '24h') {
+      return 'الإعلانات العاجلة - آخر 24 ساعة';
+    } else if (widget.adsPeriod == '48h') {
+      return 'الإعلانات العاجلة - آخر 48 ساعة';
+    }
+    return '';
   }
 
-  void _showFilterDialog(BuildContext context, String name) {
-    showDialog(
-      context: context,
-      barrierDismissible: true,
-      builder: (ctx) {
-        return Directionality(
-          textDirection: TextDirection.rtl,
-          child: AlertDialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12.r),
-            ),
-            title: Center(
-              child: Text(
-                'بحثي الأخير عن ${name.toString()}',
-                style: TextStyle(
-                  fontSize: AppTextStyles.xxlarge,
-                  fontWeight: FontWeight.w800,
-                  fontFamily: AppTextStyles.appFontFamily,
-                ),
-              ),
-            ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SizedBox(height: 4.h),
-                Text(
-                  'هل ترغب في تكرار بحثك الاخير ؟',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: AppTextStyles.medium,
-                    fontFamily: AppTextStyles.appFontFamily,
-                    height: 1.3,
-                  ),
-                ),
-                SizedBox(height: 12.h),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: InkWell(
-                    onTap: () {
-                      print('مسح بحثي الأخير تم الضغط');
-                      Get.back();
-                    },
-                    child: Text(
-                      'مسح بحـثي الأخير',
-                      style: TextStyle(
-                        fontSize: AppTextStyles.medium,
-                        fontFamily: AppTextStyles.appFontFamily,
-                        decoration: TextDecoration.underline,
-                        color: Colors.blue,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            actionsPadding: EdgeInsets.symmetric(horizontal: 5.w, vertical: 7.h),
-            actionsAlignment: MainAxisAlignment.center,
-            actions: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  SizedBox(
-                    width: 100.w,
-                    height: 44.h,
-                    child: OutlinedButton(
-                      style: OutlinedButton.styleFrom(
-                        side: BorderSide(color: Colors.grey.shade300),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(0.r),
-                        ),
-                        backgroundColor: Colors.white,
-                        padding: EdgeInsets.zero,
-                      ),
-                      onPressed: () {
-                        Get.back();
-                      },
-                      child: Text(
-                        'تراجع',
-                        style: TextStyle(
-                         fontSize: AppTextStyles.medium,
-                          fontFamily: AppTextStyles.appFontFamily,
-                          color: AppColors.buttonAndLinksColor,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ),
-                  SizedBox(width: 5.w),
-                  SizedBox(
-                    width: 100.w,
-                    height: 44.h,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.buttonAndLinksColor,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(0.r),
-                        ),
-                        padding: EdgeInsets.zero,
-                        elevation: 2,
-                      ),
-                      onPressed: () {
-                        Get.back();
-                      },
-                      child: Text(
-                        'إتمام',
-                        style: TextStyle(
-                         fontSize: AppTextStyles.medium,
-                          fontFamily: AppTextStyles.appFontFamily,
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        );
-      },
-    );
+  int _getHours() {
+    if (widget.adsPeriod == '24h') return 24;
+    if (widget.adsPeriod == '48h') return 48;
+    return 0;
   }
 
   Widget _buildBody(Color bgColor) {
     return Obx(() {
-      if (widget.controller.isLoadingSubcategoryLevelTwo.value) {
+      
+      // حالة التحميل للمتصفح الحالي
+      final isLoading = controller.isSubCategoriesLevelTwoLoading(widget.SubCateId);
+      
+      if (isLoading) {
         return _buildShimmerLoader(bgColor);
       }
 
-      if (widget.controller.subCategoriesLevelTwo.isEmpty) {
+      // الحصول على القائمة من الماب
+      final list = controller.getSubCategoriesLevelTwoForSubCategory(widget.SubCateId);
+
+      if (list.isEmpty) {
         return Center(
           child: Text(
             'لا توجد تصنيفات فرعية'.tr,
@@ -300,7 +221,7 @@ class _SubCategoriesScreenLeveLTwoState extends State<SubCategoriesScreenLeveLTw
           Expanded(
             child: ListView.separated(
               padding: EdgeInsets.symmetric(vertical: 8.h, horizontal: 16.w),
-              itemCount: widget.controller.subCategoriesLevelTwo.length,
+              itemCount: list.length,
               separatorBuilder: (context, index) => Divider(
                 height: 1,
                 thickness: 1,
@@ -309,7 +230,7 @@ class _SubCategoriesScreenLeveLTwoState extends State<SubCategoriesScreenLeveLTw
                     : Colors.grey[200],
               ),
               itemBuilder: (context, index) {
-                final subCategory = widget.controller.subCategoriesLevelTwo[index];
+                final subCategory = list[index];
                 final translation = subCategory.translations.firstWhere(
                   (t) => t.language == Get.find<ChangeLanguageController>().currentLocale.value.languageCode,
                   orElse: () => subCategory.translations.first,
@@ -331,8 +252,10 @@ class _SubCategoriesScreenLeveLTwoState extends State<SubCategoriesScreenLeveLTw
   }
 
   Widget _buildViewAllAdsLink() {
-    final isDarkMode = Get.find<ThemeController>().isDarkMode.value;
-    
+    final AdsController adsController = Get.find<AdsController>();
+    final int hours = _getHours();
+    final String? timeframe = hours > 0 ? adsController.toTimeframe(hours) : null;
+
     return Column(
       children: [
         Padding(
@@ -340,19 +263,19 @@ class _SubCategoriesScreenLeveLTwoState extends State<SubCategoriesScreenLeveLTw
           child: InkWell(
             onTap: () {
               Get.find<AdsController>().viewMode.value = 'vertical_simple';
-              Get.toNamed(
-                AppRoutes.adsScreenMobile,
-                arguments: {
-                  'categoryId': widget.MainId,
-                  'subCategoryId': widget.SubCateId,
-                  'nameOfMain': widget.nameMainCate,
-                  'nameOFsub': widget.subCateName,
-                  'categorySlug': widget.slugMainCate,
-                  'subCategorySlug': widget.subCateSlug,
-                  'titleOfpage': widget.subCateName,
-                  'countofAds': 0,
-                },
-              );
+              final args = {
+                'categoryId': widget.MainId,
+                'subCategoryId': widget.SubCateId,
+                'nameOfMain': widget.nameMainCate,
+                'nameOFsub': widget.subCateName,
+                'categorySlug': widget.slugMainCate,
+                'subCategorySlug': widget.subCateSlug,
+                'titleOfpage': widget.subCateName,
+                'countofAds': widget.allSubOnecount,
+                if (widget.adsPeriod != null) 'adsPeriod': widget.adsPeriod,
+                if (timeframe != null) 'currentTimeframe': timeframe,
+              };
+              Get.toNamed(AppRoutes.adsScreenMobile, arguments: args);
             },
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -380,23 +303,22 @@ class _SubCategoriesScreenLeveLTwoState extends State<SubCategoriesScreenLeveLTw
                       ),
                     ),
                     IconButton(
-                      icon: Icon(Icons.arrow_forward_ios,
-                          size: 20.w, color: AppColors.buttonAndLinksColor),
+                      icon: Icon(Icons.arrow_forward_ios, size: 20.w, color: AppColors.buttonAndLinksColor),
                       onPressed: () {
                         Get.find<AdsController>().viewMode.value = 'vertical_simple';
-                        Get.toNamed(
-                          AppRoutes.adsScreenMobile,
-                          arguments: {
-                            'categoryId': widget.MainId,
-                            'subCategoryId': widget.SubCateId,
-                            'nameOfMain': widget.nameMainCate,
-                            'nameOFsub': widget.subCateName,
-                            'categorySlug': widget.slugMainCate,
-                            'subCategorySlug': widget.subCateSlug,
-                            'titleOfpage': widget.subCateName,
-                            'countofAds': 0,
-                          },
-                        );
+                        final args = {
+                          'categoryId': widget.MainId,
+                          'subCategoryId': widget.SubCateId,
+                          'nameOfMain': widget.nameMainCate,
+                          'nameOFsub': widget.subCateName,
+                          'categorySlug': widget.slugMainCate,
+                          'subCategorySlug': widget.subCateSlug,
+                          'titleOfpage': widget.subCateName,
+                          'countofAds': widget.allSubOnecount,
+                          if (widget.adsPeriod != null) 'adsPeriod': widget.adsPeriod,
+                          if (timeframe != null) 'currentTimeframe': timeframe,
+                        };
+                        Get.toNamed(AppRoutes.adsScreenMobile, arguments: args);
                       },
                     ),
                   ],
@@ -409,7 +331,7 @@ class _SubCategoriesScreenLeveLTwoState extends State<SubCategoriesScreenLeveLTw
         Divider(
           height: 1,
           thickness: 1.5,
-          color: isDarkMode ? Colors.grey[800] : Colors.grey[200],
+          color: Get.find<ThemeController>().isDarkMode.value ? Colors.grey[800] : Colors.grey[200],
         ),
       ],
     );
@@ -419,7 +341,7 @@ class _SubCategoriesScreenLeveLTwoState extends State<SubCategoriesScreenLeveLTw
     final isDarkMode = Get.find<ThemeController>().isDarkMode.value;
     final baseColor = isDarkMode ? Colors.grey[800]! : Colors.grey[300]!;
     final highlightColor = isDarkMode ? Colors.grey[700]! : Colors.grey[100]!;
-    
+
     return Shimmer.fromColors(
       baseColor: baseColor,
       highlightColor: highlightColor,
@@ -518,7 +440,7 @@ class _SubCategoriesScreenLeveLTwoState extends State<SubCategoriesScreenLeveLTw
             ),
           ),
         ],
-      )
+      ),
     );
   }
 
@@ -527,10 +449,13 @@ class _SubCategoriesScreenLeveLTwoState extends State<SubCategoriesScreenLeveLTw
     required String name,
     required int adsCount,
     required String slugSubTwo,
-    required String? imageUrl, 
+    required String? imageUrl,
   }) {
     final isDarkMode = Get.find<ThemeController>().isDarkMode.value;
-    
+    final AdsController adsController = Get.find<AdsController>();
+    final int hours = _getHours();
+    final String? tf = hours > 0 ? adsController.toTimeframe(hours) : null;
+
     return InkWell(
       onTap: () {
         BrowsingHistoryController _browsing = Get.put(BrowsingHistoryController());
@@ -544,23 +469,24 @@ class _SubCategoriesScreenLeveLTwoState extends State<SubCategoriesScreenLeveLTw
         Get.find<PopularHistoryController>().addOrIncrement(
             categoryId: widget.MainId, subcat1Id: widget.SubCateId, subcat2Id: idOfSubTwo);
         Get.find<AdsController>().viewMode.value = 'vertical_simple';
-     
-        Get.toNamed(
-          AppRoutes.adsScreenMobile,
-          arguments: {
-            'categoryId': widget.MainId,
-            'subCategoryId': widget.SubCateId,
-            'subTwoCategoryId': idOfSubTwo,
-            'nameOfMain': widget.nameMainCate,
-            'nameOFsub': widget.subCateName,
-            'nameOFsubTwo': name,
-            'categorySlug': widget.slugMainCate,
-            'subCategorySlug': widget.subCateSlug,
-            'subTwoCategorySlug': slugSubTwo,
-            'titleOfpage': name,
-            'countofAds': adsCount,
-          }
-        );
+
+        final args = {
+          'categoryId': widget.MainId,
+          'subCategoryId': widget.SubCateId,
+          'subTwoCategoryId': idOfSubTwo,
+          'nameOfMain': widget.nameMainCate,
+          'nameOFsub': widget.subCateName,
+          'nameOFsubTwo': name,
+          'categorySlug': widget.slugMainCate,
+          'subCategorySlug': widget.subCateSlug,
+          'subTwoCategorySlug': slugSubTwo,
+          'titleOfpage': name,
+          'countofAds': adsCount,
+          if (widget.adsPeriod != null) 'adsPeriod': widget.adsPeriod,
+          if (tf != null) 'currentTimeframe': tf,
+        };
+
+        Get.toNamed(AppRoutes.adsScreenMobile, arguments: args);
       },
       child: Container(
         padding: EdgeInsets.symmetric(vertical: 10.h),
@@ -569,8 +495,7 @@ class _SubCategoriesScreenLeveLTwoState extends State<SubCategoriesScreenLeveLTw
           children: [
             Row(
               children: [
-                if (imageUrl != null && imageUrl.isNotEmpty)
-                  _buildImageWidget(imageUrl),
+                if (imageUrl != null && imageUrl.isNotEmpty) _buildImageWidget(imageUrl),
                 SizedBox(width: 8.w),
                 Text(
                   name,

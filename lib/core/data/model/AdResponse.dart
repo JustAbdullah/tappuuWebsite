@@ -576,16 +576,21 @@ class Advertiser {
   final String contactPhone;
   final String whatsappPhone;
   final String accountType; // 'individual' or 'company'
+  final DateTime? createdAt;
 
   static const String TYPE_INDIVIDUAL = 'individual';
   static const String TYPE_COMPANY = 'company';
+
   Advertiser({
     this.name,
     required this.description,
     required this.logo,
     required this.contactPhone,
     required this.whatsappPhone,
+         this.createdAt,
+
     String? accountType,
+    
   }) : accountType = (accountType == null || accountType.isEmpty) ? TYPE_INDIVIDUAL : accountType;
 
   factory Advertiser.fromJson(Map<String, dynamic> json) {
@@ -596,6 +601,8 @@ class Advertiser {
       contactPhone: (json['contact_phone'] as String?) ?? (json['contactPhone'] as String?) ?? '',
       whatsappPhone: (json['whatsapp_phone'] as String?) ?? (json['whatsappPhone'] as String?) ?? '',
       accountType: (json['account_type'] ?? json['accountType'] ?? TYPE_INDIVIDUAL).toString(),
+           createdAt: _nullableDateTimeFromDynamic(json['created_at'] ?? json['created_at']),
+
     );
   }
 

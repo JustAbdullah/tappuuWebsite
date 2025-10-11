@@ -34,6 +34,7 @@ import 'package:tappuu_website/controllers/ViewsController.dart';
 import 'package:shimmer/shimmer.dart';
 
 import 'menubar.dart';
+import 'urgent/MainCategoriesWithUrgentScreen.dart';
 
 
 class HomeScreen extends StatefulWidget {
@@ -139,13 +140,13 @@ void initState() {
                 MainCategoriesScreen(),
                
                     SizedBox(height:10.h,),
-                // قسم العروض العاجلة
+              // قسم العروض العاجلة
                 _buildUrgentSection(
-                  hours: 24,
+                  hours: '24h',
                   isDarkMode: isDarkMode,
                 ),
                 _buildUrgentSection(
-                  hours: 48,
+                  hours: '48h',
                   isDarkMode: isDarkMode,
                 ),
                          SizedBox(height:10.h,),
@@ -717,20 +718,13 @@ Widget _buildSearchField(bool isDarkMode) {
 
   // ويدجت لقسم الإعلانات العاجلة
   Widget _buildUrgentSection({
-    required int hours,
+    required String hours,
     required bool isDarkMode,
   }) {
     return InkWell(
       onTap: () {
-        final int? selectedHours = hours;
-        final String? tf = adsController.toTimeframe(selectedHours);
-
-        adsController.viewMode.value = "grid_simple";
-        Get.to(() => AdsScreen(
-          categoryId: null,
-          titleOfpage: "الإعلانات الحديثة!".tr,
-          currentTimeframe: tf,
-        ));
+ Get.to(()=>UrgentCategoriesScreen(period: hours,));
+      
       },
       child: Container(
         height: 70.h,
@@ -786,7 +780,7 @@ Widget _buildSearchField(bool isDarkMode) {
                   ),
                   SizedBox(height: 0.h),
                   Text(
-                    hours == 24 
+                    hours == "24h"
                       ? 'عرض الإعلانات الجديدة آخر 24 ساعة'.tr
                       : 'عرض الإعلانات الجديدة آخر 48 ساعة'.tr,
                     style: TextStyle(
@@ -811,6 +805,7 @@ Widget _buildSearchField(bool isDarkMode) {
       ),
     );
   }
+  
   Widget _buildAppBar(bool isDarkMode) {
   return   Directionality(
           textDirection: TextDirection.rtl, // نجبر اتجاه اليسار - يمين هنا فقط

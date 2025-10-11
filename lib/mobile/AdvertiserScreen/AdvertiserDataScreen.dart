@@ -18,7 +18,7 @@ class AdvertiserDataScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDarkMode = themeC.isDarkMode.value;
-    final AdvertiserController controller = Get.put(AdvertiserController());
+    final AdvertiserController advController = Get.put(AdvertiserController());
 
     return Scaffold(
       backgroundColor: AppColors.background(isDarkMode),
@@ -44,387 +44,401 @@ class AdvertiserDataScreen extends StatelessWidget {
         centerTitle: true,
       ),
       body: SafeArea(
-        child: GetBuilder<AdvertiserController>(
-          builder: (controller) {
-            if (controller.isLoading.value) {
-              return Center(
-                child: CircularProgressIndicator(
-                  color: AppColors.primary,
-                ),
-              );
-            }
-
-            return SingleChildScrollView(
-              padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 20.h),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // العنوان
-                  Center(
-                    child: Text(
-                      'أنشئ بياناتك كمعلن'.tr,
-                      style: TextStyle(
-                        fontSize: AppTextStyles.xxxlarge,
-                        fontWeight: FontWeight.bold,
-                        fontFamily: AppTextStyles.appFontFamily,
-                        color: AppColors.primary,
-                      ),
-                    ),
-                  ),
-                  SizedBox(height: 15.h),
-
-                  // وصف الصفحة
-                  Center(
-                    child: Text(
-                      'هذه البيانات ستظهر للمستخدمين عند نشر الإعلانات'.tr,
-                      style: TextStyle(
-                        fontSize: AppTextStyles.medium,
-                        fontFamily: AppTextStyles.appFontFamily,
-                        color: AppColors.textSecondary(isDarkMode),
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                  SizedBox(height: 30.h),
-
-                  // حقل الشعار
-                  Center(
-                    child: Column(
-                      children: [
-                        Text(
-                          'شعار المعلن (اختياري)'.tr,
-                          style: TextStyle(
-                            fontSize: AppTextStyles.xlarge,
-                            fontWeight: FontWeight.w600,
-                            fontFamily: AppTextStyles.appFontFamily,
-                            color: AppColors.textPrimary(isDarkMode),
-                          ),
-                        ),
-                        SizedBox(height: 15.h),
-
-                        // تصميم جديد لاختيار شعار واحد فقط
-                        Obx(() => Container(
-                              width: 180.w,
-                              height: 180.h,
-                              decoration: BoxDecoration(
-                                color: AppColors.surface(isDarkMode),
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: AppColors.primary.withOpacity(0.5),
-                                  width: 2,
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.1),
-                                    blurRadius: 10,
-                                    offset: Offset(0, 4),
-                                  )
-                                ],
-                              ),
-                              child: Stack(
-                                children: [
-                                  if (controller.logoPath.value != null)
-                                    ClipOval(
-                                      child: Image.file(
-                                        controller.logoPath.value!,
-                                        fit: BoxFit.cover,
-                                        width: double.infinity,
-                                        height: double.infinity,
-                                      ),
-                                    ),
-                                  Positioned.fill(
-                                    child: Material(
-                                      color: Colors.transparent,
-                                      child: InkWell(
-                                        borderRadius:
-                                            BorderRadius.circular(100),
-                                        onTap: () => controller.pickLogo(),
-                                        child: controller.logoPath.value == null
-                                            ? Center(
-                                                child: Column(
-                                                  mainAxisAlignment:
-                                                      MainAxisAlignment.center,
-                                                  children: [
-                                                    Icon(
-                                                      Icons.add_a_photo,
-                                                      size: 40.w,
-                                                      color: AppColors.primary,
-                                                    ),
-                                                    SizedBox(height: 8.h),
-                                                    Text(
-                                                      'إضافة شعار'.tr,
-                                                      style: TextStyle(
-                                                        fontSize: AppTextStyles.medium,
-                                                        color: AppColors.primary,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              )
-                                            : Container(),
-                                      ),
-                                    ),
-                                  ),
-                                  if (controller.logoPath.value != null)
-                                    Positioned(
-                                      bottom: 8.h,
-                                      right: 8.w,
-                                      child: FloatingActionButton(
-                                        mini: true,
-                                        backgroundColor: AppColors.primary,
-                                        onPressed: () =>
-                                            controller.removeLogo(),
-                                        child: Icon(Icons.close,
-                                            color: Colors.white),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            )),
-                        SizedBox(height: 20.h),
-                        Text(
-                          'اضغط على الدائرة لإضافة أو تغيير الشعار'.tr,
-                          style: TextStyle(
-                            fontSize: AppTextStyles.medium,
-                            color: AppColors.textSecondary(isDarkMode),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  SizedBox(height: 30.h),
-
-                  // حقل نوع الحساب
-                  _buildAccountTypeField(controller, isDarkMode),
-                  SizedBox(height: 25.h),
-
-                  // حقل اسم المعلن
-                  _buildInputField(
-                    title: 'اسم المعلن*'.tr,
-                    hint: controller.accountType.value == 'individual' 
-                      ? 'أدخل اسمك الشخصي'.tr 
-                      : 'أدخل اسم الشركة أو المؤسسة'.tr,
-                    icon: Icons.business,
-                    controller: controller.businessNameCtrl,
-                    isDarkMode: isDarkMode,
-                    onChanged: (value) => controller.updateButton(),
-                  ),
-                  SizedBox(height: 25.h),
-
-                  // حقل الوصف (اختياري)
-                  _buildInputField(
-                    title: 'وصف المعلن (اختياري)'.tr,
-                    hint: controller.accountType.value == 'individual' 
-                      ? 'أدخل وصفًا مختصرًا عن نشاطك'.tr 
-                      : 'أدخل وصفًا مختصرًا عن نشاط الشركة'.tr,
-                    icon: Icons.description,
-                    controller: controller.descriptionCtrl,
-                    isDarkMode: isDarkMode,
-                    maxLines: 3,
-                  ),
-                  SizedBox(height: 25.h),
-
-                  // حقل رقم الاتصال
-                  _buildInputField(
-                    title: 'رقم الاتصال*'.tr,
-                    hint: 'مثال: 00963XXXXXXXX'.tr,
-                    icon: Icons.phone,
-                    controller: controller.contactPhoneCtrl,
-                    isDarkMode: isDarkMode,
-                    keyboardType: TextInputType.phone,
-                    onChanged: (value) => controller.updateButton(),
-                  ),
-                  SizedBox(height: 25.h),
-
-                  // حقل واتساب (اختياري)
-                  _buildInputField(
-                    title: 'رقم الواتساب (اختياري)'.tr,
-                    hint: 'مثال: 00963XXXXXXXXXXXXXXXX'.tr,
-                    icon: Icons.wallet,
-                    controller: controller.whatsappPhoneCtrl,
-                    isDarkMode: isDarkMode,
-                    keyboardType: TextInputType.phone,
-                  ),
-                  SizedBox(height: 25.h),
-
-                  // حقل الاتصال المباشر بالواتساب (جديد)
-                  _buildInputField(
-                    title: 'رقم الاتصال المباشر بالواتساب (اختياري)'.tr,
-                    hint: 'مثال: 00963XXXXXXXXXXXXXXXX'.tr,
-                    icon: Icons.phone_android,
-                    controller: controller.whatsappCallNumberCtrl,
-                    isDarkMode: isDarkMode,
-                    keyboardType: TextInputType.phone,
-                  ),
-                  SizedBox(height: 30.h),
-
-                  // زر الحفظ
-                  GetBuilder<AdvertiserController>(
-                    id: 'button',
-                    builder: (btnController) {
-                      final isValid = btnController.businessNameCtrl.text.isNotEmpty &&
-                                     btnController.contactPhoneCtrl.text.isNotEmpty;
-                      
-                      final isSaving = btnController.isSaving.value;
-                      
-                      return SizedBox(
-                        width: double.infinity,
-                        height: 55.h,
-                        child: ElevatedButton(
-                          onPressed: (isValid && !isSaving)
-                              ? () async {
-                                  try {
-                                    btnController.setSaving(true);
-                                    
-                                    if (btnController.logoPath.value != null) {
-                                      await btnController.uploadLogoToServer();
-                                    }
-
-                                    final profile = AdvertiserProfile(
-                                      userId: loadingC.currentUser?.id ?? 0,
-                                      logo: btnController.uploadedImageUrls.value,
-                                      name: btnController.businessNameCtrl.text,
-                                      description: btnController.descriptionCtrl.text,
-                                      contactPhone: btnController.contactPhoneCtrl.text,
-                                      whatsappPhone: btnController.whatsappPhoneCtrl.text,
-                                      whatsappCallNumber: btnController.whatsappCallNumberCtrl.text,
-                                      accountType: btnController.accountType.value,
-                                    );
-
-                                    await btnController.createProfile(profile);
-                                    Get.offAll(() => HomeScreen());
-                                  } catch (e) {
-                                    Get.snackbar('خطأ'.tr, '${'فشل في حفظ البيانات:'.tr} $e');
-                                  } finally {
-                                    btnController.setSaving(false);
-                                  }
-                                }
-                              : null,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: (isValid && !isSaving)
-                                ? AppColors.primary
-                                : AppColors.primary.withOpacity(0.4),
-                            foregroundColor: AppColors.onPrimary,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14.r),
-                            ),
-                            elevation: (isValid && !isSaving) ? 4 : 0,
-                            shadowColor: AppColors.primary.withOpacity(0.3),
-                          ),
-                          child: isSaving
-                              ? CircularProgressIndicator(
-                                  color: AppColors.onPrimary,
-                                  strokeWidth: 3,
-                                )
-                              : Text(
-                                  'حفظ البيانات'.tr,
-                                  style: TextStyle(
-                                    fontSize: AppTextStyles.xlarge,
-                                    fontWeight: FontWeight.bold,
-                                    fontFamily: AppTextStyles.appFontFamily,
-                                  ),
-                                ),
-                        ),
-                      );
-                    },
-                  ),
-                  SizedBox(height: 20.h),
-
-                  // ملاحظة
-                  Center(
-                    child: Text(
-                      '* الحقول الإلزامية'.tr,
-                      style: TextStyle(
-                        fontSize: AppTextStyles.medium,
-                        fontFamily: AppTextStyles.appFontFamily,
-                        color: AppColors.textSecondary(isDarkMode),
-                      ),
-                    ),
-                  ),
-                ],
+        child: Obx(() {
+          if (advController.isLoading.value) {
+            return Center(
+              child: CircularProgressIndicator(
+                color: AppColors.primary,
               ),
             );
-          },
-        ),
+          }
+
+          return SingleChildScrollView(
+            padding: EdgeInsets.symmetric(horizontal: 28.w, vertical: 24.h),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: 900.w),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Title
+                    Center(
+                      child: Text(
+                        'أنشئ بياناتك كمعلن'.tr,
+                        style: TextStyle(
+                          fontSize: AppTextStyles.xxxlarge,
+                          fontWeight: FontWeight.bold,
+                          fontFamily: AppTextStyles.appFontFamily,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 18.h),
+
+                    // Description
+                    Center(
+                      child: Text(
+                        'هذه البيانات ستظهر للمستخدمين عند نشر الإعلانات'.tr,
+                        style: TextStyle(
+                          fontSize: AppTextStyles.medium,
+                          fontFamily: AppTextStyles.appFontFamily,
+                          color: AppColors.textSecondary(isDarkMode),
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    SizedBox(height: 28.h),
+
+                    // Form layout: two columns on wide screens
+                    LayoutBuilder(builder: (context, constraints) {
+                      final isWide = constraints.maxWidth > 700;
+                      return isWide
+                          ? Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(child: _leftColumn(advController, isDarkMode)),
+                                SizedBox(width: 24.w),
+                                Expanded(child: _rightColumn(advController, isDarkMode)),
+                              ],
+                            )
+                          : Column(
+                              children: [
+                                _leftColumn(advController, isDarkMode),
+                                SizedBox(height: 18.h),
+                                _rightColumn(advController, isDarkMode),
+                              ],
+                            );
+                    }),
+
+                    SizedBox(height: 22.h),
+
+                    // Save button
+                    GetBuilder<AdvertiserController>(
+                      id: 'button',
+                      builder: (btnController) {
+                        final isValid = btnController.businessNameCtrl.text.isNotEmpty &&
+                            btnController.contactPhoneCtrl.text.isNotEmpty;
+
+                        final isSaving = btnController.isSaving.value;
+
+                        return SizedBox(
+                          width: double.infinity,
+                          height: 55.h,
+                          child: ElevatedButton(
+                            onPressed: (isValid && !isSaving)
+                                ? () async {
+                                    try {
+                                      btnController.setSaving(true);
+
+                                      if (btnController.logoPath.value != null) {
+                                        await btnController.uploadLogoToServer();
+                                      }
+
+                                      final profile = AdvertiserProfile(
+                                        userId: loadingC.currentUser?.id ?? 0,
+                                        logo: btnController.uploadedImageUrls.value,
+                                        name: btnController.businessNameCtrl.text,
+                                        description: btnController.descriptionCtrl.text,
+                                        contactPhone: btnController.contactPhoneCtrl.text,
+                                        whatsappPhone: btnController.whatsappPhoneCtrl.text,
+                                        whatsappCallNumber:
+                                            btnController.whatsappCallNumberCtrl.text,
+                                        accountType: btnController.accountType.value,
+                                      );
+
+                                      await btnController.createProfile(profile);
+                                      Get.offAll(() => HomeScreen());
+                                    } catch (e) {
+                                      Get.snackbar('خطأ'.tr,
+                                          '${'فشل في حفظ البيانات:'.tr} $e');
+                                    } finally {
+                                      btnController.setSaving(false);
+                                    }
+                                  }
+                                : null,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: (isValid && !isSaving)
+                                  ? AppColors.primary
+                                  : AppColors.primary.withOpacity(0.4),
+                              foregroundColor: AppColors.onPrimary,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12.r),
+                              ),
+                              elevation: (isValid && !isSaving) ? 4 : 0,
+                              shadowColor: AppColors.primary.withOpacity(0.3),
+                            ),
+                            child: isSaving
+                                ? CircularProgressIndicator(
+                                    color: AppColors.onPrimary,
+                                    strokeWidth: 3,
+                                  )
+                                : Text(
+                                    'حفظ البيانات'.tr,
+                                    style: TextStyle(
+                                      fontSize: AppTextStyles.xlarge,
+                                      fontWeight: FontWeight.bold,
+                                      fontFamily: AppTextStyles.appFontFamily,
+                                    ),
+                                  ),
+                          ),
+                        );
+                      },
+                    ),
+
+                    SizedBox(height: 14.h),
+                    Center(
+                      child: Text(
+                        '* الحقول الإلزامية'.tr,
+                        style: TextStyle(
+                          fontSize: AppTextStyles.medium,
+                          fontFamily: AppTextStyles.appFontFamily,
+                          color: AppColors.textSecondary(isDarkMode),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }),
       ),
     );
   }
 
-  Widget _buildAccountTypeField(AdvertiserController controller, bool isDarkMode) {
+  Widget _leftColumn(AdvertiserController controller, bool isDarkMode) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'نوع الحساب*'.tr,
-          style: TextStyle(
-            fontSize: AppTextStyles.xlarge,
-            fontWeight: FontWeight.w600,
-            fontFamily: AppTextStyles.appFontFamily,
-            color: AppColors.textPrimary(isDarkMode),
+        // Logo
+        Center(
+          child: Column(
+            children: [
+              Text(
+                'شعار المعلن (اختياري)'.tr,
+                style: TextStyle(
+                  fontSize: AppTextStyles.xlarge,
+                  fontWeight: FontWeight.w600,
+                  fontFamily: AppTextStyles.appFontFamily,
+                  color: AppColors.textPrimary(isDarkMode),
+                ),
+              ),
+              SizedBox(height: 12.h),
+              Obx(() => GestureDetector(
+                    onTap: () => controller.pickLogo(),
+                    child: Container(
+                      width: 200.w,
+                      height: 200.w,
+                      decoration: BoxDecoration(
+                        color: AppColors.surface(isDarkMode),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: AppColors.primary.withOpacity(0.5),
+                          width: 2,
+                        ),
+                      ),
+                      child: Stack(
+                        children: [
+                          if (controller.logoPath.value != null)
+                            ClipOval(
+                              child: Image.file(
+                                controller.logoPath.value!,
+                                fit: BoxFit.cover,
+                                width: double.infinity,
+                                height: double.infinity,
+                              ),
+                            )
+                          else
+                            Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.add_a_photo, size: 34.w, color: AppColors.primary),
+                                  SizedBox(height: 8.h),
+                                  Text('إضافة شعار'.tr, style: TextStyle(fontSize: AppTextStyles.medium, color: AppColors.primary)),
+                                ],
+                              ),
+                            ),
+                          if (controller.logoPath.value != null)
+                            Positioned(
+                              bottom: 10.h,
+                              right: 10.w,
+                              child: FloatingActionButton(
+                                mini: true,
+                                backgroundColor: AppColors.primary,
+                                onPressed: () => controller.removeLogo(),
+                                child: Icon(Icons.close, color: Colors.white),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  )),
+              SizedBox(height: 10.h),
+              Text('اضغط على الدائرة لإضافة أو تغيير الشعار'.tr, style: TextStyle(color: AppColors.textSecondary(isDarkMode))),
+            ],
           ),
         ),
-        SizedBox(height: 12.h),
-        Row(
-          children: [
-            Expanded(
-              child: _buildAccountTypeChoice(
-                title: 'فردي'.tr,
-                isSelected: controller.accountType.value == 'individual',
-                onTap: () => controller.setAccountType('individual'),
-                isDarkMode: isDarkMode,
-              ),
-            ),
-            SizedBox(width: 16.w),
-            Expanded(
-              child: _buildAccountTypeChoice(
-                title: 'شركة'.tr,
-                isSelected: controller.accountType.value == 'company',
-                onTap: () => controller.setAccountType('company'),
-                isDarkMode: isDarkMode,
-              ),
-            ),
-          ],
+
+        SizedBox(height: 22.h),
+
+        // Account type
+        _buildAccountTypeField(controller, isDarkMode),
+        SizedBox(height: 18.h),
+
+        // Business name (reactive hint)
+        Obx(() => _buildInputField(
+              title: 'اسم المعلن*'.tr,
+              hint: controller.accountType.value == 'individual'
+                  ? 'أدخل اسمك الشخصي'.tr
+                  : 'أدخل اسم الشركة أو المؤسسة'.tr,
+              icon: Icons.business,
+              controller: controller.businessNameCtrl,
+              isDarkMode: isDarkMode,
+              onChanged: (v) => controller.updateButton(),
+            )),
+
+        SizedBox(height: 18.h),
+
+        // Description (reactive hint)
+        Obx(() => _buildInputField(
+              title: 'وصف المعلن (اختياري)'.tr,
+              hint: controller.accountType.value == 'individual'
+                  ? 'أدخل وصفًا مختصرًا عن نشاطك'.tr
+                  : 'أدخل وصفًا مختصرًا عن نشاط الشركة'.tr,
+              icon: Icons.description,
+              controller: controller.descriptionCtrl,
+              isDarkMode: isDarkMode,
+              maxLines: 4,
+            )),
+      ],
+    );
+  }
+
+  Widget _rightColumn(AdvertiserController controller, bool isDarkMode) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildInputField(
+          title: 'رقم الاتصال*'.tr,
+          hint: 'مثال: 00963XXXXXXXX'.tr,
+          icon: Icons.phone,
+          controller: controller.contactPhoneCtrl,
+          isDarkMode: isDarkMode,
+          keyboardType: TextInputType.phone,
+          onChanged: (v) => controller.updateButton(),
+        ),
+        SizedBox(height: 18.h),
+        _buildInputField(
+          title: 'رقم الواتساب (اختياري)'.tr,
+          hint: 'مثال: 00963XXXXXXXXXXXXXXXX'.tr,
+          icon: Icons.wallet,
+          controller: controller.whatsappPhoneCtrl,
+          isDarkMode: isDarkMode,
+          keyboardType: TextInputType.phone,
+        ),
+        SizedBox(height: 18.h),
+        _buildInputField(
+          title: 'رقم الاتصال المباشر بالواتساب (اختياري)'.tr,
+          hint: 'مثال: 00963XXXXXXXXXXXXXXXX'.tr,
+          icon: Icons.phone_android,
+          controller: controller.whatsappCallNumberCtrl,
+          isDarkMode: isDarkMode,
+          keyboardType: TextInputType.phone,
         ),
       ],
     );
   }
 
-  Widget _buildAccountTypeChoice({
-    required String title,
-    required bool isSelected,
-    required VoidCallback onTap,
-    required bool isDarkMode,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        padding: EdgeInsets.symmetric(vertical: 16.h, horizontal: 8.w),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? AppColors.primary
-              : AppColors.surface(isDarkMode),
-          borderRadius: BorderRadius.circular(14.r),
-          border: Border.all(
-            color: isSelected
-                ? AppColors.primary
-                : AppColors.textSecondary(isDarkMode).withOpacity(0.5),
-            width: 1.5,
-          ),
-        ),
-        child: Center(
-          child: Text(
-            title,
-            style: TextStyle(
-              fontSize: AppTextStyles.medium,
-              fontWeight: FontWeight.w600,
-              color: isSelected
-                  ? AppColors.onPrimary
-                  : AppColors.textPrimary(isDarkMode),
+  Widget _buildAccountTypeField(AdvertiserController controller, bool isDarkMode) {
+    return Obx(() => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'نوع الحساب*'.tr,
+              style: TextStyle(
+                fontSize: AppTextStyles.xlarge,
+                fontWeight: FontWeight.w600,
+                fontFamily: AppTextStyles.appFontFamily,
+                color: AppColors.textPrimary(isDarkMode),
+              ),
             ),
-          ),
-        ),
-      ),
-    );
+            SizedBox(height: 12.h),
+            Row(
+              children: [
+                Expanded(
+                  child: MouseRegion(
+                    cursor: SystemMouseCursors.click,
+                    child: GestureDetector(
+                      onTap: () => controller.setAccountType('individual'),
+                      child: AnimatedContainer(
+                        duration: Duration(milliseconds: 220),
+                        padding: EdgeInsets.symmetric(vertical: 14.h, horizontal: 10.w),
+                        decoration: BoxDecoration(
+                          color: controller.accountType.value == 'individual'
+                              ? AppColors.primary
+                              : AppColors.surface(isDarkMode),
+                          borderRadius: BorderRadius.circular(12.r),
+                          border: Border.all(
+                            color: controller.accountType.value == 'individual'
+                                ? AppColors.primary
+                                : AppColors.textSecondary(isDarkMode).withOpacity(0.5),
+                            width: 1.4,
+                          ),
+                        ),
+                        child: Center(
+                          child: Text('فردي'.tr,
+                              style: TextStyle(
+                                fontSize: AppTextStyles.large,
+                                fontWeight: FontWeight.w600,
+                                color: controller.accountType.value == 'individual'
+                                    ? AppColors.onPrimary
+                                    : AppColors.textPrimary(isDarkMode),
+                              )),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                SizedBox(width: 14.w),
+                Expanded(
+                  child: MouseRegion(
+                    cursor: SystemMouseCursors.click,
+                    child: GestureDetector(
+                      onTap: () => controller.setAccountType('company'),
+                      child: AnimatedContainer(
+                        duration: Duration(milliseconds: 220),
+                        padding: EdgeInsets.symmetric(vertical: 14.h, horizontal: 10.w),
+                        decoration: BoxDecoration(
+                          color: controller.accountType.value == 'company'
+                              ? AppColors.primary
+                              : AppColors.surface(isDarkMode),
+                          borderRadius: BorderRadius.circular(12.r),
+                          border: Border.all(
+                            color: controller.accountType.value == 'company'
+                                ? AppColors.primary
+                                : AppColors.textSecondary(isDarkMode).withOpacity(0.5),
+                            width: 1.4,
+                          ),
+                        ),
+                        child: Center(
+                          child: Text('شركة'.tr,
+                              style: TextStyle(
+                                fontSize: AppTextStyles.large,
+                                fontWeight: FontWeight.w600,
+                                color: controller.accountType.value == 'company'
+                                    ? AppColors.onPrimary
+                                    : AppColors.textPrimary(isDarkMode),
+                              )),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ));
   }
 
   Widget _buildInputField({
@@ -449,7 +463,7 @@ class AdvertiserDataScreen extends StatelessWidget {
             color: AppColors.textPrimary(isDarkMode),
           ),
         ),
-        SizedBox(height: 12.h),
+        SizedBox(height: 10.h),
         TextFormField(
           controller: controller,
           keyboardType: keyboardType,
@@ -462,21 +476,19 @@ class AdvertiserDataScreen extends StatelessWidget {
               fontFamily: AppTextStyles.appFontFamily,
               color: AppColors.textSecondary(isDarkMode),
             ),
-            prefixIcon: Icon(icon,
-                size: 24.w, color: AppColors.textSecondary(isDarkMode)),
+            prefixIcon: Icon(icon, size: 22.w, color: AppColors.textSecondary(isDarkMode)),
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14.r),
+              borderRadius: BorderRadius.circular(12.r),
               borderSide: BorderSide.none,
             ),
             filled: true,
             fillColor: AppColors.surface(isDarkMode),
-            contentPadding:
-                EdgeInsets.symmetric(horizontal: 20.w, vertical: 18.h),
+            contentPadding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 14.h),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14.r),
+              borderRadius: BorderRadius.circular(12.r),
               borderSide: BorderSide(
                 color: AppColors.primary,
-                width: 1.5,
+                width: 1.4,
               ),
             ),
           ),

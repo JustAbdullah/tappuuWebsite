@@ -31,6 +31,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../../customWidgets/EditableTextWidget.dart';
 import '../AdvertiserAdsScreen/AdvertiserAdsScreen.dart';
+import '../HomeScreen/menubar.dart';
 import 'AdsScreen.dart';
 import 'ConversationScreen.dart';
 
@@ -54,6 +55,7 @@ class AdDetailsScreen extends StatefulWidget {
 
 class _AdDetailsScreenState extends State<AdDetailsScreen> {
     final ScrollController _scrollController = ScrollController();
+      final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   bool _showAdvertiserDialog = false;
   final AdReportController _reportController = Get.put(AdReportController());
@@ -119,7 +121,7 @@ void _safeCloseDialogOne() {
   void dispose() {
     _videoController?.dispose();
     _chewieController?.dispose();
-    final sharedController = Get.find<SharedController>();
+    final sharedController = Get.put(SharedController());
     sharedController.markDeepLinkHandled();
             _scrollController.dispose();
 
@@ -1304,7 +1306,7 @@ void _showReportDialog() {
     final dividerColor = AppColors.divider(isDarkMode);
     final areaName = areaController.getAreaNameById(widget.ad.areaId);
     final CurrencyController currencyController = Get.put(CurrencyController());
-    SharedController _sharedCtrl = Get.find<SharedController>();
+    SharedController _sharedCtrl = Get.put(SharedController());
 
     return WillPopScope(
       onWillPop: () async {
@@ -1317,37 +1319,48 @@ void _showReportDialog() {
         return true;
       },
       child: Scaffold(
+         key: _scaffoldKey,
+      drawer: Menubar(),
         backgroundColor: AppColors.background(isDarkMode),
         appBar: PreferredSize(
           preferredSize: Size.fromHeight(60.h),
           child: SafeArea(
             child: Stack(children: [
-              Container(
+                 Container(
+                height: 50.h,
                 padding: EdgeInsets.symmetric(horizontal: 7.w),
                 color: AppColors.appBar(isDarkMode),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Flexible(
+                   Flexible(
                       flex: 2,
-                      child: IconButton(
-                        icon: Icon(
-                         Icons.arrow_back_ios
-                         ,
-                          color: AppColors.onPrimary,
-                          size: 20.w,
-                        ),
-                        onPressed: () {
-                          _cleanUpVideoControllers();
-                          _stopVideo();
-                           // أغلق أي Snackbar مفتوح أولاً
-    if (Get.isSnackbarOpen ?? false) {
-      Get.closeAllSnackbars();
-    }
-    
-    // ثم ارجع للخلف
-                          Get.back();
-                        },
+                      child: Row(
+                        children: [
+                          SizedBox(width:10.w,),
+                          InkWell(
+                            onTap: (){
+                              _cleanUpVideoControllers();
+                              _stopVideo();
+                               // أغلق أي Snackbar مفتوح أولاً
+                              if (Get.isSnackbarOpen ?? false) {
+                                Get.closeAllSnackbars();
+                              }
+                              
+                              // ثم ارجع للخلف
+                              Get.back();
+                            },
+                            child: Icon(
+                             Icons.arrow_back_ios
+                             ,
+                              color: AppColors.onPrimary,
+                              size: 20.w,
+                            ),
+                           
+                          ),
+                                      Container(padding: EdgeInsets.all(4.w), child: InkWell(onTap: () => _scaffoldKey.currentState?.openDrawer(), child: Icon(Icons.menu, color: AppColors.onPrimary, size: 22.w))),
+                    
+                        ],
                       ),
                     ),
                     Flexible(
@@ -1543,7 +1556,24 @@ void _showReportDialog() {
                         ),
                       ),
                     ),
-                    SizedBox(height: 15.h),
+                       Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                       children: [
+                        
+                       Text(
+  "تاريخ إنشاء الحساب: ${_formatDateTime(widget.ad.advertiser.createdAt!)}",
+  style: TextStyle(
+    fontFamily: AppTextStyles.appFontFamily,
+    fontSize: AppTextStyles.small,
+    color: AppColors.grey500,
+    height: 1.4,
+  ),
+  textAlign: TextAlign.center,
+),
+                       ],
+                     ),
+                    SizedBox(height: 10.h),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -1569,7 +1599,7 @@ void _showReportDialog() {
                           ),
                         ),
                         SizedBox(width: 4.w),
-                        Icon(Icons.chevron_right, size: 12.sp, color: AppColors.primary),
+                        Icon(Icons.chevron_right, size: 12.sp, color: AppColors.buttonAndLinksColor),
                         SizedBox(width: 4.w),
                         InkWell(
                           onTap: () {
@@ -1595,7 +1625,7 @@ void _showReportDialog() {
                           ),
                         ),
                         SizedBox(width: 4.w),
-                        Icon(Icons.chevron_right, size: 12.sp, color: AppColors.primary),
+                        Icon(Icons.chevron_right, size: 12.sp, color: AppColors.buttonAndLinksColor),
                         SizedBox(width: 4.w),
                         if (widget.ad.subCategoryLevelTwo != null)
                           InkWell(
@@ -1626,7 +1656,7 @@ void _showReportDialog() {
                       ],
                     ),
                     SizedBox(height: 5.h),
-                    Divider(height: 1, thickness: 0.7, color: AppColors.grey700.withOpacity(0.7)),
+                    Divider(height: 1, thickness: 0.3, color: AppColors.grey500.withOpacity(0.7)),
                     SizedBox(height: 5.h),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -1635,27 +1665,27 @@ void _showReportDialog() {
                           onTap: () {
                             Get.to(() => AdsScreen(titleOfpage: widget.ad.city!.name!, categoryId: null, cityId: widget.ad.city!.id));
                           },
-                          child: Text(
+                          child:Text(
                             widget.ad.city!.name.toString(),
                             style: TextStyle(
                               fontFamily: AppTextStyles.appFontFamily,
                               fontSize: AppTextStyles.small,
 
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.buttonAndLinksColor,
+                                  color: AppColors.grey500,
+
                               height: 1.4,
                             ),
                           ),
                         ),
                         SizedBox(width: 4.w),
-                        Text(
+                         Text(
                           "/",
                           style: TextStyle(
                             fontFamily: AppTextStyles.appFontFamily,
                             fontSize: AppTextStyles.small,
 
                             fontWeight: FontWeight.w600,
-                            color: AppColors.buttonAndLinksColor,
+                              color: AppColors.grey500,
                             height: 1.4,
                           ),
                         ),
@@ -1671,8 +1701,8 @@ void _showReportDialog() {
                               fontFamily: AppTextStyles.appFontFamily,
                               fontSize: AppTextStyles.small,
 
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.buttonAndLinksColor,
+                            
+                              color: AppColors.grey500,
                               height: 1.4,
                             ),
                           ),
@@ -1767,7 +1797,14 @@ void _showReportDialog() {
       ),
     );
   }
-
+String _formatDateTime(DateTime dateTime) {
+  // تنسيق التاريخ إلى yyyy/mm/dd
+  String year = dateTime.year.toString();
+  String month = dateTime.month.toString().padLeft(2, '0');
+  String day = dateTime.day.toString().padLeft(2, '0');
+  
+  return '$year/$month/$day';
+}
   Widget _buildSelectedTabContent(
     bool isDarkMode, 
     Color textPrimary, 
@@ -1956,68 +1993,70 @@ Future<void> _openInGoogleMaps(double lat, double lng) async {
 }
 
 
-  Widget _buildAttributesList(
-    List<AttributeValue> attributes,
-    double price,
-    DateTime createdAt,
-    String ad_number,
-    Color cardColor,
-    Color textPrimary,
-    Color textSecondary,
-  ) {
-    final extraItems = <Map<String, String>>[
-      {
-        'name': 'السعر'.tr,
-        'value': price != 0 ? Get.find<CurrencyController>().formatPrice(price) : '-',
-      },
-      {
-        'name': 'تاريخ النشر'.tr,
-  'value': _formatNumericDate(createdAt), // استخدام التاريخ بالأرقام
-      },
-      {
-        'name': 'رقم الإعلان'.tr,
-  'value': _convertArabicNumbersToEnglish(ad_number.toString()), // تحويل الأرقام العربية إلى إنجليزية
-      },
-    ];
+ Widget _buildAttributesList(
+  List<AttributeValue> attributes,
+  double price,
+  DateTime createdAt,
+  String ad_number,
+  Color cardColor,
+  Color textPrimary,
+  Color textSecondary,
+) {
+  final extraItems = <Map<String, String>>[
+    {
+      'name': 'السعر'.tr,
+      'value': price != 0 ? Get.find<CurrencyController>().formatPrice(price) : '-',
+    },
+    {
+      'name': 'تاريخ النشر'.tr,
+      'value': _formatNumericDate(createdAt),
+    },
+    {
+      'name': 'رقم الإعلان'.tr,
+      'value': _convertArabicNumbersToEnglish(ad_number.toString()),
+    },
+  ];
 
-    final totalCount = extraItems.length + attributes.length;
-  _adsController.showMap.value =false;
+  final totalCount = extraItems.length + attributes.length;
+  _adsController.showMap.value = false;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(16.r),
+  return Container(
+    decoration: BoxDecoration(
+      color: cardColor,
+      borderRadius: BorderRadius.circular(16.r),
+    ),
+    child: ListView.separated(
+      shrinkWrap: true,
+      physics: NeverScrollableScrollPhysics(),
+      itemCount: totalCount,
+      separatorBuilder: (_, __) => Divider(
+        height: 1.h,
+        thickness: 0.8,
+        color: Colors.grey.shade300,
+        indent: 24.w,
+        endIndent: 24.w,
       ),
-      child: ListView.separated(
-        shrinkWrap: true,
-        physics: NeverScrollableScrollPhysics(),
-        itemCount: totalCount,
-        separatorBuilder: (_, __) => Divider(
-          height: 1.h,
-          thickness: 0.8,
-          color: Colors.grey.shade300,
-          indent: 24.w,
-          endIndent: 24.w,
-        ),
-        itemBuilder: (context, index) {
-          String name = extraItems.length > index
-              ? extraItems[index]['name']!
-              : attributes[index - extraItems.length].name;
+      itemBuilder: (context, index) {
+        String name = extraItems.length > index
+            ? extraItems[index]['name']!
+            : attributes[index - extraItems.length].name;
         String value = extraItems.length > index
-    ? extraItems[index]['value']!
-    : _convertArabicNumbersToEnglish(attributes[index - extraItems.length].value); // تح
+            ? extraItems[index]['value']!
+            : _convertArabicNumbersToEnglish(attributes[index - extraItems.length].value);
 
-          Color valueColor;
-          if (name == 'السعر'.tr) {
-            valueColor = AppColors.buttonAndLinksColor;
-          } else if (name == 'رقم الإعلان'.tr) {
-            valueColor = AppColors.redId;
-          } else if (value.toLowerCase() == 'نعم' || value.toLowerCase() == 'لا') {
-            valueColor = value.toLowerCase() == 'نعم' ? Colors.green : Colors.red;
-          } else {
-            valueColor = textSecondary;
-          }
+        Color valueColor;
+        if (name == 'السعر'.tr) {
+          valueColor = AppColors.buttonAndLinksColor;
+        } else if (name == 'رقم الإعلان'.tr) {
+          valueColor = AppColors.redId;
+        } else if (value.toLowerCase() == 'نعم' || value.toLowerCase() == 'لا') {
+          valueColor = value.toLowerCase() == 'نعم' ? Colors.green : Colors.red;
+        } else {
+          valueColor = textSecondary;
+        }
 
+        // إذا كان هذا هو عنصر السعر، نضيف أيقونة الساعة
+        if (name == 'السعر'.tr) {
           return Padding(
             padding: EdgeInsets.symmetric(vertical: 8.h, horizontal: 16.w),
             child: Row(
@@ -2029,44 +2068,232 @@ Future<void> _openInGoogleMaps(double lat, double lng) async {
                     style: TextStyle(
                       fontFamily: AppTextStyles.appFontFamily,
                       fontSize: AppTextStyles.medium,
-
                       color: textPrimary,
                     ),
                   ),
                 ),
                 Expanded(
                   flex: 3,
-                  child: Text(
-                    value,
-                    textAlign: TextAlign.end,
-                    style: TextStyle(
-                      fontFamily: AppTextStyles.appFontFamily,
-                      fontSize: AppTextStyles.medium,
-
-                      fontWeight: FontWeight.w600,
-                      color: valueColor,
-                    ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Text(
+                        value,
+                        textAlign: TextAlign.end,
+                        style: TextStyle(
+                          fontFamily: AppTextStyles.appFontFamily,
+                          fontSize: AppTextStyles.medium,
+                          fontWeight: FontWeight.w600,
+                          color: valueColor,
+                        ),
+                      ),
+                      SizedBox(width: 8.w),
+                      GestureDetector(
+                        onTap: () {
+                          _showPriceInfoDialog(context);
+                        },
+                        child:  Icon(
+                            Icons.access_time_rounded,
+                            color: Colors.blue.shade600,
+                            size: 18.w,
+                          ),
+                       
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
           );
-        },
-      ),
-    );
-  }
+        }
 
-  String _formatArabicDate(DateTime date) {
-    final arabicMonths = [
-      'يناير'.tr, 'فبراير'.tr, 'مارس'.tr, 'أبريل'.tr, 'مايو'.tr, 'يونيو'.tr,
-      'يوليو'.tr, 'أغسطس'.tr, 'سبتمبر'.tr, 'أكتوبر'.tr, 'نوفمبر'.tr, 'ديسمبر'.tr,
-    ];
-    final month = arabicMonths[date.month - 1];
-    final day = date.day.toString();
-    final year = date.year.toString();
-    return '$month $year $day';
-  }
-  
+        // العناصر الأخرى بدون أيقونة الساعة
+        return Padding(
+          padding: EdgeInsets.symmetric(vertical: 8.h, horizontal: 16.w),
+          child: Row(
+            children: [
+              Expanded(
+                flex: 2,
+                child: Text(
+                  name,
+                  style: TextStyle(
+                    fontFamily: AppTextStyles.appFontFamily,
+                    fontSize: AppTextStyles.medium,
+                    color: textPrimary,
+                  ),
+                ),
+              ),
+              Expanded(
+                flex: 3,
+                child: Text(
+                  value,
+                  textAlign: TextAlign.end,
+                  style: TextStyle(
+                    fontFamily: AppTextStyles.appFontFamily,
+                    fontSize: AppTextStyles.medium,
+                    fontWeight: FontWeight.w600,
+                    color: valueColor,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    ),
+  );
+}
+void _showPriceInfoDialog(BuildContext context) {
+  showDialog(
+    context: context,
+    builder: (BuildContext context) {
+      return Dialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20.r),
+        ),
+        child: Container(
+          padding: EdgeInsets.all(24.w),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // أيقونة الساعة
+              Container(
+                padding: EdgeInsets.all(16.w),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.access_time_rounded,
+                  color: Colors.blue.shade600,
+                  size: 32.w,
+                ),
+              ),
+              
+              SizedBox(height: 16.h),
+              
+              // النص الجديد: أنت الآن تشاهد أحدث سعر لهذا الإعلان
+              Text(
+                'أنت الآن تشاهد أحدث سعر لهذا الإعلان'.tr,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: AppTextStyles.appFontFamily,
+                  fontSize: AppTextStyles.medium,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.green.shade700,
+                ),
+              ),
+              
+              SizedBox(height: 16.h),
+              
+              // الخط الفاصل
+              Divider(
+                height: 1.h,
+                thickness: 1.0,
+                color: Colors.grey.shade400,
+                indent: 16.w,
+                endIndent: 16.w,
+              ),
+              
+              SizedBox(height: 16.h),
+              
+              // العنوان الأصلي
+              Text(
+                'تتبع تغيرات سعر الإعلان'.tr,
+                style: TextStyle(
+                  fontFamily: AppTextStyles.appFontFamily,
+                  fontSize: AppTextStyles.large,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey.shade800,
+                ),
+              ),
+              
+              SizedBox(height: 16.h),
+              
+              // الرسالة التوضيحية
+              Text(
+                'يمكنك تتبع أحدث سعر لهذا الإعلان وتلقي إشعارات عند تغيير السعر من خلال تفعيل التنبيهات في قائمة المفضلة. أضف الإعلان إلى المفضلة واشغل التنبيهات لتبقى على اطلاع بجميع التحديثات.'.tr,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: AppTextStyles.appFontFamily,
+                  fontSize: AppTextStyles.medium,
+                  color: Colors.grey.shade600,
+                  height: 1.5,
+                ),
+              ),
+              
+              SizedBox(height: 24.h),
+              
+              // زر الإضافة إلى المفضلة
+              Container(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () {
+                    // هنا يمكنك إضافة دالة إضافة إلى المفضلة
+                    _toggleFavorite();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orange.shade600,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12.r),
+                    ),
+                    padding: EdgeInsets.symmetric(vertical: 12.h),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.favorite_border_rounded,
+                        color: Colors.white,
+                        size: 20.w,
+                      ),
+                      SizedBox(width: 8.w),
+                      Text(
+                        'أضف إلى المفضلة'.tr,
+                        style: TextStyle(
+                          fontFamily: AppTextStyles.appFontFamily,
+                          fontSize: AppTextStyles.medium,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              
+              SizedBox(height: 12.h),
+              
+              // زر الإغلاق
+              Container(
+                width: double.infinity,
+                child: TextButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                  },
+                  style: TextButton.styleFrom(
+                    padding: EdgeInsets.symmetric(vertical: 12.h),
+                  ),
+                  child: Text(
+                    'حسناً'.tr,
+                    style: TextStyle(
+                      fontFamily: AppTextStyles.appFontFamily,
+                      fontSize: AppTextStyles.medium,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
 
   Widget _buildContactButtons(Advertiser advertiser, bool isDarkMode) {
     return Container(

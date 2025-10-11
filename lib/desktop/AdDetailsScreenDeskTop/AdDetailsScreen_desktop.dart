@@ -1788,8 +1788,8 @@ Widget _buildCategoryHierarchy(bool isDarkMode, Ad ad) {
         Row(
           children: [
                 _buildBottomTab(0, 'tabTitle_info'.tr, ),
-                            _buildBottomTab(1, 'tabTitle_desc'.tr, ),
-                            _buildBottomTab(2, 'tabTitle_location'.tr, ),
+                            _buildBottomTab(1, 'tabTitle_location'.tr, ),
+                            _buildBottomTab(2, 'tabTitle_desc'.tr, ),
          
           ],
         ),

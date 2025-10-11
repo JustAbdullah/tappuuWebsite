@@ -224,7 +224,7 @@ class _DesktopConversationsListScreenState extends State<DesktopConversationsLis
                     child: _selectedConversation != null
                       ? DesktopConversationScreenInMy(
                           advertiser: _selectedConversation!.advertiser,
-                          ad: _selectedConversation?.ad,
+                          ad: _selectedConversation?.ad, idAdv: _selectedConversation!.advertiser.id,
                         )
                       : Center(
                           child: Column(

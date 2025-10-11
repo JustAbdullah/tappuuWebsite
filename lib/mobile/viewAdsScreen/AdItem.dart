@@ -221,7 +221,7 @@ bool get _isPremiumByPackage {
                             ad.title,
                             style: TextStyle(
                               fontFamily: AppTextStyles.appFontFamily,
-                              fontSize: AppTextStyles.medium,
+                              fontSize: AppTextStyles.large,
                               fontWeight: FontWeight.w500,
                               color: AppColors.textPrimary(themeController.isDarkMode.value),
                               height: 1.35,

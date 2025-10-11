@@ -692,8 +692,10 @@ class _AdsScreenState extends State<AdsScreen> with SingleTickerProviderStateMix
 
                               fontWeight: FontWeight.bold,
                               color: Colors.white,
+                                                                                          height: 1,
+
                             ),
-                            maxLines: 1,
+                            maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
                           Obx(() {
@@ -807,70 +809,101 @@ class _AdsScreenState extends State<AdsScreen> with SingleTickerProviderStateMix
               return Column(
                 children: [
                   // ===== Toolbar تحت العنوان — مشابه للصورة =====
-                  Container(
-                    height: 52.h,
-                    decoration: BoxDecoration(
-                      color: AppColors.backGroundButton(isDarkMode),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.09),
-                          blurRadius: 9,
-                          offset: const Offset(0, 7),
-                        )
-                      ],
-                    ),
-                    child: ListView(
-                      scrollDirection: Axis.horizontal,
-                      shrinkWrap: true,
-                      physics: const ClampingScrollPhysics(),
-                      children: [
-                        _toolItem(
-                          label: 'حفظ البحث'.tr,
-                          onTap: () {
-                            _showSaveSearchDialog(context);
-                          },
-                          isDarkMode: isDarkMode,
-                        ),
-                        _verticalToolDivider(isDarkMode),
-                        _toolItem(
-                          label: 'فرز حسب'.tr,
-                          onTap: () => _showSortOptions(context, adsController),
-                          isDarkMode: isDarkMode,
-                        ),
-                        _verticalToolDivider(isDarkMode),
-                        Obx(() {
-                          int activeFilters = 0;
-                          try {
-                            if (adsController.currentAttributes != null && adsController.currentAttributes.isNotEmpty) activeFilters += adsController.currentAttributes.length;
-                          } catch (_) {}
-                          try {
-                            if (adsController.selectedCity.value != null) activeFilters += 1;
-                          } catch (_) {}
-                          try {
-                            if (adsController.selectedArea.value != null) activeFilters += 1;
-                          } catch (_) {}
-                          return _toolItem(
-                            label: 'فلترة'.tr,
-                            onTap: () {
-                              if (widget.categoryId != null) {
-                                Get.to(() => FilterScreen(categoryId: widget.categoryId!, currentTimeframe: widget.currentTimeframe, onlyFeatured: widget.onlyFeatured));
-                              } else {
-                                Get.to(() => FilterScreen(categoryId: 0, currentTimeframe: widget.currentTimeframe, onlyFeatured: widget.onlyFeatured));
-                              }
-                            },
-                            isDarkMode: isDarkMode,
-                            badgeCount: activeFilters,
-                          );
-                        }),
-                        _verticalToolDivider(isDarkMode),
-                        _toolItem(
-                          label: 'طريقة العرض'.tr,
-                          onTap: () => _showViewOptions(context, adsController),
-                          isDarkMode: isDarkMode,
-                        ),
-                      ],
-                    ),
-                  ),
+                 Container(
+  height: 52.h,
+  decoration: BoxDecoration(
+    color: AppColors.backGroundButton(isDarkMode),
+    boxShadow: [
+      BoxShadow(
+        color: Colors.black.withOpacity(0.09),
+        blurRadius: 9,
+        offset: const Offset(0, 7),
+      )
+    ],
+  ),
+  child: Row(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      // حفظ البحث - أكبر حجماً
+      Expanded(
+        flex: 3,
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: 2.w), // تقليل المساحة
+          child: _toolItem(
+            label: 'حفظ البحث'.tr,
+            onTap: () => _showSaveSearchDialog(context),
+            isDarkMode: isDarkMode,
+          ),
+        ),
+      ),
+
+      // ديفايدر ثابت
+      _verticalToolDivider(isDarkMode),
+
+      // فرز حسب - أصغر
+      Expanded(
+        flex: 2,
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: 1.w), // تقليل المساحة
+          child: _toolItem(
+            label: 'فرز حسب'.tr,
+            onTap: () => _showSortOptions(context, adsController),
+            isDarkMode: isDarkMode,
+          ),
+        ),
+      ),
+
+      _verticalToolDivider(isDarkMode),
+
+      // فلترة - أصغر
+      Expanded(
+        flex: 2,
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: 1.w), // تقليل المساحة
+          child: Obx(() {
+            int activeFilters = 0;
+            try {
+              if (adsController.currentAttributes != null && adsController.currentAttributes.isNotEmpty) activeFilters += adsController.currentAttributes.length;
+            } catch (_) {}
+            try {
+              if (adsController.selectedCity.value != null) activeFilters += 1;
+            } catch (_) {}
+            try {
+              if (adsController.selectedArea.value != null) activeFilters += 1;
+            } catch (_) {}
+            return _toolItem(
+              label: 'فلترة'.tr,
+              onTap: () {
+                if (widget.categoryId != null) {
+                  Get.to(() => FilterScreen(categoryId: widget.categoryId!, currentTimeframe: widget.currentTimeframe, onlyFeatured: widget.onlyFeatured));
+                } else {
+                  Get.to(() => FilterScreen(categoryId: 0, currentTimeframe: widget.currentTimeframe, onlyFeatured: widget.onlyFeatured));
+                }
+              },
+              isDarkMode: isDarkMode,
+              badgeCount: activeFilters,
+            );
+          }),
+        ),
+      ),
+
+      _verticalToolDivider(isDarkMode),
+
+      // طريقة العرض - أكبر حجماً
+      Expanded(
+        flex: 3,
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: 2.w), // تقليل المساحة
+          child: _toolItem(
+            label: 'طريقة العرض'.tr,
+            onTap: () => _showViewOptions(context, adsController),
+            isDarkMode: isDarkMode,
+          ),
+        ),
+      ),
+    ],
+  ),
+),
 
                   SizedBox(height: 7.h),
 
@@ -1048,55 +1081,71 @@ class _AdsScreenState extends State<AdsScreen> with SingleTickerProviderStateMix
   }
 
   // ===== Helper widget for toolbar items =====
-  Widget _toolItem({
-    required String label,
-    required VoidCallback onTap,
-    required bool isDarkMode,
-    int badgeCount = 0,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 14.w),
-        height: double.infinity,
-        child: Row(
-          children: [
-            SizedBox(width: 8.w),
-            Text(
+// دالة الـ Divider المعدلة مع الحفاظ على التصميم الأصلي
+Widget _verticalToolDivider(bool isDarkMode, {double width = 1.0}) {
+  return Container(
+    width: width,
+    margin: EdgeInsets.symmetric(vertical: 10.h),
+    color: isDarkMode ? Colors.white12 : Colors.black12,
+  );
+}
+
+// دالة _toolItem المعدلة لدعم النقاط (...) والتقليل من المسافات
+Widget _toolItem({
+  required String label,
+  required VoidCallback onTap,
+  required bool isDarkMode,
+  int badgeCount = 0,
+}) {
+  return InkWell(
+    onTap: onTap,
+    child: Container(
+      alignment: Alignment.center,
+      padding: EdgeInsets.symmetric(horizontal: 2.w), // تقليل المساحة الداخلية
+      height: double.infinity,
+      constraints: BoxConstraints(minWidth: 20.w), // حد أدنى للعرض
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min, // يسمح بالتقلص عند الحاجة
+        children: [
+          Flexible( // يمنع تجاوز النص للحدود
+            child: Text(
               label,
               style: TextStyle(
                 fontFamily: AppTextStyles.appFontFamily,
                 fontSize: AppTextStyles.small,
-
                 fontWeight: FontWeight.w600,
                 color: AppColors.textPrimary(isDarkMode),
               ),
+              overflow: TextOverflow.ellipsis, // نقطة ... عند عدم كفاية المساحة
+              maxLines: 1,
+              softWrap: false,
             ),
-            if (badgeCount > 0) ...[
-              SizedBox(width: 6.w),
-              Container(
-                padding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 4.h),
-                decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(12.r)),
-                child: Text(
-                  badgeCount > 99 ? '99+' : badgeCount.toString(),
-                  style: TextStyle(fontSize: 11.sp, color: Colors.white, fontWeight: FontWeight.bold),
+          ),
+          if (badgeCount > 0) ...[
+            SizedBox(width: 3.w), // تقليل المسافة بين النص والبادج
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 2.h), // تصغير البادج
+              decoration: BoxDecoration(
+                color: Colors.red, 
+                borderRadius: BorderRadius.circular(10.r) // تقليل نصف القطر
+              ),
+              child: Text(
+                badgeCount > 99 ? '99+' : badgeCount.toString(),
+                style: TextStyle(
+                  fontSize: 9.sp, // تصغير حجم خط البادج
+                  color: Colors.white, 
+                  fontWeight: FontWeight.bold
                 ),
-              )
-            ],
+              ),
+            )
           ],
-        ),
+        ],
       ),
-    );
-  }
-
-  Widget _verticalToolDivider(bool isDarkMode) {
-    return Container(
-      width: 1,
-      height: 28.h,
-      color: AppColors.grey.withOpacity(0.35),
-      margin: EdgeInsets.symmetric(horizontal: 6.w),
-    );
-  }
+    ),
+  );
+}
 
   // ========== باقي الدوال كما عندك (قوائم، شيمر، مودالات) ==========
   Widget _buildAdsList(AdsController controller) {

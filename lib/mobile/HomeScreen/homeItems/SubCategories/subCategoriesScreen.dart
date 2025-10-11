@@ -14,6 +14,7 @@ import '../../../../app_routes.dart';
 import '../../../../controllers/BrowsingHistoryController.dart';
 import '../../../../controllers/LoadingController.dart';
 import '../../../../controllers/PopularHistoryController.dart';
+import '../../../../core/data/model/subcategory_level_one.dart';
 import '../../menubar.dart';
 import '../SubCategoriesLevelTwo/subCategoriesScreenLevelTwo.dart';
 
@@ -22,13 +23,15 @@ class SubCategoriesScreen extends StatefulWidget {
   final String categoryName;
   final String categorslug;
   final int countOfAdsInCategory;
+  final String? adsPeriod;
 
-  SubCategoriesScreen({
+  const SubCategoriesScreen({
     super.key,
     required this.categoryId,
     required this.categoryName,
     required this.countOfAdsInCategory,
     required this.categorslug,
+    this.adsPeriod,
   });
 
   @override
@@ -42,36 +45,60 @@ class _SubCategoriesScreenState extends State<SubCategoriesScreen> {
   @override
   void initState() {
     super.initState();
+    _initializeData();
+  }
+
+  void _initializeData() {
     final langCode = Get.find<ChangeLanguageController>().currentLocale.value.languageCode;
-    controller.fetchSubcategories(widget.categoryId, langCode);
+    
+    // إعادة تعيين البيانات السابقة إذا كان التصنيف مختلف
+    if (controller.currentCategoryId.value != widget.categoryId) {
+      controller.clearCategoryData(widget.categoryId);
+    }
+    
+    // جلب البيانات الجديدة
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      controller.fetchSubcategories(
+        widget.categoryId, 
+        langCode, 
+        adsPeriod: widget.adsPeriod,
+        force: true
+      );
+    });
+
     _updateBrowserUrl();
   }
 
   void _updateBrowserUrl() {
     String urlPath = '';
-    
-    if (widget.categorslug != null && widget.categorslug.isNotEmpty) {
+
+    if (widget.categorslug.isNotEmpty) {
       urlPath += '/${widget.categorslug}';
     }
-    
-    html.window.history.replaceState({}, '', urlPath);
+
+    if (widget.adsPeriod != null && widget.adsPeriod!.isNotEmpty) {
+      final qp = '?ads_period=${widget.adsPeriod}';
+      html.window.history.replaceState({}, '', urlPath + qp);
+    } else {
+      html.window.history.replaceState({}, '', urlPath);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Get.find<ThemeController>().isDarkMode.value;
     final bgColor = AppColors.background(isDarkMode);
-    
-    return Scaffold( 
+
+    return Scaffold(
       key: _scaffoldKey,
       drawer: Menubar(),
       backgroundColor: bgColor,
-      appBar: _buildAppBar(context, _scaffoldKey),
-      body: _buildBody(bgColor, widget.categoryId),
+      appBar: _buildAppBar(context),
+      body: _buildBody(bgColor),
     );
   }
 
-  PreferredSizeWidget _buildAppBar(BuildContext context, GlobalKey<ScaffoldState> _scaffoldKey) {
+  PreferredSizeWidget _buildAppBar(BuildContext context) {
     final isDarkMode = Get.find<ThemeController>().isDarkMode.value;
     return AppBar(
       backgroundColor: AppColors.primary,
@@ -81,7 +108,11 @@ class _SubCategoriesScreenState extends State<SubCategoriesScreen> {
           size: 20.w,
           color: AppColors.onSurfaceDark,
         ),
-        onPressed: () => Get.back(),
+        onPressed: () {
+          // مسح بيانات التصنيف الحالي عند الرجوع
+          controller.clearCategoryData(widget.categoryId);
+          Get.back();
+        },
       ),
       actions: [
         InkWell(
@@ -110,13 +141,19 @@ class _SubCategoriesScreenState extends State<SubCategoriesScreen> {
     );
   }
 
-  Widget _buildBody(Color bgColor, int categorieID) {
+  Widget _buildBody(Color bgColor) {
     return Obx(() {
-      if (controller.isLoadingSubcategoryLevelOne.value) {
+      // حالة التحميل للمتصفح الحالي
+      final isLoading = controller.isSubCategoriesLoading(widget.categoryId);
+      
+      if (isLoading) {
         return _buildShimmerLoader(bgColor);
       }
 
-      if (controller.subCategories.isEmpty) {
+      // الحصول على القائمة من الماب
+      final List<SubcategoryLevelOne> list = controller.getSubCategoriesForCategory(widget.categoryId);
+
+      if (list.isEmpty) {
         return Center(
           child: Text(
             'لا توجد تصنيفات فرعية'.tr,
@@ -133,14 +170,11 @@ class _SubCategoriesScreenState extends State<SubCategoriesScreen> {
 
       return Column(
         children: [
-          // رابط "عرض جميع الإعلانات"
-          _buildViewAllAdsLink(categorieID),
-          
-          // قائمة التصنيفات الفرعية
+          _buildViewAllAdsLink(list),
           Expanded(
             child: ListView.separated(
               padding: EdgeInsets.symmetric(vertical: 8.h, horizontal: 16.w),
-              itemCount: controller.subCategories.length,
+              itemCount: list.length,
               separatorBuilder: (context, index) => Divider(
                 height: 1,
                 thickness: 1,
@@ -149,7 +183,7 @@ class _SubCategoriesScreenState extends State<SubCategoriesScreen> {
                     : Colors.grey[200],
               ),
               itemBuilder: (context, index) {
-                final subCategory = controller.subCategories[index];
+                final subCategory = list[index];
                 final translation = subCategory.translations.firstWhere(
                   (t) => t.language == Get.find<ChangeLanguageController>().currentLocale.value.languageCode,
                   orElse: () => subCategory.translations.first,
@@ -171,9 +205,9 @@ class _SubCategoriesScreenState extends State<SubCategoriesScreen> {
     });
   }
 
-  // رابط "عرض جميع الإعلانات"
-  Widget _buildViewAllAdsLink(int categoryId) {
+  Widget _buildViewAllAdsLink(List<SubcategoryLevelOne> currentList) {
     final isDarkMode = Get.find<ThemeController>().isDarkMode.value;
+    final actualCount = currentList.fold<int>(0, (sum, sub) => sum + (sub.adsCount ?? 0));
 
     return Column(
       children: [
@@ -181,15 +215,18 @@ class _SubCategoriesScreenState extends State<SubCategoriesScreen> {
           padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 0.h),
           child: InkWell(
             onTap: () {
+              final args = {
+                'categoryId': widget.categoryId,
+                'nameOfMain': widget.categoryName,
+                'categorySlug': widget.categorslug,
+                'countofAds': actualCount,
+                'titleOfpage': widget.categoryName,
+                if (widget.adsPeriod != null) 'adsPeriod': widget.adsPeriod,
+              };
+
               Get.toNamed(
                 AppRoutes.adsScreenMobile,
-                arguments: {
-                  'categoryId': categoryId,
-                  'nameOfMain': widget.categoryName,
-                  'categorySlug': widget.categorslug,
-                  'countofAds': widget.countOfAdsInCategory,
-                  'titleOfpage': widget.categoryName
-                },
+                arguments: args,
               );
             },
             child: Row(
@@ -205,11 +242,10 @@ class _SubCategoriesScreenState extends State<SubCategoriesScreen> {
                     decoration: TextDecoration.underline,
                   ),
                 ),
-        
                 Row(
                   children: [
                     Text(
-                      "(${widget.countOfAdsInCategory.toString()})",
+                      "(${actualCount.toString()})",
                       style: TextStyle(
                         fontSize: AppTextStyles.medium,
                         fontFamily: AppTextStyles.appFontFamily,
@@ -218,22 +254,20 @@ class _SubCategoriesScreenState extends State<SubCategoriesScreen> {
                         decoration: TextDecoration.underline,
                       ),
                     ),
-        
                     IconButton(
                       icon: Icon(Icons.arrow_forward_ios,
                           size: 20.w,
                           color: AppColors.buttonAndLinksColor),
                       onPressed: () {
-                        Get.toNamed(
-                          AppRoutes.adsScreenMobile,
-                          arguments: {
-                            'categoryId': categoryId,
-                            'nameOfMain': widget.categoryName,
-                            'categorySlug': widget.categorslug,
-                            'countofAds': widget.countOfAdsInCategory,
-                            'titleOfpage': widget.categoryName
-                          },
-                        );
+                        final args = {
+                          'categoryId': widget.categoryId,
+                          'nameOfMain': widget.categoryName,
+                          'categorySlug': widget.categorslug,
+                          'countofAds': actualCount,
+                          'titleOfpage': widget.categoryName,
+                          if (widget.adsPeriod != null) 'adsPeriod': widget.adsPeriod,
+                        };
+                        Get.toNamed(AppRoutes.adsScreenMobile, arguments: args);
                       },
                     ),
                   ],
@@ -256,7 +290,7 @@ class _SubCategoriesScreenState extends State<SubCategoriesScreen> {
     final isDarkMode = Get.find<ThemeController>().isDarkMode.value;
     final baseColor = isDarkMode ? Colors.grey[800]! : Colors.grey[300]!;
     final highlightColor = isDarkMode ? Colors.grey[700]! : Colors.grey[100]!;
-    
+
     return Shimmer.fromColors(
       baseColor: baseColor,
       highlightColor: highlightColor,
@@ -288,7 +322,6 @@ class _SubCategoriesScreenState extends State<SubCategoriesScreen> {
               ],
             ),
           ),
-          
           Expanded(
             child: Padding(
               padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
@@ -313,7 +346,6 @@ class _SubCategoriesScreenState extends State<SubCategoriesScreen> {
                             borderRadius: BorderRadius.circular(4.r),
                           ),
                         ),
-                        
                         Row(
                           children: [
                             Container(
@@ -356,26 +388,26 @@ class _SubCategoriesScreenState extends State<SubCategoriesScreen> {
     required String? imageUrl,
   }) {
     final isDarkMode = Get.find<ThemeController>().isDarkMode.value;
-    
+
     return InkWell(
       onTap: () {
         BrowsingHistoryController _browsing = Get.put(BrowsingHistoryController());
-        
+
         Get.find<LoadingController>().currentUser != null
             ? _browsing.addHistory(
-                categoryId: widget.categoryId, 
-                subcat1Id: idSub, 
+                categoryId: widget.categoryId,
+                subcat1Id: idSub,
                 userId: Get.find<LoadingController>().currentUser?.id ?? 0)
             : null;
-            
+
         Get.find<PopularHistoryController>().addOrIncrement(
           categoryId: widget.categoryId,
           subcat1Id: idSub,
         );
- 
+
         controller.idOfSubCate.value = idSub;
         controller.nameOfSubCate.value = nameSub;
-        
+
         Get.to(() => SubCategoriesScreenLeveLTwo(
           nameMainCate: nameCate,
           MainId: widget.categoryId,
@@ -384,6 +416,7 @@ class _SubCategoriesScreenState extends State<SubCategoriesScreen> {
           allSubOnecount: adsCount,
           slugMainCate: widget.categorslug,
           subCateSlug: slugsSub,
+          adsPeriod: widget.adsPeriod,
         ));
       },
       child: Container(

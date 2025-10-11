@@ -21,7 +21,7 @@ class NoScrollbarScrollBehavior extends ScrollBehavior {
   Widget buildScrollbar(BuildContext context, Widget child, ScrollableDetails details) {
     return child;
   }
-  
+
   @override
   ScrollPhysics getScrollPhysics(BuildContext context) {
     return const AlwaysScrollableScrollPhysics();
@@ -71,27 +71,27 @@ class AdvertiserDataScreenDeskTop extends StatelessWidget {
                           // العنوان الرئيسي
                           _buildMainTitle(isDarkMode),
                           SizedBox(height: 10.h),
-                          
+
                           // وصف الصفحة
                           _buildDescription(isDarkMode),
                           SizedBox(height: 20.h),
-                          
+
                           // حقل الشعار
                           _buildLogoSection(controller, isDarkMode),
                           SizedBox(height: 20.h),
-                          
-                          // حقل نوع الحساب
-                          _buildAccountTypeField(controller, isDarkMode),
+
+                          // حقل نوع الحساب (Reactive)
+                          Obx(() => _buildAccountTypeField(controller, isDarkMode)),
                           SizedBox(height: 20.h),
-                          
-                          // حقول البيانات
-                          _buildFormFields(controller, isDarkMode),
+
+                          // حقول البيانات (Reactive hints inside)
+                          Obx(() => _buildFormFields(controller, isDarkMode)),
                           SizedBox(height: 20.h),
-                          
+
                           // زر الحفظ
                           _buildSaveButton(controller),
                           SizedBox(height: 10.h),
-                          
+
                           // ملاحظة
                           _buildNote(isDarkMode),
                           SizedBox(height: 30.h),
@@ -150,88 +150,88 @@ class AdvertiserDataScreenDeskTop extends StatelessWidget {
           textAlign: TextAlign.center,
         ),
         SizedBox(height: 10.h),
-        
+
         // تصميم دائرة الشعار
         Center(
           child: Obx(() => Container(
-            width: 100.w,
-            height: 100.h,
-            decoration: BoxDecoration(
-              color: AppColors.surface(isDarkMode),
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: AppColors.primary.withOpacity(0.5),
-                width: 1.5,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 6,
-                  offset: Offset(0, 2),
-                )
-              ],
-            ),
-            child: Stack(
-              children: [
-                if (controller.logoBytes.value != null)
-                  ClipOval(
-                    child: Image.memory(
-                      controller.logoBytes.value!,
-                      fit: BoxFit.cover,
-                      width: double.infinity,
-                      height: double.infinity,
-                    ),
+                width: 100.w,
+                height: 100.h,
+                decoration: BoxDecoration(
+                  color: AppColors.surface(isDarkMode),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: AppColors.primary.withOpacity(0.5),
+                    width: 1.5,
                   ),
-                Positioned.fill(
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(100),
-                      onTap: () => controller.pickLogo(),
-                      child: controller.logoBytes.value == null
-                          ? Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.add_a_photo,
-                                    size: 24.w,
-                                    color: AppColors.primary,
-                                  ),
-                                  SizedBox(height: 6.h),
-                                  Text(
-                                    'إضافة شعار'.tr,
-                                    style: TextStyle(
-                                      fontSize: AppTextStyles.small,
-                                      color: AppColors.primary,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            )
-                          : Container(),
-                    ),
-                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 6,
+                      offset: Offset(0, 2),
+                    )
+                  ],
                 ),
-                if (controller.logoBytes.value != null)
-                  Positioned(
-                    bottom: 6.h,
-                    right: 6.w,
-                    child: GestureDetector(
-                      onTap: () => controller.removeLogo(),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: AppColors.primary,
-                          shape: BoxShape.circle,
+                child: Stack(
+                  children: [
+                    if (controller.logoBytes.value != null)
+                      ClipOval(
+                        child: Image.memory(
+                          controller.logoBytes.value!,
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                          height: double.infinity,
                         ),
-                        padding: EdgeInsets.all(4.w),
-                        child: Icon(Icons.close, color: Colors.white, size: 12.w),
+                      ),
+                    Positioned.fill(
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(100),
+                          onTap: () => controller.pickLogo(),
+                          child: controller.logoBytes.value == null
+                              ? Center(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.add_a_photo,
+                                        size: 24.w,
+                                        color: AppColors.primary,
+                                      ),
+                                      SizedBox(height: 6.h),
+                                      Text(
+                                        'إضافة شعار'.tr,
+                                        style: TextStyle(
+                                          fontSize: AppTextStyles.small,
+                                          color: AppColors.primary,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              : Container(),
+                        ),
                       ),
                     ),
-                  ),
-              ],
-            ),
-          )),
+                    if (controller.logoBytes.value != null)
+                      Positioned(
+                        bottom: 6.h,
+                        right: 6.w,
+                        child: GestureDetector(
+                          onTap: () => controller.removeLogo(),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: AppColors.primary,
+                              shape: BoxShape.circle,
+                            ),
+                            padding: EdgeInsets.all(4.w),
+                            child: Icon(Icons.close, color: Colors.white, size: 12.w),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              )),
         ),
         SizedBox(height: 10.h),
         Text(
@@ -264,63 +264,81 @@ class AdvertiserDataScreenDeskTop extends StatelessWidget {
         Row(
           children: [
             Expanded(
-              child: _buildAccountTypeChoice(
-                title: 'فردي'.tr,
-                isSelected: controller.accountType.value == 'individual',
-                onTap: () => controller.setAccountType('individual'),
-                isDarkMode: isDarkMode,
+              child: MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: GestureDetector(
+                  onTap: () => controller.setAccountType('individual'),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 220),
+                    padding: EdgeInsets.symmetric(vertical: 12.h, horizontal: 8.w),
+                    decoration: BoxDecoration(
+                      color: controller.accountType.value == 'individual'
+                          ? AppColors.primary
+                          : AppColors.surface(isDarkMode),
+                      borderRadius: BorderRadius.circular(8.r),
+                      border: Border.all(
+                        color: controller.accountType.value == 'individual'
+                            ? AppColors.primary
+                            : AppColors.textSecondary(isDarkMode).withOpacity(0.5),
+                        width: 1.0,
+                      ),
+                    ),
+                    child: Center(
+                      child: Text(
+                        'فردي'.tr,
+                        style: TextStyle(
+                          fontSize: AppTextStyles.medium,
+                          fontWeight: FontWeight.w600,
+                          color: controller.accountType.value == 'individual'
+                              ? AppColors.onPrimary
+                              : AppColors.textPrimary(isDarkMode),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
             SizedBox(width: 10.w),
             Expanded(
-              child: _buildAccountTypeChoice(
-                title: 'شركة'.tr,
-                isSelected: controller.accountType.value == 'company',
-                onTap: () => controller.setAccountType('company'),
-                isDarkMode: isDarkMode,
+              child: MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: GestureDetector(
+                  onTap: () => controller.setAccountType('company'),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 220),
+                    padding: EdgeInsets.symmetric(vertical: 12.h, horizontal: 8.w),
+                    decoration: BoxDecoration(
+                      color: controller.accountType.value == 'company'
+                          ? AppColors.primary
+                          : AppColors.surface(isDarkMode),
+                      borderRadius: BorderRadius.circular(8.r),
+                      border: Border.all(
+                        color: controller.accountType.value == 'company'
+                            ? AppColors.primary
+                            : AppColors.textSecondary(isDarkMode).withOpacity(0.5),
+                        width: 1.0,
+                      ),
+                    ),
+                    child: Center(
+                      child: Text(
+                        'شركة'.tr,
+                        style: TextStyle(
+                          fontSize: AppTextStyles.medium,
+                          fontWeight: FontWeight.w600,
+                          color: controller.accountType.value == 'company'
+                              ? AppColors.onPrimary
+                              : AppColors.textPrimary(isDarkMode),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
           ],
         ),
       ],
-    );
-  }
-
-  Widget _buildAccountTypeChoice({
-    required String title,
-    required bool isSelected,
-    required VoidCallback onTap,
-    required bool isDarkMode,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        padding: EdgeInsets.symmetric(vertical: 12.h, horizontal: 8.w),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? AppColors.primary
-              : AppColors.surface(isDarkMode),
-          borderRadius: BorderRadius.circular(8.r),
-          border: Border.all(
-            color: isSelected
-                ? AppColors.primary
-                : AppColors.textSecondary(isDarkMode).withOpacity(0.5),
-            width: 1.0,
-          ),
-        ),
-        child: Center(
-          child: Text(
-            title,
-            style: TextStyle(
-              fontSize: AppTextStyles.medium,
-              fontWeight: FontWeight.w600,
-              color: isSelected
-                  ? AppColors.onPrimary
-                  : AppColors.textPrimary(isDarkMode),
-            ),
-          ),
-        ),
-      ),
     );
   }
 
@@ -330,29 +348,29 @@ class AdvertiserDataScreenDeskTop extends StatelessWidget {
         // حقل اسم المعلن
         _buildInputField(
           title: 'اسم المعلن*'.tr,
-          hint: controller.accountType.value == 'individual' 
-            ? 'أدخل اسمك الشخصي'.tr 
-            : 'أدخل اسم الشركة أو المؤسسة'.tr,
+          hint: controller.accountType.value == 'individual'
+              ? 'أدخل اسمك الشخصي'.tr
+              : 'أدخل اسم الشركة أو المؤسسة'.tr,
           icon: Icons.business,
           controller: controller.businessNameCtrl,
           isDarkMode: isDarkMode,
           onChanged: (value) => controller.updateButton(),
         ),
         SizedBox(height: 15.h),
-        
+
         // حقل الوصف
         _buildInputField(
           title: 'وصف المعلن (اختياري)'.tr,
-          hint: controller.accountType.value == 'individual' 
-            ? 'أدخل وصفًا مختصرًا عن نشاطك'.tr 
-            : 'أدخل وصفًا مختصرًا عن نشاط الشركة'.tr,
+          hint: controller.accountType.value == 'individual'
+              ? 'أدخل وصفًا مختصرًا عن نشاطك'.tr
+              : 'أدخل وصفًا مختصرًا عن نشاط الشركة'.tr,
           icon: Icons.description,
           controller: controller.descriptionCtrl,
           isDarkMode: isDarkMode,
           maxLines: 3,
         ),
         SizedBox(height: 15.h),
-        
+
         // حقل رقم الاتصال
         _buildInputField(
           title: 'رقم الاتصال*'.tr,
@@ -364,7 +382,7 @@ class AdvertiserDataScreenDeskTop extends StatelessWidget {
           onChanged: (value) => controller.updateButton(),
         ),
         SizedBox(height: 15.h),
-        
+
         // حقل واتساب
         _buildInputField(
           title: 'رقم الواتساب (اختياري)'.tr,
@@ -468,10 +486,10 @@ class AdvertiserDataScreenDeskTop extends StatelessWidget {
       id: 'button',
       builder: (btnController) {
         final isValid = btnController.businessNameCtrl.text.isNotEmpty &&
-                       btnController.contactPhoneCtrl.text.isNotEmpty;
-        
+            btnController.contactPhoneCtrl.text.isNotEmpty;
+
         final isSaving = btnController.isSaving.value;
-        
+
         return SizedBox(
           width: double.infinity,
           height: 40.h,
@@ -480,7 +498,7 @@ class AdvertiserDataScreenDeskTop extends StatelessWidget {
                 ? () async {
                     try {
                       btnController.setSaving(true);
-                      
+
                       if (btnController.logoPath.value != null) {
                         await btnController.uploadLogoToServer();
                       }
