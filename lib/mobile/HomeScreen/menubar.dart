@@ -11,13 +11,13 @@ import '../../core/constant/appcolors.dart';
 import '../../core/localization/changelanguage.dart';
 import '../AddAds/AddAdScreen.dart';
 import '../ServicesDrawer/ServicesDrawer.dart';
-import '../UserSettings/SettingsDrawer.dart';
 import '../UserSettings/itemsUserSettings/UserInfoPage.dart';
 import 'homeItems/LoginPopup.dart';
 import 'homeItems/SubCategories/subCategoriesScreen.dart';
 import 'home_screen.dart';
 
-class Menubar extends StatelessWidget {
+class 
+ Menubar extends StatelessWidget {
   const Menubar({super.key});
 
   @override
@@ -116,6 +116,12 @@ class Menubar extends StatelessWidget {
                       title: 'اضف اعلان'.tr,
                       isDarkMode: isDarkMode,
                       onTap: () {
+                         
+  if ( Get.find<LoadingController>().currentUser == null) {
+    Get.snackbar('تنبيه'.tr, 'يجب تسجيل الدخول'.tr,
+        snackPosition: SnackPosition.BOTTOM);
+    return;
+  }
                         Get.to(()=>AddAdScreen());
                       },
                     ),
@@ -138,7 +144,7 @@ class Menubar extends StatelessWidget {
                                   begin: const Offset(1, 0),
                                   end: Offset.zero,
                                 ).animate(animation),
-                                child: ServicesDrawer(),
+                                child: SettingsDrawer(),
                               );
                             },
                           );
@@ -168,7 +174,8 @@ class Menubar extends StatelessWidget {
                         'التصنيفات الرئيسية'.tr,
                         style: TextStyle(
                           fontFamily: AppTextStyles.appFontFamily,
-                          fontSize: AppTextStyles.medium,
+                          fontSize: AppTextStyles.large,
+
                           fontWeight: FontWeight.bold,
                           color: AppColors.textPrimary(isDarkMode),
                         ),
@@ -195,7 +202,7 @@ class Menubar extends StatelessWidget {
                             orElse: () => category.translations.first,
                           );
 
-                          return _buildSmallCategoryItem(
+                            return _buildSmallCategoryItem(
                             id: category.id,
                             image: category.image,
                             name: translation.name,
@@ -234,7 +241,8 @@ class Menubar extends StatelessWidget {
         title,
         style: TextStyle(   
           fontFamily: AppTextStyles.appFontFamily,
-          fontSize: AppTextStyles.medium,
+          fontSize: AppTextStyles.large,
+
           color: Colors.white,
           fontWeight: FontWeight.w500,
         ),
@@ -290,6 +298,7 @@ class Menubar extends StatelessWidget {
           style: TextStyle(   
             fontFamily: AppTextStyles.appFontFamily,
             fontSize: AppTextStyles.medium,
+
             color: AppColors.textPrimary(isDarkMode),
           ),
         ),
@@ -303,3 +312,8 @@ class Menubar extends StatelessWidget {
     );
 
   }}
+
+
+
+
+

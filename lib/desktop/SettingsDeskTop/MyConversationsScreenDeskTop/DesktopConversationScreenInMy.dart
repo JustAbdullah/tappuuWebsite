@@ -1,3 +1,14 @@
+// DesktopConversationScreenInMy.dart — واجهة ويب/حاسوب مكتملة (محدّثة)
+// - تشغيل صوتيات مستلمة فقط (لا تسجيل)
+// - زر الميكروفون: مودال وسط الشاشة (عرض ثابت 420px) ينبه أن الميزة للجوال فقط
+// - تعليم الرسائل الواردة كمقروءة تلقائياً
+// - لوحة معلومات إعلان جانبية
+// - حذف رسائلي مع تأكيد
+// - شيت جانبي للتواصل من زر الهاتف/⋮
+// - سكرول تلقائي
+// - didUpdateWidget لإعادة تحميل الرسائل عند تغيّر المحادثة
+// - عرض السعر رقمي كامل بفواصل (بدون "ألف/مليون")
+
 import 'dart:async';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
@@ -12,6 +23,36 @@ import '../../../core/constant/app_text_styles.dart';
 import '../../../core/constant/appcolors.dart';
 import '../../../core/data/model/Message.dart';
 import '../../../core/data/model/conversation.dart';
+
+// ======== نماذج مساعدة لسياق الاتصال ========
+enum ContactMode { individual, companyOnly, companyWithMember }
+
+class ContactContext {
+  final ContactMode mode;
+  final String? companyName;
+  final String? memberName;
+  final String? personName;
+  final String? primaryTel;
+  final String? primaryWaChat;
+  final String? primaryWaCall;
+
+  ContactContext({
+    required this.mode,
+    this.companyName,
+    this.memberName,
+    this.personName,
+    this.primaryTel,
+    this.primaryWaChat,
+    this.primaryWaCall,
+  });
+}
+
+T? _firstWhereOrNull<T>(Iterable<T> items, bool Function(T) test) {
+  for (final x in items) {
+    if (test(x)) return x;
+  }
+  return null;
+}
 
 class DesktopConversationScreenInMy extends StatefulWidget {
   final Advertiser? advertiser;
@@ -46,6 +87,8 @@ class _DesktopConversationScreenInMyState extends State<DesktopConversationScree
 
   final Map<int, Duration> _messageDurations = {};
 
+  static const _receiptGrey = Color(0xFF9AA0A6);
+
   @override
   void initState() {
     super.initState();
@@ -61,24 +104,31 @@ class _DesktopConversationScreenInMyState extends State<DesktopConversationScree
 
     _positionSub = _audioPlayer.onPositionChanged.listen((p) {
       if (!mounted) return;
-      setState(() {
-        _currentPosition = p;
-      });
+      setState(() => _currentPosition = p);
     });
 
     _durationSub = _audioPlayer.onDurationChanged.listen((d) {
       if (!mounted) return;
-      setState(() {
-        _currentDuration = d;
-      });
+      setState(() => _currentDuration = d);
     });
   }
 
   @override
+  void didUpdateWidget(covariant DesktopConversationScreenInMy oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final oldKey = '${oldWidget.idAdv}-${oldWidget.ad?.id ?? 0}';
+    final newKey = '${widget.idAdv}-${widget.ad?.id ?? 0}';
+    if (oldKey != newKey) {
+      _chatController.messagesList.clear();
+      _loadMessages();
+    }
+  }
+
+  @override
   void dispose() {
-    _audioPlayer.dispose();
+    try { _audioPlayer.dispose(); } catch (_) {}
     _messageController.dispose();
-    _scrollController.dispose();
+    try { _scrollController.dispose(); } catch (_) {}
     _positionSub?.cancel();
     _durationSub?.cancel();
     super.dispose();
@@ -92,20 +142,78 @@ class _DesktopConversationScreenInMyState extends State<DesktopConversationScree
         partnerId: widget.ad?.userId ?? widget.idAdv,
         adId: widget.ad?.id,
         advertiserProfileId: widget.idAdv,
-      ).then((_) {
+      ).then((_) async {
         if (!mounted) return;
+        await _autoMarkIncomingAsRead();
         if (_scrollController.hasClients) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!mounted) return;
-            _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+            try { _scrollController.jumpTo(_scrollController.position.maxScrollExtent); } catch (_) {}
           });
         }
       });
     }
   }
 
-  void _sendMessage() {
+  Future<void> _autoMarkIncomingAsRead() async {
     final user = _loadingController.currentUser;
+    if (user == null) return;
+
+    for (final m in _chatController.messagesList) {
+      final isIncoming = m.recipientId == user.id;
+      if (isIncoming && m.isRead == false) {
+        final ok = await _chatController.markAsRead(m.id);
+        if (ok) {
+          final idx = _chatController.messagesList.indexWhere((x) => x.id == m.id);
+          if (idx >= 0) {
+            final old = _chatController.messagesList[idx];
+            _chatController.messagesList[idx] = Message(
+              id: old.id,
+              senderId: old.senderId,
+              senderEmail: old.senderEmail,
+              recipientId: old.recipientId,
+              recipientEmail: old.recipientEmail,
+              body: old.body,
+              isVoice: old.isVoice,
+              voiceUrl: old.voiceUrl,
+              isRead: true,
+              createdAt: old.createdAt,
+              readAt: DateTime.now(),
+              updatedAt: old.updatedAt,
+              adId: old.adId,
+              adNumber: old.adNumber,
+              adTitleAr: old.adTitleAr,
+              adTitleEn: old.adTitleEn,
+              adSlug: old.adSlug,
+              adDescriptionAr: old.adDescriptionAr,
+              adDescriptionEn: old.adDescriptionEn,
+              adPrice: old.adPrice,
+              adShowTime: old.adShowTime,
+              adCreatedAt: old.adCreatedAt,
+              adImages: old.adImages,
+              advertiserProfileId: old.advertiserProfileId,
+              advertiserUserId: old.advertiserUserId,
+              advertiserName: old.advertiserName,
+              advertiserLogo: old.advertiserLogo,
+              advertiserDescription: old.advertiserDescription,
+              advertiserContactPhone: old.advertiserContactPhone,
+              advertiserWhatsappPhone: old.advertiserWhatsappPhone,
+              advertiserWhatsappCallNumber: old.advertiserWhatsappCallNumber,
+              advertiserWhatsappUrl: old.advertiserWhatsappUrl,
+              advertiserTelUrl: old.advertiserTelUrl,
+              advertiserLatitude: old.advertiserLatitude,
+              advertiserLongitude: old.advertiserLongitude,
+              adCompanyMember: old.adCompanyMember,
+            );
+          }
+        }
+      }
+    }
+    if (mounted) setState(() {});
+  }
+
+  void _sendMessage() {
+    final user = _loading_controller_user();
     if (user != null && _messageController.text.trim().isNotEmpty) {
       final text = _messageController.text.trim();
       _messageController.clear();
@@ -116,9 +224,9 @@ class _DesktopConversationScreenInMyState extends State<DesktopConversationScree
         adId: widget.ad?.id,
         advertiserProfileId: widget.idAdv,
         body: text,
-      ).then((success) {
+      ).then((success) async {
         if (success) {
-          _loadMessages();
+          await _loadAndScrollAfterDelay();
         } else {
           _messageController.text = text;
           Get.snackbar('خطأ', 'فشل إرسال الرسالة', backgroundColor: Colors.red, colorText: Colors.white);
@@ -127,12 +235,36 @@ class _DesktopConversationScreenInMyState extends State<DesktopConversationScree
     }
   }
 
+  Future<void> _loadAndScrollAfterDelay() async {
+    await Future.delayed(const Duration(milliseconds: 400));
+    if (!mounted) return;
+    await _chatController.fetchMessages(
+      userId: _loading_controller_user()?.id ?? 0,
+      partnerId: widget.ad?.userId ?? widget.idAdv,
+      adId: widget.ad?.id,
+      advertiserProfileId: widget.idAdv,
+    );
+    if (!mounted) return;
+    await _autoMarkIncomingAsRead();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      try { _scrollController.jumpTo(_scrollController.position.maxScrollExtent); } catch (_) {}
+    });
+  }
+
   Future<void> _playPauseVoice(Message message) async {
+    final user = _loading_controller_user();
+    final isIncoming = (user != null) && (message.senderId != user.id);
+    if (!isIncoming) {
+      Get.snackbar('ملاحظة', 'يمكن تشغيل الصوتيات المستلمة فقط على الويب', backgroundColor: Colors.orange, colorText: Colors.white);
+      return;
+    }
+
     final url = message.voiceUrl;
     if (url == null || url.isEmpty) return;
 
     if (_playingMessageId == message.id) {
-      await _audioPlayer.pause();
+      try { await _audioPlayer.pause(); } catch (_) {}
       if (!mounted) return;
       setState(() => _playingMessageId = null);
     } else {
@@ -141,14 +273,8 @@ class _DesktopConversationScreenInMyState extends State<DesktopConversationScree
         await _audioPlayer.play(UrlSource(url));
         if (!mounted) return;
         setState(() => _playingMessageId = message.id);
-      } catch (e) {
-        print('خطأ في تشغيل الصوت: $e');
-        Get.snackbar(
-          'خطأ', 
-          'لا يمكن تشغيل الصوت',
-          backgroundColor: Colors.red, 
-          colorText: Colors.white
-        );
+      } catch (_) {
+        Get.snackbar('خطأ', 'لا يمكن تشغيل الصوت', backgroundColor: Colors.red, colorText: Colors.white);
       }
     }
   }
@@ -161,23 +287,20 @@ class _DesktopConversationScreenInMyState extends State<DesktopConversationScree
     try {
       if (message.voiceUrl == null || message.voiceUrl!.isEmpty) return;
       await player.setSourceUrl(message.voiceUrl!);
-      
       final duration = await player.getDuration().timeout(const Duration(seconds: 10));
       if (duration != null && duration.inMilliseconds > 0) {
         _messageDurations[message.id!] = duration;
         if (mounted) setState(() {});
       }
     } on TimeoutException {
-      print('Timeout getting duration for message ${message.id}');
-    } catch (e) {
-      print('ensureMessageDuration error: $e');
+    } catch (_) {
     } finally {
-      player.dispose();
+      try { await player.dispose(); } catch (_) {}
     }
   }
 
   Future<void> _confirmAndDeleteMessage(Message message) async {
-    final user = _loadingController.currentUser;
+    final user = _loading_controller_user();
     if (user == null) return;
 
     final isMine = message.senderId == user.id;
@@ -191,68 +314,15 @@ class _DesktopConversationScreenInMyState extends State<DesktopConversationScree
       builder: (_) => AlertDialog(
         backgroundColor: AppColors.background(_themeController.isDarkMode.value),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(
-          'حذف الرسالة',
-          style: TextStyle(
-            fontFamily: AppTextStyles.appFontFamily,
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            color: AppColors.textPrimary(_themeController.isDarkMode.value),
-          ),
-          textAlign: TextAlign.center,
-        ),
-        content: Text(
-          'هل أنت متأكد أنك تريد حذف هذه الرسالة؟',
-          style: TextStyle(
-            fontFamily: AppTextStyles.appFontFamily,
-            fontSize: 16,
-            color: AppColors.textSecondary(_themeController.isDarkMode.value),
-          ),
-          textAlign: TextAlign.center,
-        ),
+        title: Text('حذف الرسالة', style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary(_themeController.isDarkMode.value)), textAlign: TextAlign.center),
+        content: Text('هل أنت متأكد أنك تريد حذف هذه الرسالة؟', style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: 16, color: AppColors.textSecondary(_themeController.isDarkMode.value)), textAlign: TextAlign.center),
         actions: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              Expanded(
-                child: TextButton(
-                  onPressed: () => Navigator.of(context).pop(false),
-                  style: TextButton.styleFrom(
-                    backgroundColor: Colors.grey[300],
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                  child: Text(
-                    'لا',
-                    style: TextStyle(
-                      fontFamily: AppTextStyles.appFontFamily,
-                      fontSize: 16,
-                      color: Colors.black87,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
+              Expanded(child: TextButton(onPressed: () => Navigator.of(context).pop(false), style: TextButton.styleFrom(backgroundColor: Colors.grey[300], shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), padding: const EdgeInsets.symmetric(vertical: 12)), child: const Text('لا', style: TextStyle(fontSize: 16, color: Colors.black87, fontWeight: FontWeight.bold)))),
               const SizedBox(width: 16),
-              Expanded(
-                child: TextButton(
-                  onPressed: () => Navigator.of(context).pop(true),
-                  style: TextButton.styleFrom(
-                    backgroundColor: Colors.red,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                  child: Text(
-                    'نعم',
-                    style: TextStyle(
-                      fontFamily: AppTextStyles.appFontFamily,
-                      fontSize: 16,
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
+              Expanded(child: TextButton(onPressed: () => Navigator.of(context).pop(true), style: TextButton.styleFrom(backgroundColor: Colors.red, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), padding: const EdgeInsets.symmetric(vertical: 12)), child: const Text('نعم', style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold)))),
             ],
           ),
         ],
@@ -303,9 +373,7 @@ class _DesktopConversationScreenInMyState extends State<DesktopConversationScree
     }
   }
 
-  String _cleanPhoneNumber(String phone) {
-    return phone.replaceAll(RegExp(r'[^\d+]'), '');
-  }
+  String _cleanPhoneNumber(String phone) => phone.replaceAll(RegExp(r'[^\d+]'), '');
 
   String _formatDateTimeFull(DateTime date) {
     final day = date.day.toString().padLeft(2, '0');
@@ -318,19 +386,52 @@ class _DesktopConversationScreenInMyState extends State<DesktopConversationScree
     return '$day/$month/$year  ${formattedHour.toString().padLeft(2, '0')}:$minute $period';
   }
 
-  String _formatDuration(Duration d) {
-    final mm = d.inMinutes.remainder(60).toString().padLeft(2, '0');
-    final ss = d.inSeconds.remainder(60).toString().padLeft(2, '0');
-    return '$mm:$ss';
+  // رقم كامل مع فواصل آلاف
+  String _formatNumber(num value) {
+    final s = value.toStringAsFixed(0);
+    final reg = RegExp(r'\B(?=(\d{3})+(?!\d))');
+    return s.replaceAllMapped(reg, (m) => ',');
   }
 
-  String _formatPrice(double price) {
-    if (price >= 1000000) {
-      return '${(price / 1000000).toStringAsFixed(1)} مليون';
-    } else if (price >= 1000) {
-      return '${(price / 1000).toStringAsFixed(0)} ألف';
+  ContactContext _resolveContactContext() {
+    final adv = widget.advertiser;
+    CompanyMemberMessage? member;
+
+    if (_chatController.messagesList.isNotEmpty) {
+      member = _firstWhereOrNull<Message>(_chatController.messagesList, (m) => m.adCompanyMember != null)?.adCompanyMember;
     }
-    return price.toStringAsFixed(0);
+
+    final accountType = adv?.accountType?.toLowerCase().trim();
+    final isCompany = (accountType == 'company' || accountType == 'business' || member != null);
+
+    if (isCompany && member != null) {
+      return ContactContext(
+        mode: ContactMode.companyWithMember,
+        companyName: adv?.name,
+        memberName: member.displayName,
+        primaryTel: member.contactPhone,
+        primaryWaChat: member.whatsappPhone,
+        primaryWaCall: member.whatsappCallNumber,
+      );
+    }
+
+    if (isCompany && member == null) {
+      return ContactContext(
+        mode: ContactMode.companyOnly,
+        companyName: adv?.name,
+        primaryTel: adv?.contactPhone,
+        primaryWaChat: adv?.whatsappPhone,
+        primaryWaCall: adv?.whatsappCallNumber,
+      );
+    }
+
+    return ContactContext(
+      mode: ContactMode.individual,
+      personName: adv?.name,
+      primaryTel: adv?.contactPhone,
+      primaryWaChat: adv?.whatsappPhone,
+      primaryWaCall: adv?.whatsappCallNumber,
+    );
   }
 
   @override
@@ -347,21 +448,13 @@ class _DesktopConversationScreenInMyState extends State<DesktopConversationScree
       backgroundColor: AppColors.background(isDarkMode),
       body: Column(
         children: [
-          // شريط العنوان - نفس تصميم الموبايل
           _buildCustomAppBar(isDarkMode),
-          
-          // محتوى المحادثة
           Expanded(
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // لوحة معلومات الإعلان (جانبية)
                 _buildAdInfoPanel(isDarkMode, cardColor, textPrimary, textSecondary),
-                
-                // منطقة المحادثة الرئيسية
-                Expanded(
-                  child: _buildConversationArea(isDarkMode, cardColor, textPrimary, textSecondary, dividerColor, whatsappLightGreen),
-                ),
+                Expanded(child: _buildConversationArea(isDarkMode, cardColor, textPrimary, textSecondary, dividerColor, whatsappLightGreen)),
               ],
             ),
           ),
@@ -372,6 +465,11 @@ class _DesktopConversationScreenInMyState extends State<DesktopConversationScree
 
   Widget _buildCustomAppBar(bool isDarkMode) {
     final adv = widget.advertiser;
+    final ctx = _resolveContactContext();
+    final subtitlePhone = ctx.primaryTel?.isNotEmpty == true
+        ? ctx.primaryTel
+        : (ctx.primaryWaChat?.isNotEmpty == true ? ctx.primaryWaChat : '');
+
     return Container(
       color: AppColors.appBar(isDarkMode),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -379,58 +477,25 @@ class _DesktopConversationScreenInMyState extends State<DesktopConversationScree
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Row(children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              child: InkWell(
-                onTap: () => Get.back(), 
-                child: Icon(Icons.arrow_back, color: AppColors.onPrimary, size: 24)
-              )
-            ),
-            const SizedBox(width: 8),
+            InkWell(onTap: () => Get.back(), child: Icon(Icons.arrow_back, color: AppColors.onPrimary, size: 24)),
+            const SizedBox(width: 10),
             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               SizedBox(
-                width: 300,
+                width: 320,
                 child: Text(
-                  adv?.name ?? 'معلن',
-                  style: TextStyle(
-                    color: AppColors.onPrimary, 
-                    fontFamily: AppTextStyles.appFontFamily, 
-                    fontSize: 18, 
-                    fontWeight: FontWeight.bold
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                  adv?.name ?? (ctx.mode == ContactMode.companyOnly ? 'شركة' : 'معلن'),
+                  style: TextStyle(color: AppColors.onPrimary, fontFamily: AppTextStyles.appFontFamily, fontSize: 18, fontWeight: FontWeight.bold),
+                  maxLines: 1, overflow: TextOverflow.ellipsis,
                 ),
               ),
               const SizedBox(height: 2),
-              Text(
-                adv?.contactPhone ?? '',
-                style: TextStyle(
-                  fontFamily: AppTextStyles.appFontFamily, 
-                  fontSize: 14, 
-                  color: AppColors.onPrimary.withOpacity(0.9), 
-                  fontWeight: FontWeight.w600
-                ),
-              ),
+              Text(subtitlePhone ?? '', style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: 14, color: AppColors.onPrimary.withOpacity(0.9), fontWeight: FontWeight.w600)),
             ]),
           ]),
           Row(children: [
-            if ((adv?.contactPhone ?? '').isNotEmpty) 
-              Container(
-                padding: const EdgeInsets.all(8),
-                child: InkWell(
-                  onTap: () => _launchPhoneCall(adv?.contactPhone), 
-                  child: Icon(Icons.phone, color: AppColors.onPrimary, size: 24)
-                )
-              ),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.all(8),
-              child: InkWell(
-                onTap: _showTopContactMenu, 
-                child: Icon(Icons.more_vert, color: AppColors.onPrimary, size: 24)
-              )
-            ),
+            if ((subtitlePhone ?? '').isNotEmpty) InkWell(onTap: _openContactSideSheet, child: Icon(Icons.phone, color: AppColors.onPrimary, size: 24)),
+            const SizedBox(width: 10),
+            InkWell(onTap: _openContactSideSheet, child: Icon(Icons.more_vert, color: AppColors.onPrimary, size: 24)),
           ]),
         ],
       ),
@@ -441,73 +506,29 @@ class _DesktopConversationScreenInMyState extends State<DesktopConversationScree
     return Container(
       width: 320,
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: cardColor,
-        border: Border(right: BorderSide(color: AppColors.border(isDarkMode), width: 1.0)),
-      ),
+      decoration: BoxDecoration(color: cardColor, border: Border(right: BorderSide(color: AppColors.border(isDarkMode), width: 1.0))),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'معلومات الإعلان',
-            style: TextStyle(
-              fontFamily: AppTextStyles.appFontFamily,
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: textPrimary,
-            ),
-          ),
+          Text('معلومات الإعلان', style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: 18, fontWeight: FontWeight.bold, color: textPrimary)),
           const SizedBox(height: 16),
-          
-          // تنبيه عند عدم وجود إعلان
-          if (widget.ad == null)
-            _buildNoAdNotice(cardColor, textPrimary),
-          
-          // معلومات الإعلان إذا كان موجوداً
-          if (widget.ad != null) ...[
+          if (widget.ad == null) _buildNoAdNotice(cardColor, textPrimary)
+          else ...[
             if (widget.ad!.images.isNotEmpty)
               ClipRRect(
                 borderRadius: BorderRadius.circular(12),
                 child: CachedNetworkImage(
                   imageUrl: widget.ad!.images[0],
-                  width: double.infinity,
-                  height: 180,
-                  fit: BoxFit.cover,
-                  placeholder: (context, url) => Container(
-                    color: Colors.grey[300],
-                    child: const Center(child: CircularProgressIndicator()),
-                  ),
-                  errorWidget: (context, url, error) => Container(
-                    color: Colors.grey[300],
-                    child: const Icon(Icons.image_not_supported, size: 40),
-                  ),
+                  width: double.infinity, height: 180, fit: BoxFit.cover,
+                  placeholder: (context, url) => Container(color: Colors.grey[300], child: const Center(child: CircularProgressIndicator())),
+                  errorWidget: (context, url, error) => Container(color: Colors.grey[300], child: const Icon(Icons.image_not_supported, size: 40)),
                 ),
               ),
             const SizedBox(height: 16),
-            
-            Text(
-              widget.ad!.title,
-              style: TextStyle(
-                fontFamily: AppTextStyles.appFontFamily,
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: textPrimary,
-              ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
+            Text(widget.ad!.title, style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: 16, fontWeight: FontWeight.bold, color: textPrimary), maxLines: 2, overflow: TextOverflow.ellipsis),
             const SizedBox(height: 8),
-            
             if (widget.ad!.price != null)
-              Text(
-                '${_formatPrice(widget.ad!.price!)} ليرة سورية',
-                style: TextStyle(
-                  fontFamily: AppTextStyles.appFontFamily,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.primary,
-                ),
-              ),
+              Text('${_formatNumber(widget.ad!.price!)} ليرة سورية', style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.primary)),
             const SizedBox(height: 16),
           ],
         ],
@@ -519,25 +540,12 @@ class _DesktopConversationScreenInMyState extends State<DesktopConversationScree
     return Container(
       padding: const EdgeInsets.all(16),
       margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.primary.withOpacity(0.3)),
-      ),
+      decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.primary.withOpacity(0.3))),
       child: Row(
         children: [
           Icon(Icons.info_outline, color: AppColors.primary, size: 24),
           const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              'هذه المحادثة تتم بدون أي إعلان ذي صلة بين المعلن والمتحدث',
-              style: TextStyle(
-                fontFamily: AppTextStyles.appFontFamily,
-                fontSize: 14,
-                color: textPrimary,
-              ),
-            ),
-          ),
+          Expanded(child: Text('هذه المحادثة تتم بدون أي إعلان ذي صلة بين المعلن والمتحدث', style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: 14, color: textPrimary))),
         ],
       ),
     );
@@ -545,63 +553,51 @@ class _DesktopConversationScreenInMyState extends State<DesktopConversationScree
 
   Widget _buildConversationArea(bool isDarkMode, Color cardColor, Color textPrimary, Color textSecondary, Color dividerColor, Color userBubbleColor) {
     return Container(
-      decoration: BoxDecoration(
-        color: AppColors.background(isDarkMode),
-      ),
+      decoration: BoxDecoration(color: AppColors.background(isDarkMode)),
       child: Column(
         children: [
-          // منطقة الرسائل
           Expanded(
             child: Obx(() {
               if (_chatController.isLoadingMessages.value) {
-                return Center(
-                  child: CircularProgressIndicator(
-                    color: AppColors.primary,
-                  ),
-                );
+                return Center(child: CircularProgressIndicator(color: AppColors.primary));
               }
 
               final serverMessages = _chatController.messagesList;
-              
+
               return ListView.builder(
                 controller: _scrollController,
                 padding: const EdgeInsets.only(bottom: 100, top: 16),
                 itemCount: serverMessages.length,
                 itemBuilder: (context, idx) {
                   final message = serverMessages[idx];
-                  final currentUser = _loadingController.currentUser;
+                  final currentUser = _loading_controller_user();
                   final isCurrentUser = currentUser != null && (currentUser.id == message.senderId);
 
-                  if (message.isVoice == true && message.voiceUrl != null && message.voiceUrl!.isNotEmpty) {
+                  if (message.isVoice == true && (message.voiceUrl ?? '').isNotEmpty) {
                     _ensureMessageDuration(message);
                   }
 
-                  return _buildMessageBubble(
-                    message,
-                    isDarkMode,
-                    isCurrentUser,
-                    widget.advertiser,
-                    userBubbleColor,
-                  );
+                  return _buildMessageBubble(message, isDarkMode, isCurrentUser, userBubbleColor);
                 },
               );
             }),
           ),
-          
-          // حقل إرسال الرسالة
           _buildMessageInput(isDarkMode, cardColor, dividerColor),
         ],
       ),
     );
   }
 
-  Widget _buildMessageBubble(
-    Message message,
-    bool isDarkMode,
-    bool isCurrentUser,
-    Advertiser? advertiser,
-    Color userBubbleColor,
-  ) {
+  Widget _readReceiptIcon(Message msg, bool isMine) {
+    if (!isMine) return const SizedBox.shrink();
+    final read = msg.isRead == true;
+    return Padding(
+      padding: const EdgeInsets.only(left: 6.0),
+      child: Icon(Icons.done_all_rounded, size: 16, color: read ? const Color(0xFF34B7F1) : _receiptGrey.withOpacity(0.85)),
+    );
+  }
+
+  Widget _buildMessageBubble(Message message, bool isDarkMode, bool isCurrentUser, Color userBubbleColor) {
     final otherBubbleColor = AppColors.card(isDarkMode);
     final textColor = isCurrentUser ? Colors.black : AppColors.textPrimary(isDarkMode);
     final timeColor = isCurrentUser ? Colors.black.withOpacity(0.6) : AppColors.textSecondary(isDarkMode);
@@ -609,14 +605,12 @@ class _DesktopConversationScreenInMyState extends State<DesktopConversationScree
     final mainAxis = isCurrentUser ? MainAxisAlignment.end : MainAxisAlignment.start;
 
     final isVoice = message.isVoice == true;
-    final dur = (message.id != null && _messageDurations.containsKey(message.id)) 
-        ? _messageDurations[message.id] 
-        : Duration.zero;
+    final dur = (message.id != null && _messageDurations.containsKey(message.id)) ? _messageDurations[message.id]! : Duration.zero;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       child: Column(
-        crossAxisAlignment: align, 
+        crossAxisAlignment: align,
         children: [
           if (isCurrentUser)
             Padding(
@@ -632,90 +626,32 @@ class _DesktopConversationScreenInMyState extends State<DesktopConversationScree
                         builder: (_) => AlertDialog(
                           backgroundColor: AppColors.background(isDarkMode),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                          title: Text(
-                            'حذف الرسالة',
-                            style: TextStyle(
-                              fontFamily: AppTextStyles.appFontFamily,
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.textPrimary(isDarkMode),
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                          content: Text(
-                            'هل تريد حذف هذه الرسالة؟',
-                            style: TextStyle(
-                              fontFamily: AppTextStyles.appFontFamily,
-                              fontSize: 16,
-                              color: AppColors.textSecondary(isDarkMode),
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
+                          title: Text('حذف الرسالة', style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary(isDarkMode)), textAlign: TextAlign.center),
+                          content: Text('هل تريد حذف هذه الرسالة؟', style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: 16, color: AppColors.textSecondary(isDarkMode)), textAlign: TextAlign.center),
                           actions: [
                             Row(
                               children: [
-                                Expanded(
-                                  child: TextButton(
-                                    onPressed: () => Navigator.of(context).pop(false),
-                                    style: TextButton.styleFrom(
-                                      backgroundColor: Colors.grey[300],
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                      padding: const EdgeInsets.symmetric(vertical: 12),
-                                    ),
-                                    child: Text(
-                                      'لا',
-                                      style: TextStyle(
-                                        fontFamily: AppTextStyles.appFontFamily,
-                                        fontSize: 16,
-                                        color: Colors.black87,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                ),
+                                Expanded(child: TextButton(onPressed: () => Navigator.of(context).pop(false), style: TextButton.styleFrom(backgroundColor: Colors.grey[300], shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), padding: const EdgeInsets.symmetric(vertical: 12)), child: const Text('لا', style: TextStyle(fontSize: 16, color: Colors.black87, fontWeight: FontWeight.bold)))),
                                 const SizedBox(width: 16),
-                                Expanded(
-                                  child: TextButton(
-                                    onPressed: () => Navigator.of(context).pop(true),
-                                    style: TextButton.styleFrom(
-                                      backgroundColor: Colors.red,
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                      padding: const EdgeInsets.symmetric(vertical: 12),
-                                    ),
-                                    child: Text(
-                                      'نعم',
-                                      style: TextStyle(
-                                        fontFamily: AppTextStyles.appFontFamily,
-                                        fontSize: 16,
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                ),
+                                Expanded(child: TextButton(onPressed: () => Navigator.of(context).pop(true), style: TextButton.styleFrom(backgroundColor: Colors.red, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), padding: const EdgeInsets.symmetric(vertical: 12)), child: const Text('نعم', style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold)))),
                               ],
                             ),
                           ],
                         ),
                       );
-                      if (confirmed == true) {
-                        await _confirmAndDeleteMessage(message);
-                      }
+                      if (confirmed == true) await _confirmAndDeleteMessage(message);
                     },
-                    child: Container(
-                      padding: const EdgeInsets.all(6),
-                      child: Icon(Icons.more_vert, size: 20, color: AppColors.textSecondary(isDarkMode)),
-                    ),
+                    child: Container(padding: const EdgeInsets.all(6), child: Icon(Icons.more_vert, size: 20, color: AppColors.textSecondary(isDarkMode))),
                   ),
                 ],
               ),
             ),
           Row(
-            mainAxisAlignment: mainAxis, 
+            mainAxisAlignment: mainAxis,
             children: [
               Flexible(
                 child: Container(
-                  constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.5),
+                  constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.55),
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   decoration: BoxDecoration(
                     color: isCurrentUser ? userBubbleColor : otherBubbleColor,
@@ -725,48 +661,31 @@ class _DesktopConversationScreenInMyState extends State<DesktopConversationScree
                       bottomLeft: const Radius.circular(16),
                       bottomRight: const Radius.circular(16),
                     ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.03), 
-                        blurRadius: 6, 
-                        offset: const Offset(0, 2)
-                      )
-                    ],
+                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 6, offset: const Offset(0, 2))],
                   ),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start, 
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       if (isVoice)
                         _buildVoiceBubbleContent(message, dur, isCurrentUser)
                       else
-                        Text(
-                          message.body ?? '', 
-                          style: TextStyle(
-                            fontFamily: AppTextStyles.appFontFamily, 
-                            fontSize: 16, 
-                            color: textColor, 
-                            height: 1.4
-                          )
-                        ),
-                      const SizedBox(height: 8),
-                      Align(
-                        alignment: Alignment.centerRight, 
-                        child: Text(
-                          _formatDateTimeFull(message.createdAt), 
-                          style: TextStyle(
-                            fontFamily: AppTextStyles.appFontFamily, 
-                            fontSize: 12, 
-                            color: timeColor
-                          )
-                        )
+                        Text(message.body ?? '', style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: 16, color: textColor, height: 1.4)),
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(_formatDateTimeFull(message.createdAt), style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: 12, color: timeColor)),
+                          _readReceiptIcon(message, isCurrentUser),
+                        ],
                       ),
-                    ]
+                    ],
                   ),
                 ),
               ),
-            ]
+            ],
           ),
-        ]
+        ],
       ),
     );
   }
@@ -777,20 +696,16 @@ class _DesktopConversationScreenInMyState extends State<DesktopConversationScree
     final totalDur = playing ? (_currentDuration > Duration.zero ? _currentDuration : (cachedDuration ?? Duration.zero)) : (cachedDuration ?? Duration.zero);
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start, 
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(children: [
           IconButton(
-            onPressed: () => _playPauseVoice(message), 
-            icon: Icon(
-              playing ? Icons.pause_circle_filled : Icons.play_circle_filled, 
-              size: 32, 
-              color: isCurrentUser ? Colors.black : AppColors.primary
-            )
+            onPressed: () => _playPauseVoice(message),
+            icon: Icon(playing ? Icons.pause_circle_filled : Icons.play_circle_filled, size: 32, color: isCurrentUser ? Colors.black : AppColors.primary),
           ),
           Expanded(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start, 
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (playing || (totalDur.inSeconds > 0))
                   Column(children: [
@@ -798,83 +713,59 @@ class _DesktopConversationScreenInMyState extends State<DesktopConversationScree
                       value: currentPos.inMilliseconds.toDouble().clamp(0, (totalDur.inMilliseconds > 0 ? totalDur.inMilliseconds : 1).toDouble()),
                       max: (totalDur.inMilliseconds > 0 ? totalDur.inMilliseconds.toDouble() : 1.0),
                       onChanged: (v) async {
-                        try {
-                          await _audioPlayer.seek(Duration(milliseconds: v.toInt()));
-                        } catch (e) {}
+                        try { await _audioPlayer.seek(Duration(milliseconds: v.toInt())); } catch (_) {}
                       },
                     ),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween, 
-                      children: [
-                        Text(_formatDuration(currentPos), style: const TextStyle(fontSize: 12)),
-                        Text(_formatDuration(totalDur), style: const TextStyle(fontSize: 12)),
-                      ]
-                    ),
+                    Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                      Text(_formatRecDuration(currentPos), style: const TextStyle(fontSize: 12)),
+                      Text(_formatRecDuration(totalDur), style: const TextStyle(fontSize: 12)),
+                    ]),
                   ])
                 else
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween, 
-                    children: [
-                      Text('00:00', style: const TextStyle(fontSize: 12)),
-                      Text(_formatDuration(cachedDuration ?? Duration.zero), style: const TextStyle(fontSize: 12)),
-                    ]
-                  ),
-              ]
+                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                    const Text('00:00', style: TextStyle(fontSize: 12)),
+                    Text(_formatRecDuration(cachedDuration ?? Duration.zero), style: const TextStyle(fontSize: 12)),
+                  ]),
+              ],
             ),
           ),
         ]),
-      ]
+      ],
     );
+  }
+
+  String _formatRecDuration(Duration d) {
+    final mm = d.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final ss = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '$mm:$ss';
   }
 
   Widget _buildMessageInput(bool isDarkMode, Color cardColor, Color dividerColor) {
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: cardColor,
-        border: Border(top: BorderSide(color: dividerColor, width: 1)),
-      ),
+      decoration: BoxDecoration(color: cardColor, border: Border(top: BorderSide(color: dividerColor, width: 1))),
       child: Row(
         children: [
-          // زر الميكروفون المعدل
+          // زر الميكروفون — مودال وسط الشاشة بعرض ثابت
           GestureDetector(
-            onTap: () {
-              Get.snackbar(
-                'الميزة غير متاحة',
-                'التسجيل الصوتي متاح حصرياً في تطبيق الجوال',
-                backgroundColor: Colors.orange,
-                colorText: Colors.white,
-                duration: const Duration(seconds: 3),
-              );
-            },
+            onTap: _showVoiceFeatureAppOnlyDialog,
             child: Container(
               padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: AppColors.buttonAndLinksColor,
-              ),
-              child: const Icon(Icons.mic, color: Colors.white, size: 20),
+              decoration: BoxDecoration(shape: BoxShape.circle, color: AppColors.buttonAndLinksColor),
+              child: const Icon(Icons.mic_off, color: Colors.white, size: 20),
             ),
           ),
           const SizedBox(width: 12),
-          
           Expanded(
             child: Container(
               height: 50,
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: BoxDecoration(
-                color: AppColors.border(isDarkMode),
-                borderRadius: BorderRadius.circular(25),
-              ),
+              decoration: BoxDecoration(color: AppColors.border(isDarkMode), borderRadius: BorderRadius.circular(25)),
               child: Row(children: [
                 Expanded(
                   child: TextField(
                     controller: _messageController,
-                    style: TextStyle(
-                      fontFamily: AppTextStyles.appFontFamily,
-                      fontSize: 16,
-                      color: AppColors.textPrimary(isDarkMode),
-                    ),
+                    style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: 16, color: AppColors.textPrimary(isDarkMode)),
                     decoration: InputDecoration(
                       hintText: 'اكتب رسالة...',
                       hintStyle: TextStyle(color: AppColors.textSecondary(isDarkMode)),
@@ -889,55 +780,281 @@ class _DesktopConversationScreenInMyState extends State<DesktopConversationScree
             ),
           ),
           const SizedBox(width: 12),
-          
-          FloatingActionButton(
-            onPressed: _sendMessage,
-            mini: true,
-            backgroundColor: AppColors.buttonAndLinksColor,
-            child: const Icon(Icons.send, color: Colors.white, size: 20),
-          ),
+          FloatingActionButton(onPressed: _sendMessage, mini: true, backgroundColor: AppColors.buttonAndLinksColor, child: const Icon(Icons.send, color: Colors.white, size: 20)),
         ],
       ),
     );
   }
 
-  void _showTopContactMenu() {
-    final adv = widget.advertiser;
-    if (adv == null) return;
-    final width = MediaQuery.of(context).size.width;
-    final top = kToolbarHeight + MediaQuery.of(context).padding.top;
-    final relativeRect = RelativeRect.fromLTRB(16, top + 8, width - 16, 0);
-    showMenu<int>(
-      context: context, 
-      position: relativeRect, 
-      items: [
-        PopupMenuItem(
-          value: 0, 
-          child: ListTile(
-            leading: const Icon(Icons.chat, color: Colors.green), 
-            title: Text('محادثة واتساب')
-          )
+  Future<void> _showVoiceFeatureAppOnlyDialog() async {
+    final isDark = _themeController.isDarkMode.value;
+    await showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (_) => Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Material(
+            color: Colors.transparent,
+            child: Dialog(
+              insetPadding: const EdgeInsets.symmetric(horizontal: 16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(color: AppColors.card(isDark), borderRadius: BorderRadius.circular(16)),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.mic_off_rounded, size: 48, color: Colors.redAccent),
+                    const SizedBox(height: 12),
+                    Text('الميزة غير متاحة هنا', style: TextStyle(fontSize: 18, fontFamily: AppTextStyles.appFontFamily, fontWeight: FontWeight.w800, color: AppColors.textPrimary(isDark))),
+                    const SizedBox(height: 8),
+                    Text('إرسال الرسائل الصوتية متاح حصرياً في تطبيقات الجوال حالياً.', textAlign: TextAlign.center, style: TextStyle(fontSize: 14, fontFamily: AppTextStyles.appFontFamily, color: AppColors.textSecondary(isDark))),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        child: const Text('حسناً'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         ),
-        PopupMenuItem(
-          value: 1, 
-          child: ListTile(
-            leading: const Icon(Icons.phone_in_talk, color: Colors.green), 
-            title: Text('اتصال واتساب')
-          )
-        ),
-        PopupMenuItem(
-          value: 2, 
-          child: ListTile(
-            leading: const Icon(Icons.call, color: Colors.blue), 
-            title: Text('اتصال هاتفي')
-          )
-        ),
-      ]
-    ).then((value) {
-      if (value == null) return;
-      if (value == 0) _launchWhatsAppChat(adv.whatsappPhone?.isNotEmpty == true ? adv.whatsappPhone : adv.whatsappCallNumber);
-      if (value == 1) _launchWhatsAppCall(adv.whatsappCallNumber?.isNotEmpty == true ? adv.whatsappCallNumber : adv.whatsappPhone);
-      if (value == 2) _launchPhoneCall(adv.contactPhone);
-    });
+      ),
+    );
   }
+
+  void _openContactSideSheet() {
+    final ctx = _resolveContactContext();
+    final isDark = _themeController.isDarkMode.value;
+
+    final bg = AppColors.card(isDark);
+    final titleStyle = TextStyle(fontFamily: AppTextStyles.appFontFamily, fontWeight: FontWeight.w700, fontSize: 16, color: AppColors.textPrimary(isDark));
+    final labelStyle = TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: 12, color: AppColors.textSecondary(isDark));
+    final valueStyle = TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: 13, color: AppColors.textPrimary(isDark));
+
+    showGeneralDialog(
+      context: context,
+      barrierLabel: 'contact-sheet',
+      barrierDismissible: true,
+      transitionDuration: const Duration(milliseconds: 220),
+      pageBuilder: (_, __, ___) {
+        return Align(
+          alignment: Alignment.centerRight,
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              width: 420,
+              height: MediaQuery.of(context).size.height,
+              decoration: BoxDecoration(
+                color: bg,
+                borderRadius: const BorderRadius.only(topLeft: Radius.circular(16), bottomLeft: Radius.circular(16)),
+                boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 12)],
+              ),
+              child: SafeArea(
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      child: Row(
+                        children: [
+                          Expanded(child: Text('التواصل', style: titleStyle)),
+                          IconButton(onPressed: () => Navigator.of(context).maybePop(), icon: const Icon(Icons.close)),
+                        ],
+                      ),
+                    ),
+                    const Divider(height: 1),
+
+                    Expanded(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (ctx.mode == ContactMode.individual) ...[
+                              _sectionHeader('بيانات المعلن'),
+                              const SizedBox(height: 8),
+                              _kv('الاسم', ctx.personName ?? '-', labelStyle, valueStyle),
+                              if ((ctx.primaryTel ?? '').isNotEmpty) ...[
+                                const SizedBox(height: 6),
+                                _contactTile('اتصال هاتفي', ctx.primaryTel!, onTap: () => _launchPhoneCall(ctx.primaryTel)),
+                              ],
+                              if ((ctx.primaryWaChat ?? '').isNotEmpty) ...[
+                                const SizedBox(height: 6),
+                                _contactTile('واتساب', ctx.primaryWaChat!, onTap: () => _launchWhatsAppChat(ctx.primaryWaChat)),
+                              ],
+                              if ((ctx.primaryWaCall ?? '').isNotEmpty) ...[
+                                const SizedBox(height: 6),
+                                _contactTile('اتصال واتساب', ctx.primaryWaCall!, onTap: () => _launchWhatsAppCall(ctx.primaryWaCall)),
+                              ],
+
+                              const SizedBox(height: 20),
+                              _sectionHeader('اختصارات سريعة'),
+                              const SizedBox(height: 8),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  if ((ctx.primaryTel ?? '').isNotEmpty) _quickActionChip(icon: Icons.call, label: 'اتصال', onTap: () => _launchPhoneCall(ctx.primaryTel)),
+                                  if ((ctx.primaryWaChat ?? '').isNotEmpty) _quickActionChip(icon: Icons.chat, label: 'واتساب', onTap: () => _launchWhatsAppChat(ctx.primaryWaChat)),
+                                  if ((ctx.primaryWaCall ?? '').isNotEmpty) _quickActionChip(icon: Icons.call, label: 'اتصال واتساب', onTap: () => _launchWhatsAppCall(ctx.primaryWaCall)),
+                                ],
+                              ),
+                            ],
+
+                            if (ctx.mode == ContactMode.companyWithMember) ...[
+                              _sectionHeader('بيانات الشركة'),
+                              const SizedBox(height: 8),
+                              _kv('اسم الشركة', ctx.companyName ?? '-', labelStyle, valueStyle),
+                              const SizedBox(height: 16),
+                              _sectionHeader('الممثل في المحادثة'),
+                              const SizedBox(height: 8),
+                              _kv('الاسم', ctx.memberName ?? '-', labelStyle, valueStyle),
+
+                              if ((ctx.primaryTel ?? '').isNotEmpty) ...[
+                                const SizedBox(height: 6),
+                                _contactTile('اتصال هاتفي (العضو)', ctx.primaryTel!, onTap: () => _launchPhoneCall(ctx.primaryTel)),
+                              ],
+                              if ((ctx.primaryWaChat ?? '').isNotEmpty) ...[
+                                const SizedBox(height: 6),
+                                _contactTile('واتساب (العضو)', ctx.primaryWaChat!, onTap: () => _launchWhatsAppChat(ctx.primaryWaChat)),
+                              ],
+                              if ((ctx.primaryWaCall ?? '').isNotEmpty) ...[
+                                const SizedBox(height: 6),
+                                _contactTile('اتصال واتساب (العضو)', ctx.primaryWaCall!, onTap: () => _launchWhatsAppCall(ctx.primaryWaCall)),
+                              ],
+
+                              const SizedBox(height: 20),
+                              _sectionHeader('اختصارات سريعة'),
+                              const SizedBox(height: 8),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  if ((ctx.primaryTel ?? '').isNotEmpty) _quickActionChip(icon: Icons.person, label: 'اتصال بالعضو', onTap: () => _launchPhoneCall(ctx.primaryTel)),
+                                  if ((ctx.primaryWaChat ?? '').isNotEmpty) _quickActionChip(icon: Icons.chat, label: 'واتساب العضو', onTap: () => _launchWhatsAppChat(ctx.primaryWaChat)),
+                                  if ((ctx.primaryWaCall ?? '').isNotEmpty) _quickActionChip(icon: Icons.call, label: 'اتصال واتساب', onTap: () => _launchWhatsAppCall(ctx.primaryWaCall)),
+                                ],
+                              ),
+                            ],
+
+                            if (ctx.mode == ContactMode.companyOnly) ...[
+                              _sectionHeader('بيانات الشركة'),
+                              const SizedBox(height: 8),
+                              _kv('اسم الشركة', ctx.companyName ?? '-', labelStyle, valueStyle),
+
+                              if ((ctx.primaryTel ?? '').isNotEmpty) ...[
+                                const SizedBox(height: 6),
+                                _contactTile('اتصال هاتفي (الشركة)', ctx.primaryTel!, onTap: () => _launchPhoneCall(ctx.primaryTel)),
+                              ],
+                              if ((ctx.primaryWaChat ?? '').isNotEmpty) ...[
+                                const SizedBox(height: 6),
+                                _contactTile('واتساب (الشركة)', ctx.primaryWaChat!, onTap: () => _launchWhatsAppChat(ctx.primaryWaChat)),
+                              ],
+                              if ((ctx.primaryWaCall ?? '').isNotEmpty) ...[
+                                const SizedBox(height: 6),
+                                _contactTile('اتصال واتساب (الشركة)', ctx.primaryWaCall!, onTap: () => _launchWhatsAppCall(ctx.primaryWaCall)),
+                              ],
+
+                              const SizedBox(height: 20),
+                              _sectionHeader('اختصارات سريعة'),
+                              const SizedBox(height: 8),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  if ((ctx.primaryTel ?? '').isNotEmpty) _quickActionChip(icon: Icons.call, label: 'اتصال بالشركة', onTap: () => _launchPhoneCall(ctx.primaryTel)),
+                                  if ((ctx.primaryWaChat ?? '').isNotEmpty) _quickActionChip(icon: Icons.chat, label: 'واتساب الشركة', onTap: () => _launchWhatsAppChat(ctx.primaryWaChat)),
+                                  if ((ctx.primaryWaCall ?? '').isNotEmpty) _quickActionChip(icon: Icons.call, label: 'اتصال واتساب', onTap: () => _launchWhatsAppCall(ctx.primaryWaCall)),
+                                ],
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+      transitionBuilder: (context, anim, _, child) {
+        final offset = Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero).animate(CurvedAnimation(parent: anim, curve: Curves.easeOutCubic));
+        return SlideTransition(position: offset, child: child);
+      },
+    );
+  }
+
+  Widget _sectionHeader(String title) {
+    final isDark = _themeController.isDarkMode.value;
+    return Row(
+      children: [
+        Icon(Icons.info, color: AppColors.primary, size: 18),
+        const SizedBox(width: 6),
+        Text(title, style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontWeight: FontWeight.w700, fontSize: 14, color: AppColors.textPrimary(isDark))),
+      ],
+    );
+  }
+
+  Widget _kv(String label, String value, TextStyle labelStyle, TextStyle valueStyle) {
+    return Row(
+      children: [
+        SizedBox(width: 130, child: Text(label, style: labelStyle)),
+        Expanded(child: Text(value, style: valueStyle, overflow: TextOverflow.ellipsis)),
+      ],
+    );
+  }
+
+  Widget _contactTile(String title, String phone, {required VoidCallback onTap}) {
+    final isDark = _themeController.isDarkMode.value;
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      dense: true,
+      leading: const Icon(Icons.call),
+      title: Text(title, style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontWeight: FontWeight.w600, color: AppColors.textPrimary(isDark))),
+      subtitle: Text(phone, style: TextStyle(fontFamily: AppTextStyles.appFontFamily, color: AppColors.textSecondary(isDark))),
+      onTap: onTap,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      tileColor: AppColors.border(isDark).withOpacity(0.4),
+    );
+  }
+
+  Widget _quickActionChip({required IconData icon, required String label, required VoidCallback onTap}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          color: AppColors.primary.withOpacity(0.08),
+          border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: AppColors.primary),
+            const SizedBox(width: 6),
+            Text(label, style: TextStyle(fontFamily: AppTextStyles.appFontFamily)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // اختصارات للوصول إلى الكنترولرز
+  bool _theme_controller_value() => _themeController.isDarkMode.value;
+  dynamic _loading_controller_user() => _loadingController.currentUser;
 }

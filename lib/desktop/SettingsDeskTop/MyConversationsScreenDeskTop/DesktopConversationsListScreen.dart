@@ -1,3 +1,10 @@
+// DesktopConversationsListScreen.dart — واجهة قائمة المحادثات (ويب/حاسوب)
+// • قائمة موحّدة مرتبة "الأحدث أولاً"
+// • تحديث يدوي + سحب للتحديث
+// • عناصر غنية + شارة غير مقروء + مؤشر مقروئية (✓✓) لآخر رسالة مني
+// • واجهة منقسمة: القائمة يسار + تفاصيل يمين (Responsive)
+// • عند اختيار محادثة ثم أخرى: تنظيف رسائل القديمة لضمان التحديث الفوري
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -17,99 +24,104 @@ class DesktopConversationsListScreen extends StatefulWidget {
   State<DesktopConversationsListScreen> createState() => _DesktopConversationsListScreenState();
 }
 
-class _DesktopConversationsListScreenState extends State<DesktopConversationsListScreen>
-    with SingleTickerProviderStateMixin {
+class _DesktopConversationsListScreenState extends State<DesktopConversationsListScreen> {
   final ChatController _chatController = Get.put(ChatController());
   final LoadingController _loadingController = Get.find<LoadingController>();
   final ThemeController _themeController = Get.find<ThemeController>();
+
   Conversation? _selectedConversation;
 
-  late TabController _tabController;
-  // خرائط نوع التاب إلى باراميتر الـ API
-  final Map<int, String> _tabType = {
-    0: 'incoming', // عرض رسائل المستخدمين لي (حد تواصل معي)
-    1: 'outgoing', // عرض رسائلي للمعلنين (أنا بادي)
-  };
+  static const _receiptGrey = Color(0xFF9AA0A6);
+  Color get _readBlue {
+    try {
+      return AppColors.buttonAndLinksColor;
+    } catch (_) {
+      return AppColors.primary;
+    }
+  }
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
-    _tabController.addListener(_onTabChanged);
-    // جلب أول صفحة (تاب افتراضي 0 -> incoming)
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadConversations());
-  }
-
-  @override
-  void dispose() {
-    _tabController.removeListener(_onTabChanged);
-    _tabController.dispose();
-    super.dispose();
-  }
-
-  void _onTabChanged() {
-    if (_tabController.indexIsChanging) return; // نتجنب النداء أثناء التحويل الداخلي
-    _loadConversations();
-    setState(() {
-      _selectedConversation = null; // إعادة تعيين المحادثة المحددة عند تغيير التبويب
-    });
   }
 
   void _loadConversations() {
     final currentUser = _loadingController.currentUser;
-    if (currentUser != null) {
-      final type = _tabType[_tabController.index] ?? 'all';
-      _chatController.fetchConversations(userId: currentUser?.id??0, type: type);
+    if (currentUser == null) return;
+    _chatController.fetchConversations(userId: currentUser.id ?? 0, type: 'all');
+  }
+
+  String _formatTimeSmart(DateTime dt) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final thatDay = DateTime(dt.year, dt.month, dt.day);
+    final diffDays = today.difference(thatDay).inDays;
+
+    if (diffDays == 0) {
+      final hour = dt.hour;
+      final minute = dt.minute.toString().padLeft(2, '0');
+      final period = hour < 12 ? 'ص' : 'م';
+      final formattedHour = (hour == 0) ? 12 : (hour > 12 ? hour - 12 : hour);
+      return '${formattedHour.toString().padLeft(2, '0')}:$minute $period';
+    } else if (diffDays == 1) {
+      return 'أمس';
+    } else if (dt.year == now.year) {
+      return '${dt.day}/${dt.month}';
+    } else {
+      return '${dt.day}/${dt.month}/${dt.year}';
     }
   }
 
-  // تنسيق الوقت (/م)
-  String _formatTime(DateTime date) {
-    final hour = date.hour;
-    final minute = date.minute;
-    final period = hour < 12 ? 'ص' : 'م';
-    final formattedHour = (hour == 0) ? 12 : (hour > 12 ? hour - 12 : hour);
-    return '${formattedHour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')} $period';
+  String _truncate(String? text, {int max = 34}) {
+    final t = (text ?? '').trim();
+    if (t.isEmpty || t.length <= max) return t;
+    return '${t.substring(0, max - 3)}...';
   }
 
-  String _truncateText(String text, {int maxLength = 30}) {
-    if (text.length <= maxLength) return text;
-    return '${text.substring(0, maxLength - 3)}...';
+  bool _isRecent(DateTime dt) => DateTime.now().difference(dt) <= const Duration(hours: 24);
+
+  Widget _conversationReadReceipt(Conversation c, int? currentUserId) {
+    final last = c.lastMessage;
+    if (last == null) return const SizedBox.shrink();
+    final isMine = (currentUserId != null) && last.senderId == currentUserId;
+    if (!isMine) return const SizedBox.shrink();
+    final read = (c.unreadCount == 0);
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: Icon(
+        Icons.done_all_rounded,
+        size: 16,
+        color: read ? _readBlue : _receiptGrey.withOpacity(0.85),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDarkMode = _themeController.isDarkMode.value;
-    final bgColor = AppColors.background(isDarkMode);
-    final cardColor = AppColors.card(isDarkMode);
-    final textPrimary = AppColors.textPrimary(isDarkMode);
-    final textSecondary = AppColors.textSecondary(isDarkMode);
-    final dividerColor = AppColors.divider(isDarkMode);
-    final primaryColor = AppColors.primary;
+    final isDark = _themeController.isDarkMode.value;
+    final bg = AppColors.background(isDark);
+    final card = AppColors.card(isDark);
+    final textPrimary = AppColors.textPrimary(isDark);
+    final textSecondary = AppColors.textSecondary(isDark);
+    final divider = AppColors.divider(isDark);
+    final primary = AppColors.primary;
+
+    final isWide = MediaQuery.of(context).size.width >= 980;
 
     return Scaffold(
-      backgroundColor: bgColor,
+      backgroundColor: bg,
       body: Column(
         children: [
-          // شريط العنوان المخصص للحاسوب
           Container(
             height: 60,
             decoration: BoxDecoration(
-              color: AppColors.appBar(isDarkMode),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 6,
-                  offset: const Offset(0, 2),
-                ),
-              ],
+              color: AppColors.appBar(isDark),
+              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 6, offset: const Offset(0, 2))],
             ),
             child: Row(
               children: [
-                IconButton(
-                  icon: Icon(Icons.arrow_back, color: AppColors.onPrimary),
-                  onPressed: () => Get.back(),
-                ),
+                IconButton(icon: Icon(Icons.arrow_back, color: AppColors.onPrimary), onPressed: () => Get.back()),
                 Text(
                   'المحادثات'.tr,
                   style: TextStyle(
@@ -120,62 +132,22 @@ class _DesktopConversationsListScreenState extends State<DesktopConversationsLis
                   ),
                 ),
                 const Spacer(),
-                IconButton(
-                  icon: Icon(Icons.refresh, color: AppColors.onPrimary),
-                  onPressed: _loadConversations,
-                ),
+                IconButton(icon: Icon(Icons.refresh, color: AppColors.onPrimary), onPressed: _loadConversations, tooltip: 'تحديث'),
               ],
             ),
           ),
-          
-          // تبويبات المحادثات
-          Container(
-            height: 48,
-            decoration: BoxDecoration(
-              color: AppColors.appBar(isDarkMode),
-              border: Border(bottom: BorderSide(color: dividerColor, width: 1.0)),
-            ),
-            child: TabBar(
-              controller: _tabController,
-              indicatorColor: AppColors.primary,
-              labelColor: AppColors.onPrimary,
-              unselectedLabelColor: AppColors.onPrimary.withOpacity(0.8),
-              tabs: [
-                Tab(
-                  child: Text(
-                    'عرض رسائل المستخدمين لي',
-                    style: TextStyle(fontSize: 13, fontFamily: AppTextStyles.appFontFamily),
-                  ),
-                ),
-                Tab(
-                  child: Text(
-                    'عرض رسائلي للمعلنين',
-                    style: TextStyle(fontSize: 13, fontFamily: AppTextStyles.appFontFamily),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          
-          // محتوى المحادثات
+
           Expanded(
             child: Obx(() {
               if (_chatController.isLoadingConversations.value) {
-                return Center(
-                  child: CircularProgressIndicator(color: primaryColor),
-                );
+                return Center(child: CircularProgressIndicator(color: primary));
               }
 
-              if (_chatController.conversationsList.isEmpty) {
+              final list = [..._chatController.conversationsList]..sort((a, b) => b.lastMessageAt.compareTo(a.lastMessageAt));
+
+              if (list.isEmpty) {
                 return Center(
-                  child: Text(
-                    'لا توجد محادثات'.tr,
-                    style: TextStyle(
-                      fontFamily: AppTextStyles.appFontFamily,
-                      fontSize: 16,
-                      color: textSecondary,
-                    ),
-                  ),
+                  child: Text('لا توجد محادثات'.tr, style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: 16, color: textSecondary)),
                 );
               }
 
@@ -184,65 +156,44 @@ class _DesktopConversationsListScreenState extends State<DesktopConversationsLis
                 children: [
                   // قائمة المحادثات
                   Container(
-                    width: 400,
-                    decoration: BoxDecoration(
-                      color: cardColor,
-                      border: Border(right: BorderSide(color: dividerColor, width: 1.0)),
-                    ),
-                    child: Column(
-                      children: [
-                        // قائمة المحادثات
-                        Expanded(
-                          child: ListView.separated(
-                            padding: const EdgeInsets.only(top: 8),
-                            itemCount: _chatController.conversationsList.length,
-                            separatorBuilder: (context, index) => Divider(
-                              height: 1,
-                              color: dividerColor,
-                              indent: 80,
-                              endIndent: 16,
-                            ),
-                            itemBuilder: (context, index) {
-                              final conversation = _chatController.conversationsList[index];
-                              return _buildConversationItem(
-                                conversation,
-                                isDarkMode,
-                                cardColor,
-                                textPrimary,
-                                textSecondary,
-                                primaryColor,
-                              );
-                            },
-                          ),
-                        ),
-                      ],
+                    width: 430,
+                    decoration: BoxDecoration(color: card, border: Border(right: BorderSide(color: divider, width: 1))),
+                    child: RefreshIndicator(
+                      onRefresh: () async => _loadConversations(),
+                      color: primary,
+                      child: ListView.separated(
+                        padding: const EdgeInsets.only(top: 8, bottom: 12),
+                        itemCount: list.length,
+                        separatorBuilder: (_, __) => Divider(height: 1, color: divider, indent: 80, endIndent: 16),
+                        itemBuilder: (context, index) {
+                          final conversation = list[index];
+                          return _buildConversationTile(
+                            conversation: conversation,
+                            isDark: isDark,
+                            baseCard: card,
+                            textPrimary: textPrimary,
+                            textSecondary: textSecondary,
+                            divider: divider,
+                            primary: primary,
+                            isWide: isWide,
+                          );
+                        },
+                      ),
                     ),
                   ),
-                  
-                  // منطقة تفاصيل المحادثة
+
+                  // تفاصيل المحادثة
                   Expanded(
-                    child: _selectedConversation != null
-                      ? DesktopConversationScreenInMy(
-                          advertiser: _selectedConversation!.advertiser,
-                          ad: _selectedConversation?.ad, idAdv: _selectedConversation!.advertiser.id,
-                        )
-                      : Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.chat, size: 60, color: textSecondary.withOpacity(0.3)),
-                              const SizedBox(height: 16),
-                              Text(
-                                'اختر محادثة لعرضها'.tr,
-                                style: TextStyle(
-                                  fontFamily: AppTextStyles.appFontFamily,
-                                  fontSize: 18,
-                                  color: textSecondary,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                    child: isWide
+                        ? (_selectedConversation != null
+                            ? DesktopConversationScreenInMy(
+                                key: ValueKey('conv-${_selectedConversation!.advertiser.id}-${_selectedConversation!.ad?.id ?? 0}'),
+                                advertiser: _selectedConversation!.advertiser,
+                                ad: _selectedConversation?.ad,
+                                idAdv: _selectedConversation!.advertiser.id,
+                              )
+                            : _emptyState(textSecondary))
+                        : Container(color: bg),
                   ),
                 ],
               );
@@ -253,129 +204,133 @@ class _DesktopConversationsListScreenState extends State<DesktopConversationsLis
     );
   }
 
-  Widget _buildConversationItem(
-    Conversation conversation,
-    bool isDarkMode,
-    Color cardColor,
-    Color textPrimary,
-    Color textSecondary,
-    Color primaryColor,
-  ) {
-    final isSelected = _selectedConversation?.inquirer == conversation.inquirer;
-    final bgColor = isSelected 
-      ? primaryColor.withOpacity(0.1) 
-      : cardColor;
+  Widget _emptyState(Color textSecondary) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.chat_bubble_outline, size: 64, color: textSecondary.withOpacity(0.35)),
+          const SizedBox(height: 12),
+          Text('اختر محادثة لعرضها', style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: 18, color: textSecondary)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildConversationTile({
+    required Conversation conversation,
+    required bool isDark,
+    required Color baseCard,
+    required Color textPrimary,
+    required Color textSecondary,
+    required Color divider,
+    required Color primary,
+    required bool isWide,
+  }) {
+    final currentUserId = _loadingController.currentUser?.id;
+    final lastMsg = conversation.lastMessage;
+    final hasUnread = (conversation.unreadCount > 0);
+
+    final isSelected = (_selectedConversation != null) &&
+        (_selectedConversation?.inquirer == conversation.inquirer) &&
+        (_selectedConversation?.advertiser?.id == conversation.advertiser?.id) &&
+        ((_selectedConversation?.ad?.id ?? 0) == (conversation.ad?.id ?? 0));
+
+    final bg = isSelected
+        ? primary.withOpacity(isDark ? 0.14 : 0.10)
+        : (hasUnread
+            ? primary.withOpacity(isDark ? 0.12 : 0.08)
+            : (_isRecent(conversation.lastMessageAt)
+                ? primary.withOpacity(isDark ? 0.08 : 0.05)
+                : baseCard));
+
+    final lastSnippet = lastMsg == null
+        ? 'بدء محادثة جديدة'
+        : (lastMsg.isVoice ? '[صوت]' : (lastMsg.body ?? ''));
 
     return InkWell(
       onTap: () {
-        setState(() {
-          _selectedConversation = conversation;
-        });
-      },
-      onLongPress: () {
-        // إجراءات إضافية مثل حذف المحادثة
+        // تنظيف الرسائل القديمة لضمان تحديث التفاصيل فورًا
+        _chatController.messagesList.clear();
+        if (isWide) {
+          setState(() => _selectedConversation = conversation);
+        } else {
+          Get.to(() => DesktopConversationScreenInMy(
+                key: ValueKey('conv-${conversation.advertiser.id}-${conversation.ad?.id ?? 0}'),
+                advertiser: conversation.advertiser,
+                ad: conversation.ad,
+                idAdv: conversation.advertiser.id,
+              ));
+        }
       },
       child: Container(
+        color: bg,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        color: bgColor,
         child: Row(
           children: [
-            // صورة المعلن
-            _buildAdvertiserAvatar(conversation.advertiser.logo),
+            _advertiserAvatar(conversation.advertiser?.logo),
             const SizedBox(width: 16),
-            
-            // محتوى المحادثة
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // اسم المعلن والوقت
-                  Row(
-                    children: [
-                      SizedBox(
-                        width: 180,
-                        child: Text(
-                          conversation.advertiser.name,
-                          style: TextStyle(
-                            fontFamily: AppTextStyles.appFontFamily,
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                            color: textPrimary,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      const Spacer(),
-                      Text(
-                        _formatTime(conversation.lastMessageAt),
-                        style: TextStyle(
-                          fontFamily: AppTextStyles.appFontFamily,
-                          fontSize: 12,
-                          color: textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  
-                  // عنوان الإعلان
-                  if (conversation.ad != null) ...[
-                    Text(
-                      conversation.ad!.title,
-                      style: TextStyle(
-                        fontFamily: AppTextStyles.appFontFamily,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: textPrimary,
-                      ),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  Expanded(
+                    child: Text(
+                      conversation.advertiser?.name ?? '',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: 15, fontWeight: FontWeight.bold, color: textPrimary),
                     ),
-                    const SizedBox(height: 4),
-                  ],
-                  
-                  // آخر رسالة
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          conversation.lastMessage != null
-                              ? _truncateText(conversation.lastMessage!.body ?? '')
-                              : 'بدء محادثة جديدة'.tr,
-                          style: TextStyle(
-                            fontFamily: AppTextStyles.appFontFamily,
-                            fontSize: 13,
-                            color: textSecondary,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      if (conversation.unreadCount > 0)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: primaryColor,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            conversation.unreadCount.toString(),
-                            style:  TextStyle(
-                              fontFamily: AppTextStyles.appFontFamily,
-                              fontSize: 12,
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
+                  ),
+                  _conversationReadReceipt(conversation, currentUserId),
+                  Text(_formatTimeSmart(conversation.lastMessageAt), style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: 12, color: textSecondary)),
+                ]),
+                const SizedBox(height: 4),
+
+                if (conversation.ad != null) ...[
+                  Text(
+                    conversation.ad!.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: 12, fontWeight: FontWeight.w600, color: textPrimary),
+                  ),
+                  const SizedBox(height: 4),
+                ],
+
+                Row(
+                  children: [
+                    Expanded(
+                      child: Row(
+                        children: [
+                          if (lastMsg?.isVoice == true) ...[
+                            Icon(Icons.mic, size: 16, color: textSecondary),
+                            const SizedBox(width: 6),
+                          ],
+                          Flexible(
+                            child: Text(
+                              _truncate(lastSnippet),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontFamily: AppTextStyles.appFontFamily,
+                                fontSize: 13,
+                                color: hasUnread ? textPrimary : textSecondary,
+                                fontWeight: hasUnread ? FontWeight.w700 : FontWeight.w400,
+                              ),
                             ),
                           ),
-                        ),
-                    ],
-                  ),
-                ],
-              ),
+                        ],
+                      ),
+                    ),
+                    if (hasUnread)
+                      Container(
+                        margin: const EdgeInsets.only(left: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(color: primary, borderRadius: BorderRadius.circular(12)),
+                        child: Text(conversation.unreadCount.toString(), style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                      )
+                  ],
+                ),
+              ]),
             ),
             const SizedBox(width: 8),
             Icon(Icons.arrow_forward_ios, size: 18, color: textSecondary),
@@ -385,34 +340,23 @@ class _DesktopConversationsListScreenState extends State<DesktopConversationsLis
     );
   }
 
-  Widget _buildAdvertiserAvatar(String? logoUrl) {
+  Widget _advertiserAvatar(String? url) {
     return Container(
       width: 56,
       height: 56,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: AppColors.greyLight,
-      ),
+      decoration: BoxDecoration(shape: BoxShape.circle, color: AppColors.greyLight),
       child: ClipOval(
-        child: logoUrl != null && logoUrl.isNotEmpty
+        child: (url != null && url.isNotEmpty)
             ? CachedNetworkImage(
-                imageUrl: logoUrl,
+                imageUrl: url,
                 fit: BoxFit.cover,
-                placeholder: (context, url) => Container(
+                placeholder: (context, _) => Container(
                   color: Colors.grey[200],
-                  child: const Center(child: CircularProgressIndicator()),
+                  child: const Center(child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))),
                 ),
-                errorWidget: (context, url, error) => Icon(
-                  Icons.person,
-                  color: AppColors.greyDark,
-                  size: 24,
-                ),
+                errorWidget: (context, _, __) => Icon(Icons.person, color: AppColors.greyDark, size: 24),
               )
-            : Icon(
-                Icons.person,
-                size: 24,
-                color: AppColors.greyDark,
-              ),
+            : Icon(Icons.person, size: 24, color: AppColors.greyDark),
       ),
     );
   }

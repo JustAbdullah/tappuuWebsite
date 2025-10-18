@@ -1,4 +1,6 @@
-
+// ConversationScreen.dart — ملف كامل (ويب، بدون تسجيل صوتي)
+// نفس التصميم، إرسال نصوص + تشغيل صوتيات مستلمة فقط،
+// زر المايك يعرض نافذة "الميزة متاحة في التطبيق فقط".
 
 import 'dart:async';
 
@@ -6,25 +8,26 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
-import 'package:tappuu_website/controllers/ChatController.dart';
-import 'package:tappuu_website/core/constant/appcolors.dart';
-import 'package:tappuu_website/core/constant/app_text_styles.dart';
-
-import 'package:tappuu_website/controllers/LoadingController.dart';
-import 'package:tappuu_website/controllers/ThemeController.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+
+import '../../controllers/ChatController.dart';
+import '../../controllers/LoadingController.dart';
+import '../../controllers/ThemeController.dart';
+import '../../core/constant/app_text_styles.dart';
+import '../../core/constant/appcolors.dart';
 import '../../core/data/model/AdResponse.dart';
 import '../../core/data/model/Message.dart';
+import '../HomeScreen/menubar.dart';
 
 class ConversationScreen extends StatefulWidget {
   final Advertiser advertiser;
   final Ad? ad;
-  final int idAdv ;
-  
+  final int idAdv;
+
   const ConversationScreen({
     super.key,
-  required  this.advertiser,
+    required this.advertiser,
     this.ad,
     required this.idAdv,
   });
@@ -33,8 +36,9 @@ class ConversationScreen extends StatefulWidget {
   State<ConversationScreen> createState() => _ConversationScreenState();
 }
 
-
 class _ConversationScreenState extends State<ConversationScreen> {
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
   final ChatController _chatController = Get.put(ChatController());
   final LoadingController _loadingController = Get.find<LoadingController>();
   final ThemeController _themeController = Get.find<ThemeController>();
@@ -48,7 +52,11 @@ class _ConversationScreenState extends State<ConversationScreen> {
 
   Duration _currentPosition = Duration.zero;
   Duration _currentDuration = Duration.zero;
+
   final Map<int, Duration> _messageDurations = {};
+  final FocusNode _messageFocusNode = FocusNode();
+
+  static const _receiptGrey = Color(0xFF9AA0A6);
 
   @override
   void initState() {
@@ -65,79 +73,236 @@ class _ConversationScreenState extends State<ConversationScreen> {
 
     _positionSub = _audioPlayer.onPositionChanged.listen((p) {
       if (!mounted) return;
-      setState(() {
-        _currentPosition = p;
-      });
+      setState(() => _currentPosition = p);
     });
 
     _durationSub = _audioPlayer.onDurationChanged.listen((d) {
       if (!mounted) return;
-      setState(() {
-        _currentDuration = d;
-      });
+      setState(() => _currentDuration = d);
+    });
+
+    // Scroll للأسفل عند ظهور الكيبورد
+    _messageFocusNode.addListener(() {
+      if (_messageFocusNode.hasFocus) {
+        Future.delayed(const Duration(milliseconds: 250), () {
+          if (!mounted) return;
+          try {
+            if (_scrollController.hasClients) {
+              _scrollController.animateTo(
+                _scrollController.position.maxScrollExtent,
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeOut,
+              );
+            }
+          } catch (_) {}
+        });
+      }
     });
   }
 
   @override
   void dispose() {
-    _audioPlayer.dispose();
+    try { _audioPlayer.dispose(); } catch (_) {}
     _messageController.dispose();
-    _scrollController.dispose();
+    try { _scrollController.dispose(); } catch (_) {}
     _positionSub?.cancel();
     _durationSub?.cancel();
+    _messageFocusNode.dispose();
     super.dispose();
   }
 
-  void _loadMessages() {
-    final user = _loadingController.currentUser;
-    if (user != null) {
-      _chatController.fetchMessages(
-        userId: user.id ?? 0,
-        partnerId: widget.ad?.userId ?? widget.idAdv,
-        adId: widget.ad?.id,
-        advertiserProfileId: widget.idAdv,
-      ).then((_) {
-        if (!mounted) return;
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-          if (_scrollController.hasClients) {
-            _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
-          }
-        });
-      });
-    }
+  // ===== نافذة: "الميزة متاحة في التطبيق فقط" =====
+  Future<void> _showVoiceFeatureAppOnlyDialog() async {
+    await showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        insetPadding: EdgeInsets.symmetric(horizontal: 24.w),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
+        child: Padding(
+          padding: EdgeInsets.all(20.w),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.mic_off_rounded, size: 48.w, color: Colors.redAccent),
+              SizedBox(height: 12.h),
+              Text(
+                'الميزة غير متاحة هنا',
+                style: TextStyle(
+                  fontSize: AppTextStyles.xlarge,
+                  fontFamily: AppTextStyles.appFontFamily,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              SizedBox(height: 8.h),
+              Text(
+                'إرسال الرسائل الصوتية متاح في تطبيقات الجوال فقط حالياً.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: AppTextStyles.medium,
+                  fontFamily: AppTextStyles.appFontFamily,
+                  color: AppColors.grey,
+                ),
+              ),
+              SizedBox(height: 16.h),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.r)),
+                    padding: EdgeInsets.symmetric(vertical: 12.h),
+                  ),
+                  child: const Text('حسناً'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
-  void _sendMessage() {
-    final user = _loadingController.currentUser;
-    if (user != null && _messageController.text.trim().isNotEmpty) {
-      final text = _messageController.text.trim();
-      _messageController.clear();
-
-      _chatController.sendMessage(
-        senderId: user.id ?? 0,
-        recipientId: widget.ad?.userId ?? widget.idAdv,
-        adId: widget.ad?.id,
-        advertiserProfileId: widget.idAdv,
-        body: text,
-      ).then((success) {
-        if (success) {
-          _loadMessages();
-        } else {
-          _messageController.text = text;
-          Get.snackbar('خطأ', 'فشل إرسال الرسالة', 
-              backgroundColor: Colors.red, colorText: Colors.white);
+  // ===== تحميل الرسائل + تعليم الواردة =====
+  void _loadMessages() {
+    final user = _loading_controller_currentUser();
+    if (user != null) {
+      _chatController
+          .fetchMessages(
+            userId: user.id ?? 0,
+            partnerId: widget.ad?.userId ?? widget.idAdv,
+            adId: widget.ad?.id,
+            advertiserProfileId: widget.idAdv,
+          )
+          .then((_) async {
+        if (!mounted) return;
+        await _autoMarkIncomingAsRead();
+        if (_scrollController.hasClients) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            try {
+              _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+            } catch (_) {}
+          });
         }
       });
     }
   }
 
+  Future<void> _autoMarkIncomingAsRead() async {
+    final user = _loading_controller_currentUser();
+    if (user == null) return;
+
+    for (final m in _chatController.messagesList) {
+      final isIncoming = m.recipientId == user.id;
+      if (isIncoming && m.isRead == false) {
+        final ok = await _chatController.markAsRead(m.id);
+        if (ok) {
+          final idx = _chatController.messagesList.indexWhere((x) => x.id == m.id);
+          if (idx >= 0) {
+            final old = _chatController.messagesList[idx];
+            _chatController.messagesList[idx] = Message(
+              id: old.id,
+              senderId: old.senderId,
+              senderEmail: old.senderEmail,
+              recipientId: old.recipientId,
+              recipientEmail: old.recipientEmail,
+              body: old.body,
+              isVoice: old.isVoice,
+              voiceUrl: old.voiceUrl,
+              isRead: true,
+              createdAt: old.createdAt,
+              readAt: DateTime.now(),
+              updatedAt: old.updatedAt,
+              adId: old.adId,
+              adNumber: old.adNumber,
+              adTitleAr: old.adTitleAr,
+              adTitleEn: old.adTitleEn,
+              adSlug: old.adSlug,
+              adDescriptionAr: old.adDescriptionAr,
+              adDescriptionEn: old.adDescriptionEn,
+              adPrice: old.adPrice,
+              adShowTime: old.adShowTime,
+              adCreatedAt: old.adCreatedAt,
+              adImages: old.adImages,
+              advertiserProfileId: old.advertiserProfileId,
+              advertiserUserId: old.advertiserUserId,
+              advertiserName: old.advertiserName,
+              advertiserLogo: old.advertiserLogo,
+              advertiserDescription: old.advertiserDescription,
+              advertiserContactPhone: old.advertiserContactPhone,
+              advertiserWhatsappPhone: old.advertiserWhatsappPhone,
+              advertiserWhatsappCallNumber: old.advertiserWhatsappCallNumber,
+              advertiserWhatsappUrl: old.advertiserWhatsappUrl,
+              advertiserTelUrl: old.advertiserTelUrl,
+              advertiserLatitude: old.advertiserLatitude,
+              advertiserLongitude: old.advertiserLongitude,
+              adCompanyMember: old.adCompanyMember,
+            );
+          }
+        }
+      }
+    }
+    if (mounted) setState(() {});
+  }
+
+  // ===== إرسال نص =====
+  void _sendMessage() {
+    final user = _loading_controller_currentUser();
+    if (user != null && _messageController.text.trim().isNotEmpty) {
+      final text = _messageController.text.trim();
+      _messageController.clear();
+
+      _chatController
+          .sendMessage(
+            senderId: user.id ?? 0,
+            recipientId: widget.ad?.userId ?? widget.idAdv,
+            adId: widget.ad?.id,
+            advertiserProfileId: widget.idAdv,
+            body: text,
+          )
+          .then((success) async {
+        if (success) {
+          await _loadAndScrollAfterDelay();
+        } else {
+          _messageController.text = text;
+          Get.snackbar('خطأ', 'فشل إرسال الرسالة', backgroundColor: Colors.red, colorText: Colors.white);
+        }
+      });
+    }
+  }
+
+  dynamic _loading_controller_currentUser() => _loadingController.currentUser;
+
+  Future<void> _loadAndScrollAfterDelay() async {
+    await Future.delayed(const Duration(milliseconds: 600));
+    if (!mounted) return;
+    await _chatController.fetchMessages(
+      userId: _loading_controller_currentUser()?.id ?? 0,
+      partnerId: widget.ad?.userId ?? widget.idAdv,
+      adId: widget.ad?.id,
+      advertiserProfileId: widget.idAdv,
+    );
+    if (!mounted) return;
+    await _autoMarkIncomingAsRead();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      try {
+        if (_scrollController.hasClients) {
+          _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+        }
+      } catch (_) {}
+    });
+  }
+
+  // ===== تشغيل/إيقاف صوت الرسائل (قراءة فقط) =====
   Future<void> _playPauseVoice(Message message) async {
     final url = message.voiceUrl;
     if (url == null || url.isEmpty) return;
 
     if (_playingMessageId == message.id) {
-      await _audioPlayer.pause();
+      try { await _audioPlayer.pause(); } catch (_) {}
       if (!mounted) return;
       setState(() => _playingMessageId = null);
     } else {
@@ -147,9 +312,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
         if (!mounted) return;
         setState(() => _playingMessageId = message.id);
       } catch (e) {
-        print('خطأ في تشغيل الصوت: $e');
-        Get.snackbar('خطأ', 'لا يمكن تشغيل الصوت',
-            backgroundColor: Colors.red, colorText: Colors.white);
+        Get.snackbar('خطأ', 'لا يمكن تشغيل الصوت', backgroundColor: Colors.red, colorText: Colors.white);
       }
     }
   }
@@ -162,159 +325,19 @@ class _ConversationScreenState extends State<ConversationScreen> {
     try {
       if (message.voiceUrl == null || message.voiceUrl!.isEmpty) return;
       await player.setSourceUrl(message.voiceUrl!);
-      
       final duration = await player.getDuration().timeout(const Duration(seconds: 10));
       if (duration != null && duration.inMilliseconds > 0) {
         _messageDurations[message.id!] = duration;
         if (mounted) setState(() {});
       }
     } on TimeoutException {
-      print('Timeout getting duration for message ${message.id}');
     } catch (e) {
-      print('ensureMessageDuration error: $e');
     } finally {
-      player.dispose();
+      try { await player.dispose(); } catch (_) {}
     }
   }
 
-  Future<void> _confirmAndDeleteMessage(Message message) async {
-    final user = _loadingController.currentUser;
-    if (user == null) return;
-
-    final isMine = message.senderId == user.id;
-    if (!isMine) {
-      Get.snackbar('تنبيه', 'لا يمكنك حذف رسالة ليست لك', 
-          backgroundColor: Colors.orange, colorText: Colors.white);
-      return;
-    }
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: AppColors.background(_themeController.isDarkMode.value),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20.r)),
-        title: Text(
-          'حذف الرسالة',
-          style: TextStyle(
-            fontFamily: AppTextStyles.appFontFamily,
-            fontSize: AppTextStyles.medium,
-            fontWeight: FontWeight.bold,
-            color: AppColors.textPrimary(_themeController.isDarkMode.value),
-          ),
-          textAlign: TextAlign.center,
-        ),
-        content: Text(
-          'هل أنت متأكد أنك تريد حذف هذه الرسالة؟',
-          style: TextStyle(
-            fontFamily: AppTextStyles.appFontFamily,
-            fontSize: AppTextStyles.medium,
-            color: AppColors.textSecondary(_themeController.isDarkMode.value),
-          ),
-          textAlign: TextAlign.center,
-        ),
-        actions: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              Expanded(
-                child: TextButton(
-                  onPressed: () => Navigator.of(context).pop(false),
-                  style: TextButton.styleFrom(
-                    backgroundColor: Colors.grey[300],
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
-                    padding: EdgeInsets.symmetric(vertical: 12.h),
-                  ),
-                  child: Text(
-                    'لا',
-                    style: TextStyle(
-                      fontFamily: AppTextStyles.appFontFamily,
-                      fontSize: AppTextStyles.medium,
-                      color: Colors.black87,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-              SizedBox(width: 16.w),
-              Expanded(
-                child: TextButton(
-                  onPressed: () => Navigator.of(context).pop(true),
-                  style: TextButton.styleFrom(
-                    backgroundColor: Colors.red,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
-                    padding: EdgeInsets.symmetric(vertical: 12.h),
-                  ),
-                  child: Text(
-                    'نعم',
-                    style: TextStyle(
-                      fontFamily: AppTextStyles.appFontFamily,
-                      fontSize: AppTextStyles.medium,
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true) return;
-
-    final ok = await _chatController.deleteMessage(message.id ?? 0);
-    if (ok) {
-      if (!mounted) return;
-      setState(() {});
-      Get.snackbar('تم', 'تم حذف الرسالة', 
-          backgroundColor: Colors.green, colorText: Colors.white);
-    } else {
-      Get.snackbar('خطأ', 'فشل حذف الرسالة', 
-          backgroundColor: Colors.red, colorText: Colors.white);
-    }
-  }
-
-  Future<void> _launchWhatsAppChat(String? phone) async {
-    if (phone == null || phone.isEmpty) {
-      Get.snackbar('خطأ', 'رقم غير متاح', 
-          backgroundColor: Colors.red, colorText: Colors.white);
-      return;
-    }
-    final cleaned = _cleanPhoneNumber(phone);
-    final Uri url = Uri.parse('https://wa.me/$cleaned');
-    if (await canLaunchUrl(url)) {
-      await launchUrl(url, mode: LaunchMode.externalApplication);
-    } else {
-      Get.snackbar('خطأ', 'لا يمكن فتح واتساب', 
-          backgroundColor: Colors.red, colorText: Colors.white);
-    }
-  }
-
-  Future<void> _launchWhatsAppCall(String? phone) async {
-    await _launchWhatsAppChat(phone);
-  }
-
-  Future<void> _launchPhoneCall(String? phone) async {
-    if (phone == null || phone.isEmpty) {
-      Get.snackbar('خطأ', 'رقم غير متاح', 
-          backgroundColor: Colors.red, colorText: Colors.white);
-      return;
-    }
-    final cleaned = _cleanPhoneNumber(phone);
-    final Uri url = Uri.parse('tel:$cleaned');
-    if (await canLaunchUrl(url)) {
-      await launchUrl(url, mode: LaunchMode.externalApplication);
-    } else {
-      Get.snackbar('خطأ', 'لا يمكن فتح تطبيق الهاتف', 
-          backgroundColor: Colors.red, colorText: Colors.white);
-    }
-  }
-
-  String _cleanPhoneNumber(String phone) {
-    return phone.replaceAll(RegExp(r'[^\d+]'), '');
-  }
-
+  // تنسيق التاريخ
   String _formatDateTimeFull(DateTime date) {
     final day = date.day.toString().padLeft(2, '0');
     final month = date.month.toString().padLeft(2, '0');
@@ -326,20 +349,21 @@ class _ConversationScreenState extends State<ConversationScreen> {
     return '$day/$month/$year  ${formattedHour.toString().padLeft(2, '0')}:$minute $period';
   }
 
-  String _formatDuration(Duration d) {
+  // تنسيق السعر: بدون كسور + فواصل آلاف
+  String _formatPrice(num value) {
+    final s = value.toStringAsFixed(0);
+    final reg = RegExp(r'\B(?=(\d{3})+(?!\d))');
+    return s.replaceAllMapped(reg, (m) => ',');
+  }
+
+  // تنسيق مدة الصوت للعرض
+  String _formatRecDuration(Duration d) {
     final mm = d.inMinutes.remainder(60).toString().padLeft(2, '0');
     final ss = d.inSeconds.remainder(60).toString().padLeft(2, '0');
     return '$mm:$ss';
   }
 
-  String _formatPrice(double price) {
-    if (price >= 1000000) {
-      return '${(price / 1000000).toStringAsFixed(1)} مليون';
-    } else if (price >= 1000) {
-      return '${(price / 1000).toStringAsFixed(0)} ألف';
-    }
-    return price.toStringAsFixed(0);
-  }
+  // ======================= UI =======================
 
   @override
   Widget build(BuildContext context) {
@@ -350,333 +374,236 @@ class _ConversationScreenState extends State<ConversationScreen> {
     final dividerColor = AppColors.divider(isDarkMode);
 
     const whatsappLightGreen = Color(0xFFDCF8C6);
+    final viewInsetsBottom = MediaQuery.of(context).viewInsets.bottom;
 
     return Scaffold(
+      key: _scaffoldKey,
+      drawer: Menubar(),
       backgroundColor: AppColors.background(isDarkMode),
-      appBar: _buildAppBar(isDarkMode, textPrimary),
-      body: Column(
-        children: [
-          // بطاقة الإعلان المصغرة
-          if (widget.ad != null)
-            _buildAdMiniCard(cardColor, textPrimary, textSecondary)
-          else
-            _buildNoAdNotice(cardColor, textPrimary),
-
-          // قائمة الرسائل
-          Expanded(
-            child: Obx(() {
-              if (_chatController.isLoadingMessages.value) {
-                return Center(child: CircularProgressIndicator(color: AppColors.primary));
-              }
-
-              final serverMessages = _chatController.messagesList;
-              
-              return ListView.builder(
-                controller: _scrollController,
-                padding: EdgeInsets.only(bottom: 100.h, top: 12.h),
-                itemCount: serverMessages.length,
-                itemBuilder: (context, idx) {
-                  final message = serverMessages[idx];
-                  final currentUser = _loadingController.currentUser;
-                  final isCurrentUser = currentUser != null && (currentUser.id == message.senderId);
-
-                  if (message.isVoice == true && message.voiceUrl != null && message.voiceUrl!.isNotEmpty) {
-                    _ensureMessageDuration(message);
-                  }
-
-                  return _buildMessageBubble(
-                    message,
-                    isDarkMode,
-                    isCurrentUser,
-                    widget.advertiser,
-                    whatsappLightGreen,
-                  );
-                },
-              );
-            }),
-          ),
-        ],
-      ),
-      bottomSheet: _buildMessageInput(isDarkMode, cardColor, dividerColor),
-    );
-  }
-
-  PreferredSizeWidget _buildAppBar(bool isDarkMode, Color titleColor) {
-    final adv = widget.advertiser;
-    return AppBar(
-      backgroundColor: AppColors.appBar(isDarkMode),
-      elevation: 2,
-      leading: IconButton(
-        icon: Icon(Icons.arrow_back, color: AppColors.onPrimary, size: 24.w),
-        onPressed: () => Get.back(),
-      ),
-      title: Row(
-        children: [
-          // صورة المعلن لو موجودة
-          Container(
-            width: 40.w,
-            height: 40.h,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: AppColors.primary.withOpacity(0.1),
-            ),
-            child: Icon(Icons.person, color: AppColors.primary, size: 20.w),
-          ),
-          SizedBox(width: 12.w),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      resizeToAvoidBottomInset: false,
+      body: SafeArea(
+        child: Stack(
+          children: [
+            Column(
               children: [
-                Text(
-                  adv.name ?? 'معلن',
-                  style: TextStyle(
-                    color: AppColors.onPrimary,
-                    fontFamily: AppTextStyles.appFontFamily,
-                    fontSize: AppTextStyles.medium,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                SizedBox(height: 2.h),
-                Text(
-                  adv.contactPhone ?? '',
-                  style: TextStyle(
-                    fontFamily: AppTextStyles.appFontFamily,
-                    fontSize: AppTextStyles.small,
-                    color: AppColors.onPrimary.withOpacity(0.9),
-                  ),
+                _buildCustomAppBar(isDarkMode),
+                if (widget.ad != null)
+                  _buildAdMiniCard(cardColor, textPrimary, textSecondary)
+                else
+                  _buildNoAdNotice(cardColor, textPrimary),
+
+                Expanded(
+                  child: Obx(() {
+                    if (_chatController.isLoadingMessages.value) {
+                      return Center(child: CircularProgressIndicator(color: AppColors.primary));
+                    }
+
+                    final serverMessages = _chatController.messagesList;
+
+                    return ListView.builder(
+                      controller: _scrollController,
+                      padding: EdgeInsets.only(bottom: viewInsetsBottom + 160.h, top: 12.h),
+                      itemCount: serverMessages.length,
+                      itemBuilder: (context, idx) {
+                        final message = serverMessages[idx];
+                        final currentUser = _loading_controller_currentUser();
+                        final isCurrentUser = currentUser != null && (currentUser.id == message.senderId);
+
+                        if (message.isVoice == true && (message.voiceUrl ?? '').isNotEmpty) {
+                          _ensureMessageDuration(message);
+                        }
+
+                        return _buildMessageBubbleWithDelete(
+                          message,
+                          isDarkMode,
+                          isCurrentUser,
+                          widget.advertiser,
+                          whatsappLightGreen,
+                        );
+                      },
+                    );
+                  }),
                 ),
               ],
             ),
-          ),
-        ],
-      ),
-      actions: [
-        if ((adv.contactPhone ?? '').isNotEmpty)
-          IconButton(
-            icon: Icon(Icons.phone, color: AppColors.onPrimary, size: 22.w),
-            onPressed: () => _launchPhoneCall(adv.contactPhone),
-          ),
-        PopupMenuButton<int>(
-          icon: Icon(Icons.more_vert, color: AppColors.onPrimary),
-          onSelected: (value) {
-            if (value == 0) _launchWhatsAppChat(adv.whatsappPhone?.isNotEmpty == true ? adv.whatsappPhone : adv.whatsappPhone);
-            if (value == 1) _launchWhatsAppCall(adv.whatsappPhone?.isNotEmpty == true ? adv.whatsappPhone : adv.whatsappPhone);
-            if (value == 2) _launchPhoneCall(adv.contactPhone);
-          },
-          itemBuilder: (context) => [
-            PopupMenuItem(
-              value: 0,
-              child: Row(
-                children: [
-                  Icon(Icons.chat, color: Colors.green, size: 20.w),
-                  SizedBox(width: 8.w),
-                  Text('محادثة واتساب'),
-                ],
-              ),
-            ),
-            PopupMenuItem(
-              value: 1,
-              child: Row(
-                children: [
-                  Icon(Icons.phone_in_talk, color: Colors.green, size: 20.w),
-                  SizedBox(width: 8.w),
-                  Text('اتصال واتساب'),
-                ],
-              ),
-            ),
-            PopupMenuItem(
-              value: 2,
-              child: Row(
-                children: [
-                  Icon(Icons.call, color: Colors.blue, size: 20.w),
-                  SizedBox(width: 8.w),
-                  Text('اتصال هاتفي'),
-                ],
+
+            // الإدخال العائم
+            Positioned(
+              left: 12.w,
+              right: 12.w,
+              bottom: viewInsetsBottom + 12.h,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeOut,
+                child: _buildFloatingInput(isDarkMode, cardColor, dividerColor),
               ),
             ),
           ],
         ),
-      ],
+      ),
     );
   }
 
-  Widget _buildMessageInput(bool isDarkMode, Color cardColor, Color dividerColor) {
+  Widget _buildCustomAppBar(bool isDarkMode) {
+    final adv = widget.advertiser;
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
-      decoration: BoxDecoration(
-        color: cardColor,
-        border: Border(top: BorderSide(color: dividerColor, width: 1)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 8,
-            offset: Offset(0, -2),
-          ),
+      height: 60.h,
+      color: AppColors.appBar(isDarkMode),
+      padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 6.h),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(children: [
+            Container(
+              padding: EdgeInsets.all(4.w),
+              child: InkWell(onTap: () => Get.back(), child: Icon(Icons.arrow_back, color: AppColors.onPrimary, size: 22.w)),
+            ),
+            SizedBox(width: 2.w),
+            Container(
+              padding: EdgeInsets.all(4.w),
+              child: InkWell(onTap: () => _scaffoldKey.currentState?.openDrawer(), child: Icon(Icons.menu, color: AppColors.onPrimary, size: 22.w)),
+            ),
+            SizedBox(width: 12.w),
+            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              SizedBox(
+                width: 200.w,
+                child: Text(
+                  adv.name ?? 'معلن',
+                  style: TextStyle(color: AppColors.onPrimary, fontFamily: AppTextStyles.appFontFamily, fontSize: AppTextStyles.medium, fontWeight: FontWeight.bold),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              SizedBox(height: 1.h),
+              Text(
+                (adv.contactPhone ?? '').trim(),
+                style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: AppTextStyles.small, color: AppColors.onPrimary.withOpacity(0.9), fontWeight: FontWeight.w600),
+              ),
+            ]),
+          ]),
+          Row(children: [
+            // كلا الأزرار تفتح نفس شاشة التواصل
+            Container(
+              padding: EdgeInsets.all(4.w),
+              child: InkWell(onTap: _openContactSideSheet, child: Icon(Icons.phone, color: AppColors.onPrimary, size: 22.w)),
+            ),
+            SizedBox(width: 2.w),
+            Container(
+              padding: EdgeInsets.all(4.w),
+              child: InkWell(onTap: _openContactSideSheet, child: Icon(Icons.more_vert, color: AppColors.onPrimary, size: 22.w)),
+            ),
+          ]),
         ],
       ),
-      child: Row(
-        children: [
-          // زر الميكروفون
-          GestureDetector(
-            onTap: () {
-              Get.snackbar(
-                'الميزة غير متاحة',
-                'التسجيل الصوتي متاح حصرياً في تطبيق الجوال',
-                backgroundColor: Colors.orange,
-                colorText: Colors.white,
-                duration: Duration(seconds: 3),
-              );
-            },
-            child: Container(
-              padding: EdgeInsets.all(12.r),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: AppColors.buttonAndLinksColor,
+    );
+  }
+
+  Widget _buildFloatingInput(bool isDarkMode, Color cardColor, Color dividerColor) {
+    return Material(
+      elevation: 10,
+      borderRadius: BorderRadius.circular(28.r),
+      color: cardColor,
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 6.h),
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(28.r), color: cardColor),
+        child: Row(
+          children: [
+            // زر المايك: لا تسجيل — يفتح نافذة فقط
+            GestureDetector(
+              onTap: _showVoiceFeatureAppOnlyDialog,
+              child: Container(
+                padding: EdgeInsets.all(10.r),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.buttonAndLinksColor,
+                ),
+                child: const Icon(Icons.mic_off, color: Colors.white),
               ),
-              child: Icon(Icons.mic, color: Colors.white, size: 22.w),
             ),
-          ),
-          SizedBox(width: 12.w),
-          
-          // حقل النص
-          Expanded(
-            child: Container(
-              height: 50.h,
-              padding: EdgeInsets.symmetric(horizontal: 16.w),
-              decoration: BoxDecoration(
-                color: AppColors.border(isDarkMode),
-                borderRadius: BorderRadius.circular(25.r),
-                border: Border.all(color: dividerColor.withOpacity(0.5)),
-              ),
-              child: Row(
-                children: [
+            SizedBox(width: 8.w),
+            Expanded(
+              child: Container(
+                height: 48.h,
+                padding: EdgeInsets.symmetric(horizontal: 12.w),
+                decoration: BoxDecoration(color: AppColors.border(isDarkMode), borderRadius: BorderRadius.circular(20.r)),
+                child: Row(children: [
                   Expanded(
                     child: TextField(
+                      focusNode: _messageFocusNode,
                       controller: _messageController,
-                      style: TextStyle(
-                        fontFamily: AppTextStyles.appFontFamily,
-                        fontSize: AppTextStyles.large,
-                        color: AppColors.textPrimary(isDarkMode),
-                      ),
+                      style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: AppTextStyles.large, color: AppColors.textPrimary(isDarkMode)),
                       decoration: InputDecoration(
-                        hintText: 'اكتب رسالة...',
-                        hintStyle: TextStyle(
-                          color: AppColors.textSecondary(isDarkMode),
-                          fontSize: AppTextStyles.medium,
-                        ),
+                        hintText: 'اكتب رسالة...'.tr,
+                        hintStyle: TextStyle(color: AppColors.textSecondary(isDarkMode)),
                         border: InputBorder.none,
-                        contentPadding: EdgeInsets.symmetric(vertical: 14.h),
+                        contentPadding: EdgeInsets.symmetric(vertical: 12.h),
                       ),
                       textInputAction: TextInputAction.send,
                       onSubmitted: (_) => _sendMessage(),
-                      maxLines: null,
                     ),
                   ),
-                ],
+                ]),
               ),
             ),
-          ),
-          SizedBox(width: 12.w),
-          
-          // زر الإرسال
-          Container(
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: AppColors.buttonAndLinksColor,
-            ),
-            child: IconButton(
-              icon: Icon(Icons.send, color: Colors.white, size: 22.w),
+            SizedBox(width: 8.w),
+            FloatingActionButton(
               onPressed: _sendMessage,
-              padding: EdgeInsets.all(10.r),
+              mini: true,
+              backgroundColor: AppColors.buttonAndLinksColor,
+              child: const Icon(Icons.send, color: Colors.white),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildAdMiniCard(Color cardColor, Color textPrimary, Color textSecondary) {
     return Container(
-      padding: EdgeInsets.all(16.r),
-      margin: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(16.r),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 8,
-            offset: Offset(0, 2),
-          ),
-        ],
-      ),
+      padding: EdgeInsets.all(12.r),
+      margin: EdgeInsets.symmetric(horizontal: 0.w, vertical: 6.h),
+      decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(0.r)),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // صورة الإعلان
           if (widget.ad?.images.isNotEmpty == true)
-            Container(
-              width: 70.w,
-              height: 70.h,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12.r),
-                color: Colors.grey[200],
-              ),
+            SizedBox(
+              width: 60.w,
+              height: 60.h,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(12.r),
                 child: Image.network(
                   widget.ad!.images[0],
                   fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) => Container(
-                    color: Colors.grey[300],
-                    child: Icon(Icons.image, size: 30.sp, color: Colors.grey[600]),
-                  ),
+                  errorBuilder: (c, e, s) => Container(color: AppColors.greyLight, child: Icon(Icons.image, size: 30.sp)),
                 ),
               ),
             ),
-          SizedBox(width: 16.w),
-          
-          // تفاصيل الإعلان
+          SizedBox(width: 12.w),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  widget.ad?.title ?? 'إعلان',
+                  widget.ad?.title ?? 'اعلان',
                   style: TextStyle(
                     fontFamily: AppTextStyles.appFontFamily,
                     fontSize: AppTextStyles.medium,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF1A73E8),
+                    color: const Color.fromARGB(255, 24, 117, 232),
                   ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
                 ),
                 SizedBox(height: 6.h),
-                
                 if (widget.ad?.price != null)
                   Text(
-                    '${_formatPrice(widget.ad!.price!)} ليرة سورية',
+                    '${_formatPrice(widget.ad!.price!)}${" ليرة سورية".tr}',
                     style: TextStyle(
                       fontFamily: AppTextStyles.appFontFamily,
                       fontSize: AppTextStyles.medium,
                       fontWeight: FontWeight.bold,
-                      color: AppColors.primary,
+                      color: AppColors.textPrimary(_themeController.isDarkMode.value),
                     ),
                   ),
-                
-                SizedBox(height: 4.h),
-                
-                Text(
-                  widget.advertiser.name ?? 'معلن',
-                  style: TextStyle(
-                    fontFamily: AppTextStyles.appFontFamily,
-                    fontSize: AppTextStyles.small,
-                    color: textSecondary,
-                  ),
-                ),
               ],
             ),
           ),
@@ -687,117 +614,152 @@ class _ConversationScreenState extends State<ConversationScreen> {
 
   Widget _buildNoAdNotice(Color cardColor, Color textPrimary) {
     return Container(
-      padding: EdgeInsets.all(16.r),
-      margin: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(16.r),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.info_outline, color: AppColors.primary, size: 24.sp),
-          SizedBox(width: 12.w),
-          Expanded(
-            child: Text(
-              'هذه المحادثة تتم بدون أي إعلان ذي صلة',
-              style: TextStyle(
-                fontFamily: AppTextStyles.appFontFamily,
-                fontSize: AppTextStyles.medium,
-                color: textPrimary,
-              ),
-            ),
+      padding: EdgeInsets.all(12.r),
+      margin: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
+      decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(12.r)),
+      child: Row(children: [
+        Icon(Icons.info_outline, color: AppColors.primary, size: 20.sp),
+        SizedBox(width: 8.w),
+        Expanded(
+          child: Text(
+            'هذه المحادثة تتم بدون أي إعلان ذي صلة بين المعلن والمتحدث'.tr,
+            style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: AppTextStyles.small, color: textPrimary),
           ),
-        ],
+        ),
+      ]),
+    );
+  }
+
+  // مؤشر القراءة لرسائلي
+  Widget _readReceiptIcon(Message msg, bool isMine) {
+    if (!isMine) return const SizedBox.shrink();
+    final read = msg.isRead == true;
+    return Padding(
+      padding: const EdgeInsets.only(left: 6.0),
+      child: Icon(
+        Icons.done_all_rounded,
+        size: 16,
+        color: read ? Color(0xFF34B7F1) : _receiptGrey.withOpacity(0.85),
       ),
     );
   }
 
-  Widget _buildMessageBubble(
+  // فقاعة الرسائل + حذف
+  Widget _buildMessageBubbleWithDelete(
     Message message,
     bool isDarkMode,
     bool isCurrentUser,
-    Advertiser advertiser,
+    Advertiser? advertiser,
     Color userBubbleColor,
   ) {
     final otherBubbleColor = AppColors.card(isDarkMode);
     final textColor = isCurrentUser ? Colors.black : AppColors.textPrimary(isDarkMode);
     final timeColor = isCurrentUser ? Colors.black.withOpacity(0.6) : AppColors.textSecondary(isDarkMode);
     final align = isCurrentUser ? CrossAxisAlignment.end : CrossAxisAlignment.start;
+    final mainAxis = isCurrentUser ? MainAxisAlignment.end : MainAxisAlignment.start;
 
     final isVoice = message.isVoice == true;
-    final dur = (message.id != null && _messageDurations.containsKey(message.id)) 
-        ? _messageDurations[message.id] 
+    final dur = (message.id != null && _messageDurations.containsKey(message.id))
+        ? _messageDurations[message.id]!
         : Duration.zero;
 
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
+      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 6.h),
       child: Column(
         crossAxisAlignment: align,
         children: [
-          // معلومات المرسل (للمرسل الآخر فقط)
-          if (!isCurrentUser)
-            Padding(
-              padding: EdgeInsets.only(bottom: 6.h, right: 8.w),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.start,
-                children: [
-                  Container(
-                    padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 4.h),
-                    decoration: BoxDecoration(
-                      color: AppColors.border(isDarkMode),
-                      borderRadius: BorderRadius.circular(12.r),
-                    ),
-                    child: Text(
-                      advertiser.name ?? 'معلن',
-                      style: TextStyle(
-                        fontFamily: AppTextStyles.appFontFamily,
-                        fontSize: AppTextStyles.small,
-                        color: AppColors.textSecondary(isDarkMode),
-                        fontWeight: FontWeight.w600,
-                      ),
+          Padding(
+            padding: EdgeInsets.only(bottom: 6.h),
+            child: Row(
+              mainAxisAlignment: mainAxis,
+              children: [
+                if (isCurrentUser)
+                  GestureDetector(
+                    onTap: () async {
+                      final confirmed = await showDialog<bool>(
+                        context: context,
+                        builder: (_) => AlertDialog(
+                          backgroundColor: AppColors.background(_themeController.isDarkMode.value),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20.r)),
+                          title: Text(
+                            'حذف الرسالة',
+                            style: TextStyle(
+                              fontFamily: AppTextStyles.appFontFamily,
+                              fontSize: AppTextStyles.medium,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textPrimary(_themeController.isDarkMode.value),
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          content: Text(
+                            'هل تريد حذف هذه الرسالة؟',
+                            style: TextStyle(
+                              fontFamily: AppTextStyles.appFontFamily,
+                              fontSize: AppTextStyles.medium,
+                              color: AppColors.textSecondary(_themeController.isDarkMode.value),
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          actions: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: TextButton(
+                                    onPressed: () => Navigator.of(context).pop(false),
+                                    style: TextButton.styleFrom(
+                                      backgroundColor: Colors.grey[300],
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+                                      padding: EdgeInsets.symmetric(vertical: 12.h),
+                                    ),
+                                    child: const Text('لا', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold)),
+                                  ),
+                                ),
+                                SizedBox(width: 16.w),
+                                Expanded(
+                                  child: TextButton(
+                                    onPressed: () => Navigator.of(context).pop(true),
+                                    style: TextButton.styleFrom(
+                                      backgroundColor: Colors.red,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+                                      padding: EdgeInsets.symmetric(vertical: 12.h),
+                                    ),
+                                    child: const Text('نعم', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      );
+                      if (confirmed == true) {
+                        await _confirmAndDeleteMessage(message);
+                      }
+                    },
+                    child: Container(
+                      padding: EdgeInsets.all(6.r),
+                      decoration: BoxDecoration(borderRadius: BorderRadius.circular(8.r)),
+                      child: Icon(Icons.more_vert, size: 18.sp, color: AppColors.textSecondary(isDarkMode)),
                     ),
                   ),
-                ],
-              ),
+              ],
             ),
-
-          // فقاعة الرسالة
+          ),
           Row(
-            mainAxisAlignment: isCurrentUser ? MainAxisAlignment.end : MainAxisAlignment.start,
-            crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisAlignment: mainAxis,
             children: [
-              if (!isCurrentUser) 
-                Container(
-                  width: 32.w,
-                  height: 32.h,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: AppColors.primary.withOpacity(0.1),
-                  ),
-                  child: Icon(Icons.person, color: AppColors.primary, size: 18.w),
-                ),
-              
-              SizedBox(width: 8.w),
-              
               Flexible(
                 child: Container(
-                  constraints: BoxConstraints(maxWidth: 280.w),
-                  padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
+                  constraints: BoxConstraints(maxWidth: 300.w),
+                  padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
                   decoration: BoxDecoration(
                     color: isCurrentUser ? userBubbleColor : otherBubbleColor,
                     borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(isCurrentUser ? 20.r : 8.r),
-                      topRight: Radius.circular(isCurrentUser ? 8.r : 20.r),
-                      bottomLeft: Radius.circular(20.r),
-                      bottomRight: Radius.circular(20.r),
+                      topLeft: Radius.circular(isCurrentUser ? 16.r : 6.r),
+                      topRight: Radius.circular(isCurrentUser ? 6.r : 16.r),
+                      bottomLeft: Radius.circular(16.r),
+                      bottomRight: Radius.circular(16.r),
                     ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 8,
-                        offset: Offset(0, 2),
-                      ),
-                    ],
+                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 6, offset: const Offset(0, 2))],
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -816,43 +778,17 @@ class _ConversationScreenState extends State<ConversationScreen> {
                         ),
                       SizedBox(height: 6.h),
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          if (isCurrentUser)
-                            GestureDetector(
-                              onTap: () => _confirmAndDeleteMessage(message),
-                              child: Icon(Icons.delete_outline, 
-                                size: 16.w, 
-                                color: timeColor),
-                            )
-                          else
-                            SizedBox(width: 16.w),
-                          
-                          Text(
-                            _formatDateTimeFull(message.createdAt),
-                            style: TextStyle(
-                              fontFamily: AppTextStyles.appFontFamily,
-                              fontSize: 10.sp,
-                              color: timeColor,
-                            ),
-                          ),
+                          Text(_formatDateTimeFull(message.createdAt), style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: 10.sp, color: timeColor)),
+                          _readReceiptIcon(message, isCurrentUser),
                         ],
                       ),
                     ],
                   ),
                 ),
               ),
-              
-              if (isCurrentUser) 
-                Container(
-                  width: 32.w,
-                  height: 32.h,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: AppColors.primary.withOpacity(0.8),
-                  ),
-                  child: Icon(Icons.person, color: Colors.white, size: 18.w),
-                ),
             ],
           ),
         ],
@@ -861,88 +797,323 @@ class _ConversationScreenState extends State<ConversationScreen> {
   }
 
   Widget _buildVoiceBubbleContent(Message message, Duration? cachedDuration, bool isCurrentUser) {
+    final totalDur = cachedDuration ?? Duration.zero;
     final playing = _playingMessageId == message.id;
     final currentPos = playing ? _currentPosition : Duration.zero;
-    final totalDur = playing ? (_currentDuration > Duration.zero ? _currentDuration : (cachedDuration ?? Duration.zero)) : (cachedDuration ?? Duration.zero);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            IconButton(
-              onPressed: () => _playPauseVoice(message),
-              icon: Icon(
-                playing ? Icons.pause_circle_filled : Icons.play_circle_filled,
-                size: 32.sp,
-                color: isCurrentUser ? Colors.black : AppColors.primary,
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        IconButton(
+          onPressed: () => _playPauseVoice(message),
+          icon: Icon(
+            playing ? Icons.pause_circle_filled : Icons.play_circle_filled,
+            size: 30.sp,
+            color: isCurrentUser ? Colors.black : AppColors.primary,
+          ),
+        ),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            if (playing || (totalDur.inSeconds > 0))
+              Column(children: [
+                Slider(
+                  value: currentPos.inMilliseconds.toDouble().clamp(0, (totalDur.inMilliseconds > 0 ? totalDur.inMilliseconds : 1).toDouble()),
+                  max: (totalDur.inMilliseconds > 0 ? totalDur.inMilliseconds.toDouble() : 1.0),
+                  onChanged: (v) async {
+                    try { await _audioPlayer.seek(Duration(milliseconds: v.toInt())); } catch (e) {}
+                  },
+                ),
+                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                  Text(_formatRecDuration(currentPos), style: TextStyle(fontSize: 11.sp)),
+                  Text(_formatRecDuration(totalDur), style: TextStyle(fontSize: 11.sp)),
+                ]),
+              ])
+            else
+              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                const Text('00:00', style: TextStyle(fontSize: 11)),
+                Text(_formatRecDuration(totalDur), style: const TextStyle(fontSize: 11)),
+              ]),
+          ]),
+        ),
+      ]),
+    ]);
+  }
+
+  // ===== حذف رسالة =====
+  Future<void> _confirmAndDeleteMessage(Message message) async {
+    final user = _loading_controller_currentUser();
+    if (user == null) return;
+
+    final isMine = message.senderId == user.id;
+    if (!isMine) {
+      Get.snackbar('تنبيه', 'لا يمكنك حذف رسالة ليست لك', backgroundColor: Colors.orange, colorText: Colors.white);
+      return;
+    }
+
+    final ok = await _chatController.deleteMessage(message.id ?? 0);
+    if (ok) {
+      if (!mounted) return;
+      setState(() {});
+      Get.snackbar('تم', 'تم حذف الرسالة', backgroundColor: Colors.green, colorText: Colors.white);
+    } else {
+      Get.snackbar('خطأ', 'فشل حذف الرسالة', backgroundColor: Colors.red, colorText: Colors.white);
+    }
+  }
+
+  // ===== شاشة التواصل الموحّدة: شركة/فردي =====
+  void _openContactSideSheet() {
+    final adv = widget.advertiser;
+
+    // نحاول استخراج عضو الشركة من الرسائل (إن وجد)
+    CompanyMemberMessage? member;
+    if (_chatController.messagesList.isNotEmpty) {
+      try {
+        member = _chatController.messagesList.firstWhere((m) => m.adCompanyMember != null).adCompanyMember;
+      } catch (_) {
+        member = null;
+      }
+    }
+
+    // تحديد نوع الحساب:
+    final bool isCompany = (adv.accountType?.toLowerCase() == 'company') || (member != null);
+
+    showGeneralDialog(
+      context: context,
+      barrierLabel: 'contact-sheet',
+      barrierDismissible: true,
+      transitionDuration: const Duration(milliseconds: 220),
+      pageBuilder: (_, __, ___) {
+        final isDark = _themeController.isDarkMode.value;
+        final bg = AppColors.card(isDark);
+        final titleStyle = TextStyle(fontFamily: AppTextStyles.appFontFamily, fontWeight: FontWeight.w700, fontSize: 16.sp, color: AppColors.textPrimary(isDark));
+        final labelStyle = TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: 12.sp, color: AppColors.textSecondary(isDark));
+        final valueStyle = TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: 13.sp, color: AppColors.textPrimary(isDark));
+
+        return Align(
+          alignment: Alignment.centerRight,
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              width: MediaQuery.of(context).size.width * 0.86,
+              height: MediaQuery.of(context).size.height,
+              decoration: BoxDecoration(
+                color: bg,
+                borderRadius: const BorderRadius.only(topLeft: Radius.circular(16), bottomLeft: Radius.circular(16)),
+                boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 12)],
               ),
-            ),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (playing || (totalDur.inSeconds > 0))
-                    Column(
-                      children: [
-                        Slider(
-                          value: currentPos.inMilliseconds.toDouble().clamp(0, (totalDur.inMilliseconds > 0 ? totalDur.inMilliseconds : 1).toDouble()),
-                          max: (totalDur.inMilliseconds > 0 ? totalDur.inMilliseconds.toDouble() : 1.0),
-                          onChanged: (v) async {
-                            try {
-                              await _audioPlayer.seek(Duration(milliseconds: v.toInt()));
-                            } catch (e) {}
-                          },
-                          activeColor: isCurrentUser ? Colors.black : AppColors.primary,
-                          inactiveColor: Colors.grey[400],
-                        ),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              child: SafeArea(
+                child: Column(
+                  children: [
+                    // رأس
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
+                      child: Row(
+                        children: [
+                          Expanded(child: Text('التواصل', style: titleStyle)),
+                          IconButton(onPressed: () => Navigator.of(context).maybePop(), icon: const Icon(Icons.close)),
+                        ],
+                      ),
+                    ),
+                    const Divider(height: 1),
+
+                    Expanded(
+                      child: SingleChildScrollView(
+                        padding: EdgeInsets.all(16.w),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              _formatDuration(currentPos),
-                              style: TextStyle(
-                                fontSize: 11.sp,
-                                color: isCurrentUser ? Colors.black54 : Colors.grey[600],
+                            _sectionHeader(isCompany ? 'بيانات الشركة' : 'بيانات المعلن'),
+                            SizedBox(height: 8.h),
+
+                            if (!isCompany) ...[
+                              _kv('الاسم', adv.name ?? '-', labelStyle, valueStyle),
+                              if ((adv.contactPhone ?? '').isNotEmpty) ...[
+                                SizedBox(height: 6.h),
+                                _contactTile('اتصال هاتفي', adv.contactPhone!, onTap: () => _launchPhoneCall(adv.contactPhone)),
+                              ],
+                              if ((adv.whatsappPhone ?? '').isNotEmpty) ...[
+                                SizedBox(height: 6.h),
+                                _contactTile('واتساب', adv.whatsappPhone!, onTap: () => _launchWhatsAppChat(adv.whatsappPhone)),
+                              ],
+                              if ((adv.whatsappPhone ?? '').isNotEmpty) ...[
+                                SizedBox(height: 6.h),
+                                _contactTile('اتصال واتساب', adv.whatsappPhone!, onTap: () => _launchWhatsAppCall(adv.whatsappPhone)),
+                              ],
+                              SizedBox(height: 20.h),
+                              _sectionHeader('اختصارات سريعة'),
+                              SizedBox(height: 8.h),
+                              Wrap(
+                                spacing: 8.w,
+                                runSpacing: 8.h,
+                                children: [
+                                  if ((adv.contactPhone ?? '').isNotEmpty)
+                                    _quickActionChip(icon: Icons.call, label: 'اتصال', onTap: () => _launchPhoneCall(adv.contactPhone)),
+                                  if ((adv.whatsappPhone ?? '').isNotEmpty)
+                                    _quickActionChip(icon: Icons.chat, label: 'واتساب', onTap: () => _launchWhatsAppChat(adv.whatsappPhone)),
+                                  if ((adv.whatsappPhone ?? '').isNotEmpty)
+                                    _quickActionChip(icon: Icons.call, label: 'اتصال واتساب', onTap: () => _launchWhatsAppCall(adv.whatsappPhone)),
+                                ],
                               ),
-                            ),
-                            Text(
-                              _formatDuration(totalDur),
-                              style: TextStyle(
-                                fontSize: 11.sp,
-                                color: isCurrentUser ? Colors.black54 : Colors.grey[600],
+                            ] else ...[
+                              _kv('اسم الشركة', adv.name ?? '-', labelStyle, valueStyle),
+
+                              SizedBox(height: 16.h),
+                              _sectionHeader('الشخص المسؤول'),
+                              SizedBox(height: 8.h),
+                              _kv('الاسم', (member?.displayName ?? adv.name) ?? '-', labelStyle, valueStyle),
+                              if ((member?.contactPhone ?? '').isNotEmpty) ...[
+                                SizedBox(height: 6.h),
+                                _contactTile('اتصال هاتفي (العضو)', member!.contactPhone!, onTap: () => _launchPhoneCall(member!.contactPhone)),
+                              ],
+                              if ((member?.whatsappPhone ?? '').isNotEmpty) ...[
+                                SizedBox(height: 6.h),
+                                _contactTile('واتساب (العضو)', member!.whatsappPhone!, onTap: () => _launchWhatsAppChat(member!.whatsappPhone)),
+                              ],
+                              if ((member?.whatsappCallNumber ?? '').isNotEmpty) ...[
+                                SizedBox(height: 6.h),
+                                _contactTile('اتصال واتساب (العضو)', member!.whatsappCallNumber!, onTap: () => _launchWhatsAppCall(member!.whatsappCallNumber)),
+                              ],
+
+                              SizedBox(height: 20.h),
+                              _sectionHeader('اختصارات سريعة'),
+                              SizedBox(height: 8.h),
+                              Wrap(
+                                spacing: 8.w,
+                                runSpacing: 8.h,
+                                children: [
+                                  if ((member?.contactPhone ?? '').isNotEmpty)
+                                    _quickActionChip(icon: Icons.person, label: 'اتصال بالعضو', onTap: () => _launchPhoneCall(member!.contactPhone)),
+                                  if ((member?.whatsappPhone ?? '').isNotEmpty)
+                                    _quickActionChip(icon: Icons.chat, label: 'واتساب العضو', onTap: () => _launchWhatsAppChat(member!.whatsappPhone)),
+                                  if ((member?.whatsappCallNumber ?? '').isNotEmpty)
+                                    _quickActionChip(icon: Icons.call, label: 'اتصال واتساب العضو', onTap: () => _launchWhatsAppCall(member!.whatsappCallNumber)),
+                                ],
                               ),
-                            ),
+                            ],
                           ],
                         ),
-                      ],
-                    )
-                  else
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          '00:00',
-                          style: TextStyle(
-                            fontSize: 11.sp,
-                            color: isCurrentUser ? Colors.black54 : Colors.grey[600],
-                          ),
-                        ),
-                        Text(
-                          _formatDuration(cachedDuration ?? Duration.zero),
-                          style: TextStyle(
-                            fontSize: 11.sp,
-                            color: isCurrentUser ? Colors.black54 : Colors.grey[600],
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ],
+          ),
+        );
+      },
+      transitionBuilder: (context, anim, _, child) {
+        final offset = Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero)
+            .animate(CurvedAnimation(parent: anim, curve: Curves.easeOutCubic));
+        return SlideTransition(position: offset, child: child);
+      },
+    );
+  }
+
+  // ===== إطلاقات =====
+  Future<void> _launchWhatsAppChat(String? phone) async {
+    if (phone == null || phone.isEmpty) {
+      Get.snackbar('خطأ', 'رقم غير متاح', backgroundColor: Colors.red, colorText: Colors.white);
+      return;
+    }
+    final cleaned = _cleanPhoneNumber(phone);
+    final Uri url = Uri.parse('https://wa.me/$cleaned');
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    } else {
+      Get.snackbar('خطأ', 'لا يمكن فتح واتساب', backgroundColor: Colors.red, colorText: Colors.white);
+    }
+  }
+
+  Future<void> _launchWhatsAppCall(String? phone) async {
+    await _launchWhatsAppChat(phone);
+  }
+
+  Future<void> _launchPhoneCall(String? phone) async {
+    if (phone == null || phone.isEmpty) {
+      Get.snackbar('خطأ', 'رقم غير متاح', backgroundColor: Colors.red, colorText: Colors.white);
+      return;
+    }
+    final cleaned = _cleanPhoneNumber(phone);
+    final Uri url = Uri.parse('tel:$cleaned');
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    } else {
+      Get.snackbar('خطأ', 'لا يمكن فتح تطبيق الهاتف', backgroundColor: Colors.red, colorText: Colors.white);
+    }
+  }
+
+  String _cleanPhoneNumber(String phone) {
+    return phone.replaceAll(RegExp(r'[^\d+]'), '');
+  }
+
+  // ===== Widgets صغار =====
+  Widget _sectionHeader(String title) {
+    final isDark = _themeController.isDarkMode.value;
+    return Row(
+      children: [
+        Icon(Icons.info, color: AppColors.primary, size: 18.sp),
+        SizedBox(width: 6.w),
+        Text(
+          title,
+          style: TextStyle(
+            fontFamily: AppTextStyles.appFontFamily,
+            fontWeight: FontWeight.w700,
+            fontSize: 14.sp,
+            color: AppColors.textPrimary(isDark),
+          ),
         ),
       ],
+    );
+  }
+
+  Widget _kv(String label, String value, TextStyle labelStyle, TextStyle valueStyle) {
+    return Row(
+      children: [
+        SizedBox(width: 120.w, child: Text(label, style: labelStyle)),
+        Expanded(child: Text(value, style: valueStyle, overflow: TextOverflow.ellipsis)),
+      ],
+    );
+  }
+
+  Widget _contactTile(String title, String phone, {required VoidCallback onTap}) {
+    final isDark = _themeController.isDarkMode.value;
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      dense: true,
+      leading: const Icon(Icons.call),
+      title: Text(
+        title,
+        style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontWeight: FontWeight.w600, color: AppColors.textPrimary(isDark)),
+      ),
+      subtitle: Text(
+        phone,
+        style: TextStyle(fontFamily: AppTextStyles.appFontFamily, color: AppColors.textSecondary(isDark)),
+      ),
+      onTap: onTap,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+      tileColor: AppColors.border(isDark).withOpacity(0.4),
+    );
+  }
+
+  Widget _quickActionChip({required IconData icon, required String label, required VoidCallback onTap}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20.r),
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20.r),
+          color: AppColors.primary.withOpacity(0.08),
+          border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16.sp, color: AppColors.primary),
+            SizedBox(width: 6.w),
+            Text(label, style: TextStyle(fontFamily: AppTextStyles.appFontFamily)),
+          ],
+        ),
+      ),
     );
   }
 }

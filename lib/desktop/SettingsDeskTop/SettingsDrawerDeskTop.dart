@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:tappuu_website/desktop/AdsManageDeskTop/AddAdScreenDeskTop.dart';
+import 'package:tappuu_website/desktop/SettingsDeskTop/MyCompanyInvitesScreenDeskTop/MyCompanyInvitesScreen.dart';
+import 'package:tappuu_website/desktop/SettingsDeskTop/SendCompanyInvitesScreenDeskTop/SendCompanyInvitesScreen.dart';
 import '../../../controllers/ThemeController.dart';
 import '../../../core/constant/app_text_styles.dart';
 import '../../../core/constant/appcolors.dart';
@@ -345,6 +347,8 @@ class _SettingsDrawerDeskTopState extends State<SettingsDrawerDeskTop> {
           onTap: () => _handleUnpublishedAds(),
           color: Colors.amber,
         ),
+
+
       ],
     );
   }
@@ -376,6 +380,18 @@ class _SettingsDrawerDeskTopState extends State<SettingsDrawerDeskTop> {
           title: 'إضافة معلن جديد'.tr,
           description: 'إضافة معلن جديد إلى الحساب'.tr,
           onTap: () => _handleAddNewAdvertiser(),
+          color: Colors.pink,
+        ),
+
+         _buildSettingCard(
+          title: 'الشركات والاعضاء'.tr,
+          description: 'إضافة معلن جديد إلى الحساب'.tr,
+          onTap: () => _handleompanyInvites(),
+          color: Colors.pink,
+        ),  _buildSettingCard(
+          title: 'دعوات الإنضمام'.tr,
+          description: 'إضافة معلن جديد إلى الحساب'.tr,
+          onTap: () => _handlCompanyInvites(),
           color: Colors.pink,
         ),
       ],
@@ -630,6 +646,13 @@ class _SettingsDrawerDeskTopState extends State<SettingsDrawerDeskTop> {
 
   void _handleAddNewAdvertiser() {
   Get.to(() => AdvertiserDataScreenDeskTop());
+  }
+
+  void _handleompanyInvites() {
+  Get.to(() => SendCompanyInvitesScreenDeskTop());
+  }
+  void _handlCompanyInvites() {
+  Get.to(() => MyCompanyInvitesScreenDeskTop());
   }
 
   void _handleFavoriteAds() {

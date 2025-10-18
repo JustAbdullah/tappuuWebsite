@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:tappuu_website/HomeDeciderView.dart';
-import 'package:tappuu_website/mobile/viewAdsScreen/AdDetailsScreen.dart';
 
 import '../../controllers/ThemeController.dart';
 import '../../controllers/AdsManageSearchController.dart';
