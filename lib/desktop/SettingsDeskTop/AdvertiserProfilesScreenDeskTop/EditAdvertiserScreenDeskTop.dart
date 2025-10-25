@@ -27,8 +27,8 @@ class NoScrollbarScrollBehavior extends ScrollBehavior {
   }
 }
 
-class EditAdvertiserScreen extends StatelessWidget {
-  EditAdvertiserScreen({Key? key}) : super(key: key);
+class EditAdvertiserScreenDeskTop extends StatelessWidget {
+  EditAdvertiserScreenDeskTop({Key? key}) : super(key: key);
 
   final ThemeController themeC = Get.find<ThemeController>();
   final LoadingController loadingC = Get.find<LoadingController>();

@@ -27,7 +27,6 @@ import 'core/services/font_service.dart';
 import 'core/services/font_size_service.dart';
 import 'enhanced_navigator_observer.dart';
 
-// NEW: EditableTextController import
 
 Future<void> _initializeFirebaseServices() async {
   try {

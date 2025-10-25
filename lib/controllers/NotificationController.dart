@@ -5,34 +5,54 @@ import 'package:googleapis_auth/auth_io.dart';
 import 'package:http/http.dart' as http;
 
 class NotificationController extends GetxController {
-  // النطاقات المطلوبة لواجهة FCM HTTP v1
   static const List<String> _scopes = [
     'https://www.googleapis.com/auth/firebase.messaging'
   ];
+  final String _projectId = 'stayinme-1af7d';
 
-  // معرف مشروع Firebase الجديد
-  final String _projectId = 'tappuu-7c425';
-
-  //////////////////////////////////////////////////////////////////////////////
-  // إرسال إشعار لقناة (Topic) مبنية على التصنيف: topic = categoryId
-  //////////////////////////////////////////////////////////////////////////////
-  Future<void> sendCategoryNotification(
-    String title,
-    String body,
-    String categoryId,
-  ) async {
-    // ملف Service Account credentials (مشروع tappuu-7c425)
+  Future<void> sendCategoryNotification(String title, String body, String categoryId) async {
+    // ملف Service Account credentials
     final serviceAccount = ServiceAccountCredentials.fromJson({
       "type": "service_account",
-      "project_id": "tappuu-7c425",
-      "private_key_id": "907d5cfe2cd2aadb8dec643235b63bb96fad7f16",
-      "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDubcqSJUklGks3\nHeNkUtMWLcLCLUc+9jrdrF6vgfi/hcUJAg5w4dH+Y200vu5h79q//s+1E5825Xff\nAymaXHnMRdVL8hS7K6B2m2sTo0cWGD79vzVEaxZYqgVGI8ZIwcbP6uqCb9wrvRVh\n3Ze2c6JON8QVJkEA+Nqbq/rByaRjFtHuUgEosrDfk2+gIFhSQE2rFQyrpN1uy2+0\nxTvI9TrRBtpTPu4iBLG0nugVWVC5FxaG4YXfLMqklnjy0u8pWPgfFhlXAQTMaPEb\nvQd5VBXyoJyV1HcAMtQ8oZhJQafItubwdm+iPS5bU0mbK17DN3BITA7KJgpqHeBO\n2TJeVeY7AgMBAAECggEAQDihcikJ4S0Kam+qAqlOgzBTP8M7aAmhxHi7zlFXY5sP\n/gOoSR6CVh+I2Ea/ZfDZvpJPdyowXfSEC7VJ3PKgufVrZPfxPpMbNydYuaLmsFxa\nhzWcDvA7RimRnxlevNU5DGLtxLGFn+Bf5Irv5OyToLbjoYC6zJy7IWg69DywgyGq\n1USKDgQن164Kxpg+HRTNKP5fRrIgFXbfZzqZS6WtLD6fKD7qL7D4LZ4tjXLJnUI1\noW3KHTkzXyjr+1c6dxCXqGt8d0Rdoo1H67ZY9Bq3QogzCgPVMwvcfp5q9SQYEQml\n1IVwf8DG6hl5/sUY7HXMNqHCBeZcXFKD0WIMirv5XQKBgQD3WeZ1VwnnI5WyUh2B\nAEzHzdTXYPQNeIF7RZmO7ZkLfWXukpBDmqrHBbAuZixXHtS2ZvZAsLhFw1gzgxaO\nof6DbrS/it+Umn/IzxrrrpHeGs9zkfUufjO/uuj8mvw+PkrEqyzELx86jzpv6uwB\nLuBYpsccAFfuVUdWuyzBwQ2KhQKBgQD2xAaBM9ueydmFWJU7AOZUZJtJCRdncYWc\njKsExdqPQoTcT0u7rusQWCG4RpaSY8jKaqDUcPNNmXmRk5FWXZ19LgoqTIzMp6fC\nmlFOoy4B9rqjJGq/a5jNgvKlEe/NhFXrHcmBm6lAMHnArQT6FhhrJmzUOP7A50f8\nba/gxS9pvwKBgQDSvMlYV5ucTfkQQF3atoK0CG26QmQrxeurNxUpbMzjuSbLKBu5\nPWEax4HfRjWo1B+ud/J+ExIsfc37tUfWpbXODNf6CTuLxEXytGDfQ5ALhxQQBt65\nidRVGc2+ydz2uuPAw4YUb4FPxw+moqQILgP+A7nH5ZME/6sT/cyYFv6OcQKBgQCO\nD4HzJcicnHXGh525zyXKlfSz0jEQE1GpM25NHB5b9R6JunjN/sBCs4oODU0nz5xL\ns6ENTE01clKDVWIJR3GgHD4r5c/1DdvNc4u1asnUxZbiztdJhgb84RMRpsbYGQRh\ni89y9wsz8fRV0QWZd9js7r0eXAWFRmCx2O+0xbAq/wKBgCzBfhUHC6rJkNO/JwpN\nEuxbY3kAFk2VLtQlwEP0بJnxVDKXX//eQ0NTYzLrpA4+rsbPH0يPYVDkRfopiHbf\na3oej2u5IH8BPg5vwQJEGK7ho10uszXXXxOR7hdgDUuEi34DX/HVUhLTrrGXH3LT\nNyEQMco66zxETPv1K06ugFaA\n-----END PRIVATE KEY-----\n",
-      "client_email": "firebase-adminsdk-fbsvc@tappuu-7c425.iam.gserviceaccount.com",
-      "client_id": "114921813183076551164",
+      "project_id": "stayinme-1af7d",
+      "private_key_id": "540f1f5ed41fa3f203867493991f1b43f25b5b18",
+      "private_key": "-----BEGIN PRIVATE KEY-----\n"
+          "MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCnawV7vLyz/WDn\n"
+          "5OZc73sMHBs1RSRu4mUBTiYghAP6dcpB2C8DCbvjSlLA9pKUIsZj2dNAcGS+zEq1\n"
+          "hH2J50fdRw85nPvRnVC6kKQ65+zmC8ckGnCU64TyueaZU28427u7UCPtjDbOASSo\n"
+          "lgCIjEkLpy8Com4NMeR0nHt3jL6eV+ckN6Ptsr99HWCYpbCH8ygeN2xQe/jfiqnG\n"
+          "2yaqNP1ZRIsmUmdhHcxomwH0zp7dcyAIaBXaZJVgeOvZDqsNo6xa2quWTcU3UpKu\n"
+          "eU0KrvkLPIo65fj6UcpLYs+e9riJGwpapmTWCghomdqzMpkROcgNbya2UYtCB6ol\n"
+          "iJqrXd0jAgMBAAECggEAGMDwLJ15YTuDioYDsZYPIXk+ZJ/2hRagTJMbfA9I701f\n"
+          "PGEUgmR8DV094x4SCikiID1iyNJVcwiNu0z9qtgxffw1uhUF/rY963fbcII+Or1f\n"
+          "Em1+W+Z+38yw1dbKSSPkHAv7Y/IpYEg2/V5AcfAcFMcBYmhV0UmhN8SzVLfQr2Se\n"
+          "pQmR1lbR7MZHvYTCph3K2YgZTRl+XYNExIZINsFxDIFim3ng9mOs6zPI9f07UYQz\n"
+          "mBuSSwHYIF2doVNJ8Wi5JzRQ+FAGVLBZbSeRKPJc/IkH1rPbR3HlquYZtREQlsFl\n"
+          "o9KRIBoOV4JUuHmYaCFChzv+OMeSthZo5L6Ae+IW4QKBgQDRaS7xHMwrMJOozW8d\n"
+          "fanHDAhBpvPUaBmFdHrESYQr7s6GNGTWTv7h8XUlcC5wCV1DEFzRRtJfpp3wQbed\n"
+          "ZRThRPvJNVUAcPufG4ycPhxUBEEfWW77gFSsWIZ8Zp9GFNOCwU1Miw3qVkDB9Zd0\n"
+          "LFQIO76Lz/ojY2FBM4iAkAiMewKBgQDMqixJxsqRdNkRJew6FzhkhfrjTJ8kH3n1\n"
+          "WrJ5mVeUcTZ6iiQwh1n0RSUC/XYJWLiuMvr7spVZpnh+Lom+iqJGkdexl70LdAAH\n"
+          "qlu/a/HcRaXB2+zEN/aJIspzJ/6HpaFligUBL19IWoHGm/Cc1/YBiVdFOp+Yit9K\n"
+          "X93UnVo1eQKBgHEFbvNtEniA+EDT15O4HeizAsXEQLc0FAomKphEAVTgx5BBOOc9\n"
+          "rWzur8Yr/LQ1KaOnciD1M1eyim2AWoRVaOaIH8ihwyXA1N0ztjkhgJKL1UYBM9gD\n"
+          "lC+Me9EqZe4iEWHxyDF2n2UJdlv4m+x0fEoRTK8S6bMt0PCqypJwqlx/AoGBAMT8\n"
+          "TWA9C59wnbRZkcJfsxFduxqnFs0H1rSGNR3Ar4DabpsG9soWnEf1fSghmEhqsmZH\n"
+          "/zXersz44yRf2oggmwvdN4NhDr1FSvoVx/S4CrP9/QpXiM1bJ9jaOY0Yw2z/yBYY\n"
+          "/7QiSk0zf5EPakkru0XDUNH7GL0TfNLy7mnDgZ3RAoGAI37O8HGVRJBWgSYDP9Tf\n"
+          "KvcXOr28YcvpuhiEsfH1utHUbO0/AdemeSApuyRo5hEwwchPoc/bQR9t/Xi7qKc3\n"
+          "MrUMMxj6b6nkqtT+7lEV0b4vBYGKhoHeHL2rRUfL9t2V0nKB3el9+NqC+QQlnF+e\n"
+          "lVFUtgsaaVGyKH46ZP8lybw=\n"
+          "-----END PRIVATE KEY-----\n",
+      "client_email":
+          "firebase-adminsdk-fbsvc@stayinme-1af7d.iam.gserviceaccount.com",
+      "client_id": "103600567456147272658",
       "auth_uri": "https://accounts.google.com/o/oauth2/auth",
       "token_uri": "https://oauth2.googleapis.com/token",
-      "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-      "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40tappuu-7c425.iam.gserviceaccount.com",
+      "auth_provider_x509_cert_url":
+          "https://www.googleapis.com/oauth2/v1/certs",
+      "client_x509_cert_url":
+          "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40stayinme-1af7d.iam.gserviceaccount.com",
       "universe_domain": "googleapis.com"
     });
 
@@ -50,20 +70,17 @@ class NotificationController extends GetxController {
       final url = Uri.parse(
         'https://fcm.googleapis.com/v1/projects/$_projectId/messages:send',
       );
-
-      // رؤوس الطلب
       final headers = {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $accessToken',
       };
-
+      
       // بناء اسم القناة حسب التصنيف
       final topicName = "$categoryId";
 
-      // جسم رسالة FCM
       final message = {
         "message": {
-          "topic": topicName,  // استخدام القناة المخصصة
+          "topic": topicName,  // التغيير هنا لاستخدام القناة المخصصة
           "notification": {"title": title, "body": body},
           "android": {
             "priority": "HIGH",
@@ -102,39 +119,63 @@ class NotificationController extends GetxController {
         body: json.encode(message),
       );
 
-      // التحقق من النتيجة
       if (response.statusCode == 200) {
         debugPrint('✅ تم إرسال الإشعار بنجاح إلى قناة $topicName');
       } else {
         debugPrint('‼️ فشل الإرسال: ${response.statusCode} - ${response.body}');
       }
     } catch (e, stack) {
-      // معالجة الخطأ
       debugPrint('‼️ خطأ غير متوقع: $e');
       debugPrint('🔍 تفاصيل الخطأ: $stack');
     }
   }
 
-  //////////////////////////////////////////////////////////////////////////////
-  // إرسال إشعار تحديث سعر لإعلان محدّد: topic = AdId_{adId}
-  //////////////////////////////////////////////////////////////////////////////
-  Future<void> sendUpdatePriceNotification(
-    String title,
-    String body,
-    String adId,
-  ) async {
-    // ملف Service Account credentials (مشروع tappuu-7c425) — مكرر لكي تبقى البنية كما كانت
+
+  ////////
+
+  Future<void> sendUpdatePriceNotification(String title, String body, String adId) async {
+    // ملف Service Account credentials
     final serviceAccount = ServiceAccountCredentials.fromJson({
       "type": "service_account",
-      "project_id": "tappuu-7c425",
-      "private_key_id": "907d5cfe2cd2aadb8dec643235b63bb96fad7f16",
-      "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDubcqSJUklGks3\nHeNkUtMWLcLCLUc+9jrdrF6vgfi/hcUJAg5w4dH+Y200vu5h79q//s+1E5825Xff\nAymaXHnMRdVL8hS7K6B2m2sTo0cWGD79vzVEaxZYqgVGI8ZIwcbP6uqCb9wrvRVh\n3Ze2c6JON8QVJkEA+Nqbq/rByaRjFtHuUgEosrDfk2+gIFhSQE2rFQyrpN1uy2+0\nxTvI9TrRBtpTPu4iBLG0نugVWVC5FxaG4YXfLMqklnjy0u8pWPgfFhlXAQTMaPEb\nvQd5VBXyoJyV1HcAMtQ8oZhJQafItubwdm+iPS5bU0mbK17DN3BITA7KJgpqHeBO\n2TJeVeY7AgMBAAECggEAQDihcikJ4س0Kam+qAqlOgzBTP8M7aAmhxHi7zlFXY5sP\n/gOoSR6CVh+I2Ea/ZfDZvpJPdyowXfSEC7VJ3PKgufVrZPfxPpMbNydYuaLmsFxa\nhzWcDvA7RimRnxlevNU5DGLtxLGFn+Bf5Irv5OyToLbjoYC6zJy7IWg69DywgyGq\n1USKDgQن164Kxpg+HRTNKP5fRrIgFXbfZzqZS6WtLD6fKD7qL7D4LZ4tjXLJnUI1\noW3KHTkzXyjr+1c6dxCXqGt8d0Rdoo1H67ZY9Bq3QogzCgPVMwvcfp5q9SQYEQml\n1IVwf8DG6hl5/sUY7HXMNqHCBeZcXFKD0WIMirv5XQKBgQD3WeZ1VwnnI5WyUh2B\nAEzHzdTXYPQNeIF7RZmO7ZkLfWXukpBDmqrHBbAuZixXHtS2ZvZAsLhFw1gzgxaO\nof6DbrS/it+Umn/IzxrrrpHeGs9zkfUufjO/uuj8mvw+PkrEqyzELx86jzpv6uwB\nLuBYpsccAFfuVUdWuyzBwQ2KhQKBgQD2xAaBM9ueydmFWJU7AOZUZJtJCRdncYWc\njKsExdqPQoTcT0u7rusQWCG4RpaSY8jKaqDUcPNNmXmRk5FWXZ19LgoqTIzMp6fC\nmlFOoy4B9rqjJGq/a5jNgvKlEe/NhFXrHcmBm6lAMHnArQT6FhhrJmzUOP7A50f8\nba/gxS9pvwKBgQDSvMlYV5ucTfkQQF3atoK0CG26QmQrxeurNxUpbMzjuSbLKBu5\nPWEax4HfRjWo1B+ud/J+ExIsfc37tUfWpbXODNf6CTuLxEXytGDfQ5ALhxQQBt65\nidRVGc2+ydz2uuPAw4YUb4FPxw+moqQILgP+A7nH5ZME/6sT/cyYFv6OcQKBgQCO\nD4HzJcicnHXGh525zyXKlfSz0jEQE1GpM25NHB5b9R6JunjN/sBCs4oODU0nz5xL\ns6ENTE01clKDVWIJR3GgHD4r5c/1DdvNc4u1asnUxZbiztdJhgb84RMRpsbYGQRh\ni89y9wsz8fRV0QWZd9js7r0eXAWFRmCx2O+0xbAq/wKBgCzBfhUHC6رJkNO/JwpN\nEuxbY3kAFk2VLtQlwEP0بJnxVDKXX//eQ0NTYzLrpA4+rsبPH0يPYVDkRfopiHbf\na3oej2u5IH8BPg5vwQJEGK7ho10uszXXXxOR7hdgDUuEi34DX/HVUhLTrrGXH3LT\nNyEQMco66zxETPv1K06ugFaA\n-----END PRIVATE KEY-----\n",
-      "client_email": "firebase-adminsdk-fbsvc@tappuu-7c425.iam.gserviceaccount.com",
-      "client_id": "114921813183076551164",
+      "project_id": "stayinme-1af7d",
+      "private_key_id": "540f1f5ed41fa3f203867493991f1b43f25b5b18",
+      "private_key": "-----BEGIN PRIVATE KEY-----\n"
+          "MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCnawV7vLyz/WDn\n"
+          "5OZc73sMHBs1RSRu4mUBTiYghAP6dcpB2C8DCbvjSlLA9pKUIsZj2dNAcGS+zEq1\n"
+          "hH2J50fdRw85nPvRnVC6kKQ65+zmC8ckGnCU64TyueaZU28427u7UCPtjDbOASSo\n"
+          "lgCIjEkLpy8Com4NMeR0nHt3jL6eV+ckN6Ptsr99HWCYpbCH8ygeN2xQe/jfiqnG\n"
+          "2yaqNP1ZRIsmUmdhHcxomwH0zp7dcyAIaBXaZJVgeOvZDqsNo6xa2quWTcU3UpKu\n"
+          "eU0KrvkLPIo65fj6UcpLYs+e9riJGwpapmTWCghomdqzMpkROcgNbya2UYtCB6ol\n"
+          "iJqrXd0jAgMBAAECggEAGMDwLJ15YTuDioYDsZYPIXk+ZJ/2hRagTJMbfA9I701f\n"
+          "PGEUgmR8DV094x4SCikiID1iyNJVcwiNu0z9qtgxffw1uhUF/rY963fbcII+Or1f\n"
+          "Em1+W+Z+38yw1dbKSSPkHAv7Y/IpYEg2/V5AcfAcFMcBYmhV0UmhN8SzVLfQr2Se\n"
+          "pQmR1lbR7MZHvYTCph3K2YgZTRl+XYNExIZINsFxDIFim3ng9mOs6zPI9f07UYQz\n"
+          "mBuSSwHYIF2doVNJ8Wi5JzRQ+FAGVLBZbSeRKPJc/IkH1rPbR3HlquYZtREQlsFl\n"
+          "o9KRIBoOV4JUuHmYaCFChzv+OMeSthZo5L6Ae+IW4QKBgQDRaS7xHMwrMJOozW8d\n"
+          "fanHDAhBpvPUaBmFdHrESYQr7s6GNGTWTv7h8XUlcC5wCV1DEFzRRtJfpp3wQbed\n"
+          "ZRThRPvJNVUAcPufG4ycPhxUBEEfWW77gFSsWIZ8Zp9GFNOCwU1Miw3qVkDB9Zd0\n"
+          "LFQIO76Lz/ojY2FBM4iAkAiMewKBgQDMqixJxsqRdNkRJew6FzhkhfrjTJ8kH3n1\n"
+          "WrJ5mVeUcTZ6iiQwh1n0RSUC/XYJWLiuMvr7spVZpnh+Lom+iqJGkdexl70LdAAH\n"
+          "qlu/a/HcRaXB2+zEN/aJIspzJ/6HpaFligUBL19IWoHGm/Cc1/YBiVdFOp+Yit9K\n"
+          "X93UnVo1eQKBgHEFbvNtEniA+EDT15O4HeizAsXEQLc0FAomKphEAVTgx5BBOOc9\n"
+          "rWzur8Yr/LQ1KaOnciD1M1eyim2AWoRVaOaIH8ihwyXA1N0ztjkhgJKL1UYBM9gD\n"
+          "lC+Me9EqZe4iEWHxyDF2n2UJdlv4m+x0fEoRTK8S6bMt0PCqypJwqlx/AoGBAMT8\n"
+          "TWA9C59wnbRZkcJfsxFduxqnFs0H1rSGNR3Ar4DabpsG9soWnEf1fSghmEhqsmZH\n"
+          "/zXersz44yRf2oggmwvdN4NhDr1FSvoVx/S4CrP9/QpXiM1bJ9jaOY0Yw2z/yBYY\n"
+          "/7QiSk0zf5EPakkru0XDUNH7GL0TfNLy7mnDgZ3RAoGAI37O8HGVRJBWgSYDP9Tf\n"
+          "KvcXOr28YcvpuhiEsfH1utHUbO0/AdemeSApuyRo5hEwwchPoc/bQR9t/Xi7qKc3\n"
+          "MrUMMxj6b6nkqtT+7lEV0b4vBYGKhoHeHL2rRUfL9t2V0nKB3el9+NqC+QQlnF+e\n"
+          "lVFUtgsaaVGyKH46ZP8lybw=\n"
+          "-----END PRIVATE KEY-----\n",
+      "client_email":
+          "firebase-adminsdk-fbsvc@stayinme-1af7d.iam.gserviceaccount.com",
+      "client_id": "103600567456147272658",
       "auth_uri": "https://accounts.google.com/o/oauth2/auth",
       "token_uri": "https://oauth2.googleapis.com/token",
-      "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-      "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40tappuu-7c425.iam.gserviceaccount.com",
+      "auth_provider_x509_cert_url":
+          "https://www.googleapis.com/oauth2/v1/certs",
+      "client_x509_cert_url":
+          "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40stayinme-1af7d.iam.gserviceaccount.com",
       "universe_domain": "googleapis.com"
     });
 
@@ -152,26 +193,24 @@ class NotificationController extends GetxController {
       final url = Uri.parse(
         'https://fcm.googleapis.com/v1/projects/$_projectId/messages:send',
       );
-
-      // رؤوس الطلب
       final headers = {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $accessToken',
       };
-
-      // بناء اسم القناة حسب الإعلان
+      
+      // بناء اسم القناة حسب التصنيف
       final topicName = "AdId_$adId";
 
-      // جسم رسالة FCM
       final message = {
         "message": {
-          "topic": topicName,  // القناة المخصصة للإعلان
+          "topic": topicName,  // التغيير هنا لاستخدام القناة المخصصة
           "notification": {"title": title, "body": body},
           "android": {
             "priority": "HIGH",
             "notification": {
               "channel_id": "high_priority_channel",
               "sound": "default",
+              // إضافة بيانات مخصصة للتصنيف
               "tag": "AdId_$adId"
             }
           },
@@ -181,6 +220,7 @@ class NotificationController extends GetxController {
               "aps": {
                 "sound": "default",
                 "badge": 1,
+                // إضافة بيانات مخصصة للتصنيف
                 "category": "AdId_$adId"
               }
             }
@@ -188,6 +228,7 @@ class NotificationController extends GetxController {
           "data": {
             "click_action": "FLUTTER_NOTIFICATION_CLICK",
             "status": "new",
+            // إرسال معرّف التصنيف للاستخدام في التطبيق
             "category_id": adId.toString(),
             "type": "category_notification"
           }
@@ -201,16 +242,15 @@ class NotificationController extends GetxController {
         body: json.encode(message),
       );
 
-      // التحقق من النتيجة
       if (response.statusCode == 200) {
         debugPrint('✅ تم إرسال الإشعار بنجاح إلى قناة $topicName');
       } else {
         debugPrint('‼️ فشل الإرسال: ${response.statusCode} - ${response.body}');
       }
     } catch (e, stack) {
-      // معالجة الخطأ
       debugPrint('‼️ خطأ غير متوقع: $e');
       debugPrint('🔍 تفاصيل الخطأ: $stack');
     }
   }
 }
+

@@ -12,7 +12,9 @@ import '../../controllers/LoadingController.dart';
 import '../../controllers/ThemeController.dart';
 import '../../core/constant/app_text_styles.dart';
 import '../../core/constant/appcolors.dart';
-import '../../core/data/model/Message.dart';
+import '../../core/data/model/Message.dart' ;
+import '../../core/data/model/Message.dart' as Mes;
+
 import '../../core/data/model/conversation.dart';
 import '../HomeScreen/menubar.dart';
 
@@ -152,6 +154,7 @@ class _ConversationScreenInMyState extends State<ConversationScreenInMy> {
     _messageFocusNode.dispose();
     super.dispose();
   }
+
   bool _isNearBottom({double threshold = 200}) {
     if (!_scrollController.hasClients) return true;
     final max = _scrollController.position.maxScrollExtent;
@@ -249,6 +252,7 @@ class _ConversationScreenInMyState extends State<ConversationScreenInMy> {
               advertiserTelUrl: old.advertiserTelUrl,
               advertiserLatitude: old.advertiserLatitude,
               advertiserLongitude: old.advertiserLongitude,
+              adCompanyMember: old.adCompanyMember,
             );
           }
         }
@@ -465,6 +469,50 @@ class _ConversationScreenInMyState extends State<ConversationScreenInMy> {
     );
   }
 
+  /// يحسب رابط الصورة: صورة العضو إن وُجدت، ثم شعار الشركة، ثم null
+  String? _resolveAvatarUrl() {
+    // ابحث عن عضو شركة من أول رسالة تحتويه
+    CompanyMemberMessage? member;
+    if (_chatController.messagesList.isNotEmpty) {
+      member = _firstWhereOrNull<Message>(
+        _chatController.messagesList,
+        (m) => m.adCompanyMember != null,
+      )?.adCompanyMember;
+    }
+
+    // حاول صورة العضو من user.avatarUrl (بعد تعديل المودل/الباك)
+    final String? memberAvatar =
+        member?.user != null ? (member!.user as   CompanyMemberMessage).avatarUrl : null;
+
+    if (memberAvatar != null && memberAvatar.isNotEmpty) {
+      return memberAvatar;
+    }
+
+    // fallback شعار الشركة
+    final logo = widget.advertiser?.logo;
+    if (logo != null && logo.isNotEmpty) return logo;
+
+    return null;
+  }
+
+  /// ويدجت صورة دائرية عامة
+  Widget _avatarWidget({double size = 36}) {
+    final url = _resolveAvatarUrl();
+    if (url == null || url.isEmpty) {
+      return CircleAvatar(
+        radius: size / 2,
+        backgroundColor: AppColors.border(_theme_controller_value()),
+        child: Icon(Icons.person, color: AppColors.textSecondary(_theme_controller_value()), size: size * 0.6),
+      );
+    }
+    return CircleAvatar(
+      radius: size / 2,
+      backgroundColor: Colors.transparent,
+      backgroundImage: NetworkImage(url),
+      onBackgroundImageError: (_, __) {},
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDarkMode = _theme_controller_value();
@@ -553,6 +601,7 @@ class _ConversationScreenInMyState extends State<ConversationScreenInMy> {
       ),
     );
   }
+
   Widget _buildCustomAppBar(bool isDarkMode, ContactContext ctx, String? subtitlePhone) {
     final adv = widget.advertiser;
     final titleText = () {
@@ -582,14 +631,17 @@ class _ConversationScreenInMyState extends State<ConversationScreenInMy> {
               padding: EdgeInsets.all(4.w),
               child: InkWell(onTap: () => _scaffoldKey.currentState?.openDrawer(), child: Icon(Icons.menu, color: AppColors.onPrimary, size: 22.w)),
             ),
-            SizedBox(width: 12.w),
+            SizedBox(width: 10.w),
+            // === صورة العضو/الشركة ===
+            _avatarWidget(size: 38.w),
+            SizedBox(width: 10.w),
             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               SizedBox(
                 width: 200.w,
                 child: Text(
                   titleText,
                   style: TextStyle(color: AppColors.onPrimary, fontFamily: AppTextStyles.appFontFamily, fontSize: AppTextStyles.medium, fontWeight: FontWeight.bold),
-                  maxLines: 2,
+                  maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -881,6 +933,18 @@ class _ConversationScreenInMyState extends State<ConversationScreenInMy> {
       barrierDismissible: true,
       transitionDuration: const Duration(milliseconds: 220),
       pageBuilder: (_, __, ___) {
+        // نحدد الاسم الأساسي الذي يُعرض تحت الصورة في رأس اللوحة
+        final headerName = () {
+          switch (ctx.mode) {
+            case ContactMode.individual:
+              return ctx.personName ?? widget.advertiser?.name ?? '-';
+            case ContactMode.companyOnly:
+              return ctx.companyName ?? widget.advertiser?.name ?? '-';
+            case ContactMode.companyWithMember:
+              return ctx.memberName ?? widget.advertiser?.name ?? '-';
+          }
+        }();
+
         return Align(
           alignment: Alignment.centerRight,
           child: Material(
@@ -888,20 +952,24 @@ class _ConversationScreenInMyState extends State<ConversationScreenInMy> {
             child: Container(
               width: MediaQuery.of(context).size.width * 0.86,
               height: MediaQuery.of(context).size.height,
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.only(topLeft: Radius.circular(16), bottomLeft: Radius.circular(16)),
-                boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 12)],
+              decoration: BoxDecoration(
+                color: bg,
+                borderRadius: const BorderRadius.only(topLeft: Radius.circular(16), bottomLeft: Radius.circular(16)),
+                boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 12)],
               ),
               child: SafeArea(
                 child: Column(
                   children: [
-                    // رأس
+                    // رأس مع الصورة
                     Padding(
                       padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
                       child: Row(
                         children: [
-                          Expanded(child: Text('التواصل', style: titleStyle)),
+                          _avatarWidget(size: 46.w),
+                          SizedBox(width: 12.w),
+                          Expanded(
+                            child: Text(headerName, style: titleStyle, maxLines: 1, overflow: TextOverflow.ellipsis),
+                          ),
                           IconButton(onPressed: () => Navigator.of(context).maybePop(), icon: const Icon(Icons.close)),
                         ],
                       ),

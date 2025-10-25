@@ -6,6 +6,7 @@
 // • سكرول تلقائي لأسفل بعد التحميل/الإرسال
 // • didUpdateWidget لإعادة التحميل عند تغيّر الإعلان/المعلن
 // • قائمة عليا باختصارات: واتساب محادثة/اتصال + اتصال هاتفي
+// • إظهار صورة العضو/شعار الشركة في AppBar (fallback لأيقونة)
 
 import 'dart:async';
 import 'package:audioplayers/audioplayers.dart';
@@ -379,7 +380,7 @@ class _DesktopConversationScreenState extends State<DesktopConversationScreen> {
   }
 
   Future<void> _launchWhatsAppCall(String? phone) async {
-    // على الويب نستخدم نفس رابط المحادثة كتصرّف افتراضي
+    // على الويب نستخدم نفس رابط المحادثة كتصرّف افتراضي (لا يوجد API للاتصال داخل المتصفح)
     await _launchWhatsAppChat(phone);
   }
 
@@ -416,6 +417,58 @@ class _DesktopConversationScreenState extends State<DesktopConversationScreen> {
     final s = value.toStringAsFixed(0);
     final reg = RegExp(r'\B(?=(\d{3})+(?!\d))');
     return s.replaceAllMapped(reg, (m) => ',');
+  }
+
+  // ====== استخراج وعرض صورة العضو/الشركة ======
+  CompanyMemberMessage? _pickFirstMemberFromMessages() {
+    try {
+      return _chatController.messagesList
+          .firstWhere((m) => m.adCompanyMember != null)
+          .adCompanyMember;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String? _extractAvatarFromMember(CompanyMemberMessage? member) {
+    if (member == null) return null;
+    try {
+      final u = (member.user as dynamic);
+      final v = u?.avatarUrl ?? u?.avatar ?? u?.photoUrl ?? u?.image ?? u?.avatar_url;
+      if (v is String && v.trim().isNotEmpty) return v.toString();
+    } catch (_) {}
+    return null;
+  }
+
+  /// يُعيد رابط صورة العضو إن وجد، وإلا شعار الشركة، وإلا null
+  String? _resolveAvatarUrl() {
+    final member = _pickFirstMemberFromMessages();
+    final memberAvatar = _extractAvatarFromMember(member);
+    if (memberAvatar != null && memberAvatar.isNotEmpty) return memberAvatar;
+
+    final logo = widget.advertiser.logo ?? '';
+    if (logo.isNotEmpty) return logo;
+
+    return null;
+  }
+
+  /// ويدجت الصورة الدائرية الموحدة
+  Widget _avatarWidget({double size = 40}) {
+    final url = _resolveAvatarUrl();
+    final isDark = _themeController.isDarkMode.value;
+    if (url == null || url.isEmpty) {
+      return CircleAvatar(
+        radius: size / 2,
+        backgroundColor: AppColors.border(isDark),
+        child: Icon(Icons.person, size: size * 0.6, color: AppColors.textSecondary(isDark)),
+      );
+    }
+    return CircleAvatar(
+      radius: size / 2,
+      backgroundColor: Colors.transparent,
+      backgroundImage: NetworkImage(url),
+      onBackgroundImageError: (_, __) {},
+    );
   }
 
   // ===== UI =====
@@ -474,6 +527,9 @@ class _DesktopConversationScreenState extends State<DesktopConversationScreen> {
         children: [
           Row(children: [
             InkWell(onTap: () => Get.back(), child: Icon(Icons.arrow_back, color: AppColors.onPrimary, size: 24)),
+            const SizedBox(width: 10),
+            // صورة العضو/الشركة
+            _avatarWidget(size: 40),
             const SizedBox(width: 10),
             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               SizedBox(
@@ -917,11 +973,11 @@ class _DesktopConversationScreenState extends State<DesktopConversationScreen> {
     ).then((value) {
       if (value == null) return;
 
-      // اختيار ذكي: إن وُجد whatsappCallNumber نستخدمه للاتصال، وإلا whatsappPhone.
-      final waChat = (adv.whatsappPhone?.isNotEmpty == true) ? adv.whatsappPhone : adv.contactPhone;
-      final waCall = (adv.whatsappPhone?.isNotEmpty == true)
-          ? adv.whatsappPhone
-          : ((adv.whatsappPhone?.isNotEmpty == true) ? adv.whatsappPhone : adv.contactPhone);
+      // اختيار ذكي للأرقام:
+      final waChat =
+          (adv.whatsappPhone?.isNotEmpty == true) ? adv.whatsappPhone : (adv.contactPhone?.isNotEmpty == true ? adv.contactPhone : null);
+      final waCall =
+          (adv.whatsappPhone?.isNotEmpty == true) ? adv.whatsappPhone : (adv.whatsappPhone?.isNotEmpty == true ? adv.whatsappPhone : adv.contactPhone);
 
       if (value == 0) _launchWhatsAppChat(waChat);
       if (value == 1) _launchWhatsAppCall(waCall);

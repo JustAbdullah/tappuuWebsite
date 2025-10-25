@@ -26,7 +26,10 @@ class DefaultFirebaseOptions {
           'you can reconfigure this by running the FlutterFire CLI again.',
         );
       case TargetPlatform.iOS:
-        return ios;
+        throw UnsupportedError(
+          'DefaultFirebaseOptions have not been configured for ios - '
+          'you can reconfigure this by running the FlutterFire CLI again.',
+        );
       case TargetPlatform.macOS:
         throw UnsupportedError(
           'DefaultFirebaseOptions have not been configured for macos - '
@@ -50,21 +53,12 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyBQN4pm5OlvEEPVUO0dgGybV7I1PrhbDos',
-    appId: '1:6952523205:web:e083543803a6d3688227ac',
-    messagingSenderId: '6952523205',
-    projectId: 'tappuu-7c425',
-    authDomain: 'tappuu-7c425.firebaseapp.com',
-    storageBucket: 'tappuu-7c425.firebasestorage.app',
+    apiKey: 'AIzaSyDUjdmiZ0jkf5mOKrn6Jb6mU6Hi8npBb4A',
+    appId: '1:361185904079:web:1e1a9cfaf3cc8e17f87eba',
+    messagingSenderId: '361185904079',
+    projectId: 'stayinme-1af7d',
+    authDomain: 'stayinme-1af7d.firebaseapp.com',
+    storageBucket: 'stayinme-1af7d.firebasestorage.app',
+    measurementId: 'G-JPX6CN2RLM',
   );
-
-  static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyAnP3N4gv_oXU_BiiDdlWmbwmBuIhb5oG4',
-    appId: '1:6952523205:ios:b7ae6d756fc69c798227ac',
-    messagingSenderId: '6952523205',
-    projectId: 'tappuu-7c425',
-    storageBucket: 'tappuu-7c425.firebasestorage.app',
-    iosBundleId: 'com.example.tappuuWebsite',
-  );
-
 }

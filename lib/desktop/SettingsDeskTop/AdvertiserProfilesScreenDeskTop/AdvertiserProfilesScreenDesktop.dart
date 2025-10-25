@@ -1,10 +1,13 @@
-// AdvertiserProfilesScreenDeskTop (WEB - Desktop/Large Screens)
-// محدثة لتطابق مزايا نسخة الموبايل (اختيار ملف، عرض تفاصيل الشركة + العضو، إجراءات المالك، تعديل العضو/المغادرة)
-// بدون أي تغيير على طريقة التعامل مع الصور (الخاصة بالكنترلور)
+
+
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:http/http.dart' as http;
 
 import '../../../controllers/AdvertiserController.dart';
 import '../../../controllers/LoadingController.dart';
@@ -45,6 +48,10 @@ class _AdvertiserProfilesScreenDeskTopState extends State<AdvertiserProfilesScre
   final AdvertiserController advC = Get.put(AdvertiserController(), permanent: true);
   final LoadingController loadingC = Get.find<LoadingController>();
 
+  // نقطة رفع الصورة (مطابقة لباقي الشاشات)
+  static const String _root = "https://stayinme.arabiagroup.net/lar_stayInMe/public/api";
+  static const String _uploadApi = "$_root/upload";
+
   @override
   void initState() {
     super.initState();
@@ -73,8 +80,8 @@ class _AdvertiserProfilesScreenDeskTopState extends State<AdvertiserProfilesScre
       backgroundColor: AppColors.background(isDarkMode),
       body: Column(
         children: [
-         TopAppBarDeskTop(),
-           SecondaryAppBarDeskTop(),
+          TopAppBarDeskTop(),
+          SecondaryAppBarDeskTop(),
           Expanded(
             child: ScrollConfiguration(
               behavior: NoScrollbarScrollBehavior(),
@@ -146,7 +153,7 @@ class _AdvertiserProfilesScreenDeskTopState extends State<AdvertiserProfilesScre
                                       isDark: isDarkMode,
                                       onEditCompany: () {
                                         controller.loadProfileForEdit(controller.selected.value!);
-                                        Get.to(() =>  EditAdvertiserScreen());
+                                        Get.to(() =>  EditAdvertiserScreenDeskTop());
                                       },
                                       onDeleteCompany: () async {
                                         final p = controller.selected.value!;
@@ -162,6 +169,7 @@ class _AdvertiserProfilesScreenDeskTopState extends State<AdvertiserProfilesScre
                                         }
                                       },
                                       onEditMember: (member) async {
+                                        // تعديل بيانات العضو + الصورة
                                         await _openMemberEditSheet(context, isDarkMode, member);
                                       },
                                       onLeaveCompany: (member) async {
@@ -337,6 +345,47 @@ class _AdvertiserProfilesScreenDeskTopState extends State<AdvertiserProfilesScre
     final formKey = GlobalKey<FormState>();
     final userId = loadingC.currentUser?.id ?? 0;
 
+    // حالة محلية للأفاتار داخل الـ BottomSheet
+    File? avatarFile;
+    String uploadedAvatarUrl = member.avatarUrl ?? "";
+    bool uploading = false;
+
+    Future<void> pickAvatar() async {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(source: ImageSource.gallery);
+      if (picked != null) {
+        avatarFile = File(picked.path);
+        uploadedAvatarUrl = ""; // إعادة الضبط لرفع الجديد
+      }
+    }
+
+    void removeAvatar() {
+      avatarFile = null;
+      uploadedAvatarUrl = ""; // لن نرسل avatarUrl
+    }
+
+    Future<void> uploadAvatar(StateSetter setSBState) async {
+      if (avatarFile == null) return;
+      setSBState(() => uploading = true);
+      try {
+        final req = http.MultipartRequest('POST', Uri.parse(_uploadApi));
+        req.files.add(await http.MultipartFile.fromPath('images[]', avatarFile!.path));
+        final resp = await req.send();
+        final body = await resp.stream.bytesToString();
+        if (resp.statusCode == 201) {
+          final jsonBody = jsonDecode(body) as Map<String, dynamic>;
+          final urls = List<String>.from(jsonBody['image_urls'] ?? const []);
+          uploadedAvatarUrl = urls.isNotEmpty ? urls.first : "";
+        } else {
+          Get.snackbar('فشل رفع الصورة', '(${resp.statusCode}) $body', snackPosition: SnackPosition.BOTTOM);
+        }
+      } catch (e) {
+        Get.snackbar('خطأ في الرفع', e.toString(), snackPosition: SnackPosition.BOTTOM);
+      } finally {
+        setSBState(() => uploading = false);
+      }
+    }
+
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -344,80 +393,201 @@ class _AdvertiserProfilesScreenDeskTopState extends State<AdvertiserProfilesScre
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16.r)),
       ),
-      builder: (_) => Padding(
-        padding: EdgeInsets.only(
-          left: 20.w,
-          right: 20.w,
-          bottom: MediaQuery.of(context).viewInsets.bottom + 20.h,
-          top: 16.h,
-        ),
-        child: Form(
-          key: formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                height: 4,
-                width: 48,
-                decoration: BoxDecoration(color: Colors.grey[400], borderRadius: BorderRadius.circular(4)),
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setSBState) {
+          return Padding(
+            padding: EdgeInsets.only(
+              left: 20.w,
+              right: 20.w,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 20.h,
+              top: 16.h,
+            ),
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    height: 4,
+                    width: 48,
+                    decoration: BoxDecoration(color: Colors.grey[400], borderRadius: BorderRadius.circular(4)),
+                  ),
+                  SizedBox(height: 12.h),
+                  Text('تعديل بياناتي كعضو', style: TextStyle(fontSize: AppTextStyles.xlarge, fontWeight: FontWeight.w800)),
+
+                  // ====== أفاتار العضو ======
+                  SizedBox(height: 12.h),
+                  Row(
+                    children: [
+                      Stack(
+                        alignment: Alignment.bottomRight,
+                        children: [
+                          CircleAvatar(
+                            radius: 40.r,
+                            backgroundColor: AppColors.textSecondary(isDark).withOpacity(.15),
+                            backgroundImage: avatarFile != null
+                                ? FileImage(avatarFile!)
+                                : (uploadedAvatarUrl.isNotEmpty
+                                    ? NetworkImage(uploadedAvatarUrl) as ImageProvider
+                                    : (member.avatarUrl != null && member.avatarUrl!.isNotEmpty
+                                        ? NetworkImage(member.avatarUrl!)
+                                        : null)),
+                            child: (avatarFile == null && uploadedAvatarUrl.isEmpty && (member.avatarUrl ?? '').isEmpty)
+                                ? Icon(Icons.person_rounded, size: 36.r, color: AppColors.textSecondary(isDark))
+                                : null,
+                          ),
+                          Positioned(
+                            right: -2,
+                            bottom: -2,
+                            child: Material(
+                              color: AppColors.primary,
+                              borderRadius: BorderRadius.circular(16.r),
+                              child: InkWell(
+                                onTap: () async {
+                                  await pickAvatar();
+                                  setSBState(() {});
+                                },
+                                borderRadius: BorderRadius.circular(16.r),
+                                child: Padding(
+                                  padding: EdgeInsets.all(6.r),
+                                  child: Icon(Icons.edit_rounded, size: 16.r, color: AppColors.onPrimary),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(width: 12.w),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('صورة العضو (اختياري)',
+                                style: TextStyle(
+                                  fontSize: AppTextStyles.large,
+                                  fontFamily: AppTextStyles.appFontFamily,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.textPrimary(isDark),
+                                )),
+                            SizedBox(height: 6.h),
+                            Text(
+                              avatarFile == null
+                                  ? 'يمكنك اختيار صورة جديدة أو تركها كما هي.'
+                                  : 'تحتاج لرفع الصورة قبل الحفظ.',
+                              style: TextStyle(
+                                fontSize: AppTextStyles.small,
+                                color: AppColors.textSecondary(isDark),
+                              ),
+                            ),
+                            SizedBox(height: 8.h),
+                            Wrap(
+                              spacing: 8.w,
+                              runSpacing: 8.h,
+                              children: [
+                                ElevatedButton.icon(
+                                  onPressed: uploading || avatarFile == null
+                                      ? null
+                                      : () async {
+                                          await uploadAvatar(setSBState);
+                                        },
+                                  icon: uploading
+                                      ? const SizedBox(
+                                          height: 16,
+                                          width: 16,
+                                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                        )
+                                      : const Icon(Icons.cloud_upload_rounded),
+                                  label: Text(uploading ? 'جارِ الرفع...' : 'رفع الصورة'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.primary,
+                                    foregroundColor: AppColors.onPrimary,
+                                    minimumSize: Size(140.w, 40.h),
+                                  ),
+                                ),
+                                OutlinedButton.icon(
+                                  onPressed: (avatarFile != null || uploadedAvatarUrl.isNotEmpty || (member.avatarUrl ?? '').isNotEmpty)
+                                      ? () {
+                                          removeAvatar();
+                                          setSBState(() {});
+                                        }
+                                      : null,
+                                  icon: const Icon(Icons.delete_outline_rounded),
+                                  label: const Text('إزالة'),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  SizedBox(height: 12.h),
+                  TextFormField(
+                    controller: nameCtrl,
+                    decoration: const InputDecoration(labelText: 'الاسم الظاهر', prefixIcon: Icon(Icons.person)),
+                    validator: (v) => v == null || v.trim().isEmpty ? 'حقل مطلوب' : null,
+                  ),
+                  SizedBox(height: 10.h),
+                  TextFormField(
+                    controller: phoneCtrl,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(labelText: 'هاتف التواصل', prefixIcon: Icon(Icons.phone)),
+                  ),
+                  SizedBox(height: 10.h),
+                  TextFormField(
+                    controller: waCtrl,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(labelText: 'رقم واتساب', prefixIcon: Icon(Icons.chat)),
+                  ),
+                  SizedBox(height: 10.h),
+                  TextFormField(
+                    controller: waCallCtrl,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(labelText: 'واتساب (للاتصال wa.me)', prefixIcon: Icon(Icons.call)),
+                  ),
+                  SizedBox(height: 16.h),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      icon: const Icon(Icons.save),
+                      label: const Text('حفظ'),
+                      onPressed: () async {
+                        if (!formKey.currentState!.validate()) return;
+
+                        // في حال اختيار صورة ولم تُرفع بعد
+                        if (avatarFile != null && uploadedAvatarUrl.isEmpty) {
+                          await uploadAvatar(setSBState);
+                          if (uploadedAvatarUrl.isEmpty) return; // فشل الرفع
+                        }
+
+                        await advC.updateMyCompanyMembership(
+                          companyId: member.advertiserProfileId!,
+                          memberId: member.id!,
+                          actorUserId: userId,
+                          displayName: nameCtrl.text.trim(),
+                          contactPhone: phoneCtrl.text.trim().isEmpty ? null : phoneCtrl.text.trim(),
+                          whatsappPhone: waCtrl.text.trim().isEmpty ? null : waCtrl.text.trim(),
+                          whatsappCallNumber: waCallCtrl.text.trim().isEmpty ? null : waCallCtrl.text.trim(),
+                          // تمرير رابط الصورة لو موجود
+                          avatarUrl: uploadedAvatarUrl.isNotEmpty ? uploadedAvatarUrl : null,
+                        );
+                        Navigator.pop(context);
+                        _fetchProfiles();
+                      },
+                    ),
+                  ),
+                ],
               ),
-              SizedBox(height: 12.h),
-              Text('تعديل بياناتي كعضو', style: TextStyle(fontSize: AppTextStyles.xlarge, fontWeight: FontWeight.w800)),
-              SizedBox(height: 12.h),
-              TextFormField(
-                controller: nameCtrl,
-                decoration: const InputDecoration(labelText: 'الاسم الظاهر', prefixIcon: Icon(Icons.person)),
-                validator: (v) => v == null || v.trim().isEmpty ? 'حقل مطلوب' : null,
-              ),
-              SizedBox(height: 10.h),
-              TextFormField(
-                controller: phoneCtrl,
-                keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(labelText: 'هاتف التواصل', prefixIcon: Icon(Icons.phone)),
-              ),
-              SizedBox(height: 10.h),
-              TextFormField(
-                controller: waCtrl,
-                keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(labelText: 'رقم واتساب', prefixIcon: Icon(Icons.chat)),
-              ),
-              SizedBox(height: 10.h),
-              TextFormField(
-                controller: waCallCtrl,
-                keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(labelText: 'واتساب (للاتصال wa.me)', prefixIcon: Icon(Icons.call)),
-              ),
-              SizedBox(height: 14.h),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  icon: const Icon(Icons.save),
-                  label: const Text('حفظ'),
-                  onPressed: () async {
-                    if (!formKey.currentState!.validate()) return;
-                    await advC.updateMyCompanyMembership(
-                      companyId: member.advertiserProfileId!,
-                      memberId: member.id!,
-                      actorUserId: userId,
-                      displayName: nameCtrl.text.trim(),
-                      contactPhone: phoneCtrl.text.trim().isEmpty ? null : phoneCtrl.text.trim(),
-                      whatsappPhone: waCtrl.text.trim().isEmpty ? null : waCtrl.text.trim(),
-                      whatsappCallNumber: waCallCtrl.text.trim().isEmpty ? null : waCallCtrl.text.trim(),
-                    );
-                    Navigator.pop(context);
-                    _fetchProfiles();
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       ),
     );
   }
 }
 
-/// كرت شامل: الشركة + معلومات العضو + إجراءات المالك/العضو (مطابق لأسلوب الموبايل مع حفظ هوية الويب)
+/// كرت شامل: الشركة + معلومات العضو + إجراءات المالك/العضو
 class _ProfileAndMemberCardDesktop extends StatelessWidget {
   const _ProfileAndMemberCardDesktop({
     required this.profile,
@@ -505,8 +675,36 @@ class _ProfileAndMemberCardDesktop extends StatelessWidget {
             Text('بياناتي كعضو في الشركة',
                 style: TextStyle(fontSize: AppTextStyles.xlarge, fontWeight: FontWeight.w800, color: AppColors.textPrimary(isDark))),
             SizedBox(height: 8.h),
+
+            // صورة العضو + الاسم
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 28.r,
+                  backgroundColor: AppColors.textSecondary(isDark).withOpacity(.15),
+                  backgroundImage: (member.avatarUrl != null && member.avatarUrl!.isNotEmpty)
+                      ? NetworkImage(member.avatarUrl!)
+                      : null,
+                  child: (member.avatarUrl == null || member.avatarUrl!.isEmpty)
+                      ? Icon(Icons.person_rounded, size: 28.r, color: AppColors.textSecondary(isDark))
+                      : null,
+                ),
+                SizedBox(width: 12.w),
+                Expanded(
+                  child: Text(
+                    member.displayName ?? '—',
+                    style: TextStyle(
+                      fontSize: AppTextStyles.large,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.textPrimary(isDark),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 8.h),
+
             _info(icon: Icons.badge, label: 'الدور', value: _roleAr(member.role), isDark: isDark),
-            _info(icon: Icons.person, label: 'الاسم الظاهر', value: member.displayName ?? 'غير محدد', isDark: isDark),
             _info(icon: Icons.phone, label: 'هاتف التواصل', value: member.contactPhone ?? 'غير محدد', isDark: isDark),
             _info(icon: Icons.chat, label: 'واتساب', value: member.whatsappPhone ?? 'غير محدد', isDark: isDark),
             _info(icon: Icons.call, label: 'واتساب للاتصال', value: member.whatsappCallNumber ?? 'غير محدد', isDark: isDark),

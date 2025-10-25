@@ -261,7 +261,7 @@ class CompanyInvitesController extends GetxController {
     }
   }
 
-  /// قبول دعوة → ينشئ/يفعّل عضو تلقائيًا
+  /// قبول دعوة → ينشئ/يفعّل عضو تلقائيًا (يدعم avatarUrl اختياريًا)
   /// POST /invites/{inviteId}/accept
   Future<bool> acceptInvite({
     required int inviteId,
@@ -270,18 +270,21 @@ class CompanyInvitesController extends GetxController {
     String? contactPhone,
     String? whatsappPhone,
     String? whatsappCallNumber,
+    String? avatarUrl, // <-- الجديد
   }) async {
     isSaving.value = true;
     try {
       final uri = Uri.parse('$_baseUrl/invites/$inviteId/accept');
-      final res = await _post(uri, {
+      final body = <String, String>{
         'user_id': userId.toString(),
         'display_name': displayName,
         if (contactPhone != null) 'contact_phone': contactPhone,
         if (whatsappPhone != null) 'whatsapp_phone': whatsappPhone,
-        if (whatsappCallNumber != null)
-          'whatsapp_call_number': whatsappCallNumber,
-      });
+        if (whatsappCallNumber != null) 'whatsapp_call_number': whatsappCallNumber,
+        if (avatarUrl != null && avatarUrl.isNotEmpty) 'avatar_url': avatarUrl, // <-- أرسلها
+      };
+
+      final res = await _post(uri, body);
 
       if (res.statusCode == 200) {
         await fetchMyInvites(userId: userId, status: 'pending');
@@ -298,6 +301,7 @@ class CompanyInvitesController extends GetxController {
     }
     return false;
   }
+
 
   /// رفض دعوة
   /// POST /invites/{inviteId}/reject

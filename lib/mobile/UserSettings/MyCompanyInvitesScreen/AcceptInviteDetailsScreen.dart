@@ -1,12 +1,24 @@
+// AcceptInviteDetailsScreen (Web) — نسخة كاملة محدّثة
+// - نفس نمط الموبايل لاختيار صورة العضو (أفاتار)
+// - رفع الصورة إلى /upload قبل الإرسال ثم تمرير avatarUrl إلى acceptInvite
+// - معاينة دائرية + زر تعديل/إزالة
+// - تعطيل زر الحفظ أثناء الرفع
+// - نفس تصميم الحقول السابقة
+
+import 'dart:convert';
+import 'dart:io'; // ملاحظة: في Flutter Web قد تحتاج لبديل (مثل image_picker_for_web/file_picker)
+// لكننا نحافظ على نفس النمط المستخدم لديكم كما في AdvertiserDataScreen
+import 'package:http/http.dart' as http;
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../controllers/CompanyInvitesController.dart';
 import '../../../controllers/ThemeController.dart';
 import '../../../core/constant/app_text_styles.dart';
 import '../../../core/constant/appcolors.dart';
-
 
 class AcceptInviteDetailsScreen extends StatefulWidget {
   const AcceptInviteDetailsScreen({
@@ -36,6 +48,14 @@ class _AcceptInviteDetailsScreenState extends State<AcceptInviteDetailsScreen> {
   final _waPhoneCtrl = TextEditingController();
   final _waCallCtrl = TextEditingController();
 
+  // ====== أفاتار العضو (بنفس نمط الموبايل) ======
+  static const String _root = "https://stayinme.arabiagroup.net/lar_stayInMe/public/api";
+  static const String _uploadApi = "$_root/upload";
+
+  File? _avatarFile;
+  String _uploadedAvatarUrl = ""; // ناتج /upload
+  bool _uploadingAvatar = false;
+
   @override
   void dispose() {
     _displayNameCtrl.dispose();
@@ -55,6 +75,50 @@ class _AcceptInviteDetailsScreenState extends State<AcceptInviteDetailsScreen> {
     final digits = v.replaceAll(RegExp(r'\D+'), '');
     if (digits.length < 7) return 'رقم غير صالح';
     return null;
+  }
+
+  Future<void> _pickAvatar() async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: ImageSource.gallery);
+    if (picked != null) {
+      setState(() {
+        _avatarFile = File(picked.path);
+        _uploadedAvatarUrl = ""; // إعادة ضبط عند تغيير الصورة
+      });
+    }
+  }
+
+  void _removeAvatar() {
+    setState(() {
+      _avatarFile = null;
+      _uploadedAvatarUrl = "";
+    });
+  }
+
+  Future<void> _uploadAvatarIfNeeded() async {
+    if (_avatarFile == null || _uploadedAvatarUrl.isNotEmpty) return;
+    setState(() => _uploadingAvatar = true);
+    try {
+      final req = http.MultipartRequest('POST', Uri.parse(_uploadApi));
+      req.files.add(await http.MultipartFile.fromPath('images[]', _avatarFile!.path));
+
+      final resp = await req.send();
+      final body = await resp.stream.bytesToString();
+
+      if (resp.statusCode == 201) {
+        final jsonBody = jsonDecode(body) as Map<String, dynamic>;
+        final urls = List<String>.from(jsonBody['image_urls'] ?? const []);
+        setState(() {
+          _uploadedAvatarUrl = urls.isNotEmpty ? urls.first : "";
+        });
+      } else {
+        Get.snackbar('فشل رفع الصورة', '(${resp.statusCode}) $body', snackPosition: SnackPosition.BOTTOM);
+      }
+    } catch (e) {
+      Get.snackbar('خطأ في الرفع', e.toString(), snackPosition: SnackPosition.BOTTOM);
+    } finally {
+      if (mounted) setState(() => _uploadingAvatar = false);
+    }
   }
 
   @override
@@ -93,6 +157,96 @@ class _AcceptInviteDetailsScreenState extends State<AcceptInviteDetailsScreen> {
             ),
             SizedBox(height: 16.h),
 
+            // ====== كتلة الأفاتار (بنفس روح AdvertiserDataScreen) ======
+            Container(
+              padding: EdgeInsets.all(14.w),
+              decoration: BoxDecoration(
+                color: AppColors.surface(isDark),
+                borderRadius: BorderRadius.circular(14.r),
+                border: Border.all(color: AppColors.textSecondary(isDark).withOpacity(.18)),
+              ),
+              child: Row(
+                children: [
+                  Stack(
+                    alignment: Alignment.bottomRight,
+                    children: [
+                      CircleAvatar(
+                        radius: 36.r,
+                        backgroundColor: AppColors.textSecondary(isDark).withOpacity(.15),
+                        backgroundImage: _avatarFile != null ? FileImage(_avatarFile!) : null,
+                        child: _avatarFile == null
+                            ? Icon(Icons.person_rounded, size: 36.r, color: AppColors.textSecondary(isDark))
+                            : null,
+                      ),
+                      Positioned(
+                        right: -2,
+                        bottom: -2,
+                        child: Material(
+                          color: AppColors.primary,
+                          borderRadius: BorderRadius.circular(16.r),
+                          child: InkWell(
+                            onTap: _pickAvatar,
+                            borderRadius: BorderRadius.circular(16.r),
+                            child: Padding(
+                              padding: EdgeInsets.all(6.r),
+                              child: Icon(Icons.edit_rounded, size: 16.r, color: AppColors.onPrimary),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(width: 12.w),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('صورة العضو (اختياري)',
+                            style: TextStyle(
+                              fontSize: AppTextStyles.large,
+                              fontFamily: AppTextStyles.appFontFamily,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textPrimary(isDark),
+                            )),
+                        SizedBox(height: 6.h),
+                        Text(
+                          'اختر صورة شخصية واضحة. بإمكانك المتابعة بدون صورة.',
+                          style: TextStyle(
+                            fontSize: AppTextStyles.small,
+                            color: AppColors.textSecondary(isDark),
+                          ),
+                        ),
+                        if (_avatarFile != null) ...[
+                          SizedBox(height: 8.h),
+                          Row(
+                            children: [
+                              if (_uploadingAvatar)
+                                const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+                              if (_uploadingAvatar) SizedBox(width: 8.w),
+                              Expanded(
+                                child: Text(
+                                  _avatarFile!.path.split('/').last,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(fontSize: AppTextStyles.small, color: AppColors.textSecondary(isDark)),
+                                ),
+                              ),
+                              TextButton.icon(
+                                onPressed: _uploadingAvatar ? null : _removeAvatar,
+                                icon: const Icon(Icons.delete_outline_rounded),
+                                label: const Text('إزالة'),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(height: 16.h),
+
+            // ====== نموذج البيانات ======
             Container(
               padding: EdgeInsets.all(14.w),
               decoration: BoxDecoration(
@@ -144,25 +298,20 @@ class _AcceptInviteDetailsScreenState extends State<AcceptInviteDetailsScreen> {
                     TextFormField(
                       controller: _waCallCtrl,
                       keyboardType: TextInputType.phone,
-                      decoration:
-                          _inputDecoration(isDark, 'رقم واتساب للاتصال (wa.me)', Icons.call_rounded),
+                      decoration: _inputDecoration(isDark, 'رقم واتساب للاتصال (wa.me)', Icons.call_rounded),
                       validator: _phoneValidator,
                     ),
                     SizedBox(height: 16.h),
 
                     Obx(() {
-                      final saving = c.isSaving.value;
+                      final saving = c.isSaving.value || _uploadingAvatar;
                       return SizedBox(
                         width: double.infinity,
                         height: 52.h,
                         child: ElevatedButton.icon(
                           onPressed: saving ? null : _onSubmit,
                           icon: saving
-                              ? SizedBox(
-                                  width: 18.w,
-                                  height: 18.w,
-                                  child: const CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                                )
+                              ? SizedBox(width: 18.w, height: 18.w, child: const CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                               : const Icon(Icons.check_rounded),
                           label: Text(
                             saving ? 'جارِ الحفظ...' : 'تأكيد القبول',
@@ -209,6 +358,15 @@ class _AcceptInviteDetailsScreenState extends State<AcceptInviteDetailsScreen> {
   Future<void> _onSubmit() async {
     if (!_formKey.currentState!.validate()) return;
 
+    // لو فيه صورة مختارة ولم تُرفع بعد → ارفعها أولاً لتحصل على avatar_url
+    if (_avatarFile != null && _uploadedAvatarUrl.isEmpty) {
+      await _uploadAvatarIfNeeded();
+      if (_uploadedAvatarUrl.isEmpty) {
+        // فشل الرفع
+        return;
+      }
+    }
+
     final ok = await c.acceptInvite(
       inviteId: widget.inviteId,
       userId: widget.userId,
@@ -216,6 +374,8 @@ class _AcceptInviteDetailsScreenState extends State<AcceptInviteDetailsScreen> {
       contactPhone: _contactPhoneCtrl.text.trim().isEmpty ? null : _contactPhoneCtrl.text.trim(),
       whatsappPhone: _waPhoneCtrl.text.trim().isEmpty ? null : _waPhoneCtrl.text.trim(),
       whatsappCallNumber: _waCallCtrl.text.trim().isEmpty ? null : _waCallCtrl.text.trim(),
+      // الجديد:
+      avatarUrl: _uploadedAvatarUrl.isNotEmpty ? _uploadedAvatarUrl : null,
     );
 
     if (ok) {
@@ -270,15 +430,9 @@ class _HeaderInfo extends StatelessWidget {
                 ),
                 children: [
                   const TextSpan(text: 'أنت على وشك قبول دعوة من شركة '),
-                  TextSpan(
-                    text: companyName,
-                    style: const TextStyle(fontWeight: FontWeight.w900),
-                  ),
+                  TextSpan(text: companyName, style: const TextStyle(fontWeight: FontWeight.w900)),
                   const TextSpan(text: ' كـ '),
-                  TextSpan(
-                    text: roleLabel, // نص عربي «ناشر/عارض»
-                    style: const TextStyle(fontWeight: FontWeight.w900),
-                  ),
+                  TextSpan(text: roleLabel, style: const TextStyle(fontWeight: FontWeight.w900)),
                 ],
               ),
             ),

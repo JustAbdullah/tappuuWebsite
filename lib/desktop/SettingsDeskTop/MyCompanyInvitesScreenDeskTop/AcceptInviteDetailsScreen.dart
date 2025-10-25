@@ -1,10 +1,13 @@
-// AcceptInviteDetailsScreenDeskTop (WEB - Desktop/Large Screens)
-// شاشة إكمال بيانات قبول الدعوة بتصميم سطح المكتب
-// تحافظ على نفس منطق CompanyInvitesController دون تغيير.
+
+
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:http/http.dart' as http;
 
 import '../../../controllers/CompanyInvitesController.dart';
 import '../../../controllers/ThemeController.dart';
@@ -47,6 +50,14 @@ class _AcceptInviteDetailsScreenDeskTopState
   final _waPhoneCtrl = TextEditingController();
   final _waCallCtrl = TextEditingController();
 
+  // === أفاتار العضو (اختياري) ===
+  static const String _root = "https://stayinme.arabiagroup.net/lar_stayInMe/public/api";
+  static const String _uploadApi = "$_root/upload";
+
+  File? _avatarFile;
+  String _uploadedAvatarUrl = ""; // ناتج /upload
+  bool _uploadingAvatar = false;
+
   @override
   void dispose() {
     _displayNameCtrl.dispose();
@@ -68,6 +79,51 @@ class _AcceptInviteDetailsScreenDeskTopState
     return null;
   }
 
+  Future<void> _pickAvatar() async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: ImageSource.gallery);
+    if (picked != null) {
+      setState(() {
+        _avatarFile = File(picked.path);
+        _uploadedAvatarUrl = ""; // إعادة ضبط في حال تغيير الصورة
+      });
+    }
+  }
+
+  void _removeAvatar() {
+    setState(() {
+      _avatarFile = null;
+      _uploadedAvatarUrl = "";
+    });
+  }
+
+  Future<void> _uploadAvatarIfNeeded() async {
+    if (_avatarFile == null || _uploadedAvatarUrl.isNotEmpty) return;
+    setState(() => _uploadingAvatar = true);
+    try {
+      final req = http.MultipartRequest('POST', Uri.parse(_uploadApi));
+      req.files.add(await http.MultipartFile.fromPath('images[]', _avatarFile!.path));
+
+      final resp = await req.send();
+      final body = await resp.stream.bytesToString();
+
+      if (resp.statusCode == 201) {
+        final jsonBody = jsonDecode(body) as Map<String, dynamic>;
+        final urls = List<String>.from(jsonBody['image_urls'] ?? const []);
+        setState(() {
+          _uploadedAvatarUrl = urls.isNotEmpty ? urls.first : "";
+        });
+      } else {
+        Get.snackbar('فشل رفع الصورة', '(${resp.statusCode}) $body',
+            snackPosition: SnackPosition.BOTTOM);
+      }
+    } catch (e) {
+      Get.snackbar('خطأ في الرفع', e.toString(), snackPosition: SnackPosition.BOTTOM);
+    } finally {
+      if (mounted) setState(() => _uploadingAvatar = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = themeC.isDarkMode.value;
@@ -82,8 +138,8 @@ class _AcceptInviteDetailsScreenDeskTopState
       backgroundColor: AppColors.background(isDark),
       body: Column(
         children: [
-           TopAppBarDeskTop(),
-           SecondaryAppBarDeskTop(),
+          TopAppBarDeskTop(),
+          SecondaryAppBarDeskTop(),
           Expanded(
             child: SingleChildScrollView(
               padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 24.h),
@@ -148,19 +204,34 @@ class _AcceptInviteDetailsScreenDeskTopState
               ),
               if (isWide) SizedBox(width: 20.w) else SizedBox(height: 16.h),
 
-              // العمود الأيمن: نموذج الإدخال
+              // العمود الأيمن: بطاقة الصورة + نموذج الإدخال
               Flexible(
                 flex: isWide ? 6 : 0,
-                child: _FormCard(
-                  isDark: isDark,
-                  formKey: _formKey,
-                  displayNameCtrl: _displayNameCtrl,
-                  contactPhoneCtrl: _contactPhoneCtrl,
-                  waPhoneCtrl: _waPhoneCtrl,
-                  waCallCtrl: _waCallCtrl,
-                  reqValidator: _reqValidator,
-                  phoneValidator: _phoneValidator,
-                  onSubmit: _onSubmit,
+                child: Column(
+                  children: [
+                    _AvatarCard(
+                      isDark: isDark,
+                      avatarFile: _avatarFile,
+                      uploadedAvatarUrl: _uploadedAvatarUrl,
+                      uploading: _uploadingAvatar,
+                      onPick: _pickAvatar,
+                      onRemove: _removeAvatar,
+                      onUpload: _uploadAvatarIfNeeded,
+                    ),
+                    SizedBox(height: 16.h),
+                    _FormCard(
+                      isDark: isDark,
+                      formKey: _formKey,
+                      displayNameCtrl: _displayNameCtrl,
+                      contactPhoneCtrl: _contactPhoneCtrl,
+                      waPhoneCtrl: _waPhoneCtrl,
+                      waCallCtrl: _waCallCtrl,
+                      reqValidator: _reqValidator,
+                      phoneValidator: _phoneValidator,
+                      onSubmit: _onSubmit,
+                      isSubmittingDisabled: _uploadingAvatar, // لا نرسل أثناء الرفع
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -173,6 +244,15 @@ class _AcceptInviteDetailsScreenDeskTopState
   Future<void> _onSubmit() async {
     if (!_formKey.currentState!.validate()) return;
 
+    // لو فيه صورة مختارة ولم تُرفع بعد → ارفعها أولاً لتحصل على avatar_url
+    if (_avatarFile != null && _uploadedAvatarUrl.isEmpty) {
+      await _uploadAvatarIfNeeded();
+      if (_uploadedAvatarUrl.isEmpty) {
+        // فشل الرفع
+        return;
+      }
+    }
+
     final ok = await c.acceptInvite(
       inviteId: widget.inviteId,
       userId: widget.userId,
@@ -183,6 +263,8 @@ class _AcceptInviteDetailsScreenDeskTopState
           _waPhoneCtrl.text.trim().isEmpty ? null : _waPhoneCtrl.text.trim(),
       whatsappCallNumber:
           _waCallCtrl.text.trim().isEmpty ? null : _waCallCtrl.text.trim(),
+      // الجديد:
+      avatarUrl: _uploadedAvatarUrl.isNotEmpty ? _uploadedAvatarUrl : null,
     );
 
     if (ok) {
@@ -337,6 +419,135 @@ class _HintRow extends StatelessWidget {
   }
 }
 
+class _AvatarCard extends StatelessWidget {
+  const _AvatarCard({
+    required this.isDark,
+    required this.avatarFile,
+    required this.uploadedAvatarUrl,
+    required this.uploading,
+    required this.onPick,
+    required this.onRemove,
+    required this.onUpload,
+  });
+
+  final bool isDark;
+  final File? avatarFile;
+  final String uploadedAvatarUrl;
+  final bool uploading;
+  final Future<void> Function() onPick;
+  final VoidCallback onRemove;
+  final Future<void> Function() onUpload;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.all(14.w),
+      decoration: BoxDecoration(
+        color: AppColors.surface(isDark),
+        borderRadius: BorderRadius.circular(14.r),
+        border: Border.all(color: AppColors.textSecondary(isDark).withOpacity(.18)),
+      ),
+      child: Row(
+        children: [
+          Stack(
+            alignment: Alignment.bottomRight,
+            children: [
+              CircleAvatar(
+                radius: 36.r,
+                backgroundColor: AppColors.textSecondary(isDark).withOpacity(.15),
+                backgroundImage: avatarFile != null
+                    ? FileImage(avatarFile!)
+                    : (uploadedAvatarUrl.isNotEmpty
+                        ? NetworkImage(uploadedAvatarUrl) as ImageProvider
+                        : null),
+                child: (avatarFile == null && uploadedAvatarUrl.isEmpty)
+                    ? Icon(Icons.person_rounded,
+                        size: 36.r, color: AppColors.textSecondary(isDark))
+                    : null,
+              ),
+              Positioned(
+                right: -2,
+                bottom: -2,
+                child: Material(
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.circular(16.r),
+                  child: InkWell(
+                    onTap: onPick,
+                    borderRadius: BorderRadius.circular(16.r),
+                    child: Padding(
+                      padding: EdgeInsets.all(6.r),
+                      child: Icon(Icons.edit_rounded,
+                          size: 16.r, color: AppColors.onPrimary),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(width: 12.w),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('صورة العضو (اختياري)',
+                    style: TextStyle(
+                      fontSize: AppTextStyles.large,
+                      fontFamily: AppTextStyles.appFontFamily,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary(isDark),
+                    )),
+                SizedBox(height: 6.h),
+                Text(
+                  avatarFile == null
+                      ? (uploadedAvatarUrl.isNotEmpty
+                          ? 'تم رفع صورة بالفعل، يمكنك استبدالها.'
+                          : 'اختر صورة شخصية واضحة. بإمكانك المتابعة بدون صورة.')
+                      : 'تحتاج لرفع الصورة قبل الحفظ.',
+                  style: TextStyle(
+                    fontSize: AppTextStyles.small,
+                    color: AppColors.textSecondary(isDark),
+                  ),
+                ),
+                SizedBox(height: 8.h),
+                Wrap(
+                  spacing: 8.w,
+                  runSpacing: 8.h,
+                  children: [
+                    ElevatedButton.icon(
+                      onPressed: (uploading || avatarFile == null) ? null : onUpload,
+                      icon: uploading
+                          ? const SizedBox(
+                              height: 16,
+                              width: 16,
+                              child:
+                                  CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            )
+                          : const Icon(Icons.cloud_upload_rounded),
+                      label: Text(uploading ? 'جارِ الرفع...' : 'رفع الصورة'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: AppColors.onPrimary,
+                        minimumSize: Size(140.w, 40.h),
+                      ),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: (avatarFile != null || uploadedAvatarUrl.isNotEmpty)
+                          ? onRemove
+                          : null,
+                      icon: const Icon(Icons.delete_outline_rounded),
+                      label: const Text('إزالة'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _FormCard extends StatelessWidget {
   const _FormCard({
     required this.isDark,
@@ -348,6 +559,7 @@ class _FormCard extends StatelessWidget {
     required this.reqValidator,
     required this.phoneValidator,
     required this.onSubmit,
+    this.isSubmittingDisabled = false,
   });
 
   final bool isDark;
@@ -359,6 +571,7 @@ class _FormCard extends StatelessWidget {
   final String? Function(String?) reqValidator;
   final String? Function(String?) phoneValidator;
   final Future<void> Function() onSubmit;
+  final bool isSubmittingDisabled;
 
   @override
   Widget build(BuildContext context) {
@@ -435,12 +648,13 @@ class _FormCard extends StatelessWidget {
 
             Obx(() {
               final saving = c.isSaving.value;
+              final disabled = saving || isSubmittingDisabled;
               return SizedBox(
                 width: double.infinity,
                 height: 52.h,
                 child: ElevatedButton.icon(
-                  onPressed: saving ? null : onSubmit,
-                  icon: saving
+                  onPressed: disabled ? null : onSubmit,
+                  icon: disabled
                       ? SizedBox(
                           width: 18.w,
                           height: 18.w,
@@ -449,7 +663,7 @@ class _FormCard extends StatelessWidget {
                         )
                       : const Icon(Icons.check_rounded),
                   label: Text(
-                    saving ? 'جارِ الحفظ...' : 'تأكيد القبول',
+                    saving ? 'جارِ الحفظ...' : (isSubmittingDisabled ? 'انتظر قليلاً...' : 'تأكيد القبول'),
                     style: TextStyle(
                       fontSize: AppTextStyles.xlarge,
                       fontWeight: FontWeight.w800,

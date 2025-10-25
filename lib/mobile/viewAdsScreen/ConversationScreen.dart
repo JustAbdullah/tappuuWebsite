@@ -10,7 +10,6 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-
 import '../../controllers/ChatController.dart';
 import '../../controllers/LoadingController.dart';
 import '../../controllers/ThemeController.dart';
@@ -337,6 +336,58 @@ class _ConversationScreenState extends State<ConversationScreen> {
     }
   }
 
+  // ====== استخراج وعرض صورة العضو/الشركة ======
+  String? _extractAvatarFromMember(CompanyMemberMessage? member) {
+    if (member == null) return null;
+    try {
+      // استخدام dynamic للوصول المرن لحقول الصورة المحتملة داخل user
+      final u = (member.user as dynamic);
+      final v = u?.avatarUrl ?? u?.avatar ?? u?.photoUrl ?? u?.image ?? u?.avatar_url;
+      if (v is String && v.trim().isNotEmpty) return v.toString();
+    } catch (_) {}
+    return null;
+  }
+
+  CompanyMemberMessage? _pickFirstMemberFromMessages() {
+    try {
+      return _chatController.messagesList
+          .firstWhere((m) => m.adCompanyMember != null)
+          .adCompanyMember;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// يُعيد رابط صورة العضو إن وجد، وإلا شعار الشركة، وإلا null
+  String? _resolveAvatarUrl() {
+    final member = _pickFirstMemberFromMessages();
+    final memberAvatar = _extractAvatarFromMember(member);
+    if (memberAvatar != null && memberAvatar.isNotEmpty) return memberAvatar;
+
+    final logo = widget.advertiser.logo;
+    if (logo.isNotEmpty) return logo;
+
+    return null;
+  }
+
+  /// ويدجت الصورة الدائرية الموحدة
+  Widget _avatarWidget({double size = 38}) {
+    final url = _resolveAvatarUrl();
+    if (url == null || url.isEmpty) {
+      return CircleAvatar(
+        radius: size / 2,
+        backgroundColor: AppColors.border(_themeController.isDarkMode.value),
+        child: Icon(Icons.person, size: size * 0.6, color: AppColors.textSecondary(_themeController.isDarkMode.value)),
+      );
+    }
+    return CircleAvatar(
+      radius: size / 2,
+      backgroundColor: Colors.transparent,
+      backgroundImage: NetworkImage(url),
+      onBackgroundImageError: (_, __) {},
+    );
+  }
+
   // تنسيق التاريخ
   String _formatDateTimeFull(DateTime date) {
     final day = date.day.toString().padLeft(2, '0');
@@ -463,7 +514,10 @@ class _ConversationScreenState extends State<ConversationScreen> {
               padding: EdgeInsets.all(4.w),
               child: InkWell(onTap: () => _scaffoldKey.currentState?.openDrawer(), child: Icon(Icons.menu, color: AppColors.onPrimary, size: 22.w)),
             ),
-            SizedBox(width: 12.w),
+            SizedBox(width: 10.w),
+            // صورة العضو/الشركة
+            _avatarWidget(size: 38.w),
+            SizedBox(width: 10.w),
             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               SizedBox(
                 width: 200.w,
@@ -888,6 +942,12 @@ class _ConversationScreenState extends State<ConversationScreen> {
         final labelStyle = TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: 12.sp, color: AppColors.textSecondary(isDark));
         final valueStyle = TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: 13.sp, color: AppColors.textPrimary(isDark));
 
+        // اسم الرأس بجانب الصورة داخل اللوحة
+        final headerName = () {
+          if (!isCompany) return adv.name ?? '-';
+          return (member?.displayName?.isNotEmpty == true) ? member!.displayName! : (adv.name ?? '-');
+        }();
+
         return Align(
           alignment: Alignment.centerRight,
           child: Material(
@@ -903,12 +963,14 @@ class _ConversationScreenState extends State<ConversationScreen> {
               child: SafeArea(
                 child: Column(
                   children: [
-                    // رأس
+                    // رأس مع صورة العضو/الشركة
                     Padding(
                       padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
                       child: Row(
                         children: [
-                          Expanded(child: Text('التواصل', style: titleStyle)),
+                          _avatarWidget(size: 46.w),
+                          SizedBox(width: 12.w),
+                          Expanded(child: Text('التواصل — $headerName', style: titleStyle, maxLines: 1, overflow: TextOverflow.ellipsis)),
                           IconButton(onPressed: () => Navigator.of(context).maybePop(), icon: const Icon(Icons.close)),
                         ],
                       ),
