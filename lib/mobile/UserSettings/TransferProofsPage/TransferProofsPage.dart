@@ -116,7 +116,7 @@ class TransferProofsPage extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'المبلغ: ${proof.amount}',
+                  'المبلغ: ${proof.amount} ليرة',
                   style: TextStyle(
                     fontFamily: AppTextStyles.appFontFamily,
                     fontSize: AppTextStyles.large,

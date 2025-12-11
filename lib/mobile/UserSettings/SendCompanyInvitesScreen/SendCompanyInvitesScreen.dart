@@ -2,16 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
-import '../../../controllers/CompanyInvitesController.dart';
-import '../../../controllers/LoadingController.dart';
-import '../../../controllers/ThemeController.dart';
-import '../../../core/constant/app_text_styles.dart';
-import '../../../core/constant/appcolors.dart';
-import '../../../core/data/model/CompanySummary.dart';
-import '../../../core/data/model/company_invite.dart';
+import 'package:tappuu_website/core/constant/appcolors.dart';
+import 'package:tappuu_website/core/constant/app_text_styles.dart';
 
+import 'package:tappuu_website/controllers/ThemeController.dart';
+import 'package:tappuu_website/controllers/CompanyInvitesController.dart';
+import 'package:tappuu_website/controllers/LoadingController.dart';
 
-
+import 'package:tappuu_website/core/data/model/company_invite.dart';
+import 'package:tappuu_website/core/data/model/CompanySummary.dart';
 
 class SendCompanyInvitesScreen extends StatefulWidget {
   const SendCompanyInvitesScreen({Key? key}) : super(key: key);
@@ -511,7 +510,7 @@ class _InviteFormCard extends StatelessWidget {
                   onTap: () => onRoleChanged('publisher'),
                 ),
                 SizedBox(width: 10.w),
-                
+              
               ],
             );
           }),
@@ -711,7 +710,7 @@ class _InviteCard extends StatelessWidget {
                     Icon(Icons.badge_rounded, size: 16.w, color: AppColors.textSecondary(isDark)),
                     SizedBox(width: 6.w),
                     Text(
-                      (invite.role == 'viewer' ? 'عارض' : 'ناشر').tr,
+                      ('ناشر').tr,
                       style: TextStyle(
                         fontSize: AppTextStyles.medium,
                         color: AppColors.textSecondary(isDark),
@@ -751,16 +750,10 @@ class _InviteCard extends StatelessWidget {
                   ],
                 ),
               ),
-              PopupMenuItem<String>(
-                value: 'viewer',
-                child: Row(
-                  children: [
-                    const Icon(Icons.visibility_rounded),
-                    SizedBox(width: 8.w),
-                    Text('تحويل إلى عارض'.tr),
-                  ],
-                ),
-              ),
+            
+               
+            
+           
               const PopupMenuDivider(),
               PopupMenuItem<String>(
                 value: 'cancel',

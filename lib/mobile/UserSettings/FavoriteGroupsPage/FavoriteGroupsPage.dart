@@ -337,7 +337,7 @@ class _FavoriteGroupsPageState extends State<FavoriteGroupsPage> {
                     'لا توجد مجموعات مفضلة'.tr,
                     style: TextStyle(
                       fontFamily: AppTextStyles.appFontFamily,
-                      fontSize: AppTextStyles.medium,
+                      fontSize: AppTextStyles.large,
 
                       color: AppColors.textPrimary(isDark),
                     ),

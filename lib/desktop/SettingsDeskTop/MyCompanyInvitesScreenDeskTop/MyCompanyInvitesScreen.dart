@@ -86,19 +86,23 @@ class _MyCompanyInvitesScreenDeskTopState extends State<MyCompanyInvitesScreenDe
   Widget build(BuildContext context) {
     final isDark = themeC.isDarkMode.value;
     final HomeController homeC = Get.find<HomeController>();
+           final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
     return Scaffold(
-      endDrawer: AnimatedSwitcher(
+       key: _scaffoldKey,
+    endDrawer: Obx(
+      () => AnimatedSwitcher(
         duration: const Duration(milliseconds: 300),
-        child: homeC.isServicesOrSettings.value
-            ? const SettingsDrawerDeskTop(key: ValueKey(1))
-            : const DesktopServicesDrawer(key: ValueKey(2)),
+        child: homeC.drawerType.value == DrawerType.settings
+            ? const SettingsDrawerDeskTop(key: ValueKey('settings'))
+            : const DesktopServicesDrawer(key: ValueKey('services')),
       ),
+    ),
       backgroundColor: AppColors.background(isDark),
       body: Column(
         children: [
            TopAppBarDeskTop(),
-           SecondaryAppBarDeskTop(),
+           SecondaryAppBarDeskTop(scaffoldKey: _scaffoldKey,),
           Expanded(
             child: ScrollConfiguration(
               behavior: NoScrollbarScrollBehavior(),

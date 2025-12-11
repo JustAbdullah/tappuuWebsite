@@ -22,19 +22,27 @@ import '../SettingsDrawerDeskTop.dart';
 
 class WalletChargeDesktopScreen extends StatefulWidget {
   final UserWallet wallet;
-  const WalletChargeDesktopScreen({Key? key, required this.wallet}) : super(key: key);
+  const WalletChargeDesktopScreen({Key? key, required this.wallet})
+      : super(key: key);
 
   @override
-  State<WalletChargeDesktopScreen> createState() => _WalletChargeDesktopScreenState();
+  State<WalletChargeDesktopScreen> createState() =>
+      _WalletChargeDesktopScreenState();
 }
 
 class _WalletChargeDesktopScreenState extends State<WalletChargeDesktopScreen> {
   final ThemeController themeController = Get.find<ThemeController>();
   final UserWalletController walletController = Get.find<UserWalletController>();
-  final BankAccountController bankAccountController = Get.put(BankAccountController());
-  final TransferProofController _transferProofController = Get.put(TransferProofController());
-  final CardPaymentController _cardPaymentController = Get.put(CardPaymentController());
+  final BankAccountController bankAccountController =
+      Get.put(BankAccountController());
+  final TransferProofController _transferProofController =
+      Get.put(TransferProofController());
+  final CardPaymentController _cardPaymentController =
+      Get.put(CardPaymentController());
   final HomeController _homeController = Get.find<HomeController>();
+
+  // ✅ المفتاح هنا (مش داخل build)
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   final _formKey = GlobalKey<FormState>();
   final _bankFormKey = GlobalKey<FormState>();
@@ -49,7 +57,7 @@ class _WalletChargeDesktopScreenState extends State<WalletChargeDesktopScreen> {
   String get initialPaymentMethod {
     return _cardPaymentController.isEnabled.value ? 'card' : 'bank';
   }
-  
+
   String selectedPaymentMethod = 'bank';
   BankAccountModel? selectedBankAccount;
   Uint8List? transferProofImageBytes;
@@ -61,7 +69,7 @@ class _WalletChargeDesktopScreenState extends State<WalletChargeDesktopScreen> {
     bankAccountController.fetchAccounts();
     selectedPaymentMethod = initialPaymentMethod;
     _cardPaymentController.fetchSetting();
-    
+
     amountCtrl.addListener(_updateButtonState);
     cardNumberCtrl.addListener(_updateButtonState);
     nameCtrl.addListener(_updateButtonState);
@@ -74,8 +82,38 @@ class _WalletChargeDesktopScreenState extends State<WalletChargeDesktopScreen> {
     setState(() {});
   }
 
+  /// ✅ دالة لتطبيع قيمة المبلغ:
+  /// - تحويل الأرقام العربية إلى لاتينية
+  /// - استبدال الفاصلة بالنقطة
+  /// - إزالة النقاط الزائدة لو أكثر من نقطة
+  String _normalizeAmount(String raw) {
+    String text = raw.trim();
+
+    // تحويل الأرقام العربية إلى لاتينية
+    const arabicDigits = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
+    const westernDigits = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+
+    for (int i = 0; i < arabicDigits.length; i++) {
+      text = text.replaceAll(arabicDigits[i], westernDigits[i]);
+    }
+
+    // استبدال الفاصلة بالنقطة
+    text = text.replaceAll(',', '.');
+
+    // لو أكثر من نقطة، خلي أول وحدة فقط
+    final firstDot = text.indexOf('.');
+    if (firstDot != -1) {
+      final before = text.substring(0, firstDot + 1);
+      final after = text.substring(firstDot + 1).replaceAll('.', '');
+      text = before + after;
+    }
+
+    return text;
+  }
+
   bool get _isFormValid {
-    if (amountCtrl.text.isEmpty || double.tryParse(amountCtrl.text) == null) {
+    final normalized = _normalizeAmount(amountCtrl.text);
+    if (normalized.isEmpty || double.tryParse(normalized) == null) {
       return false;
     }
 
@@ -89,6 +127,18 @@ class _WalletChargeDesktopScreenState extends State<WalletChargeDesktopScreen> {
     return false;
   }
 
+  // === اسم العملة بالعربي ===
+  String _getCurrencyLabel(String? currency) {
+    switch (currency) {
+      case 'SYP':
+        return 'ليرة سورية';
+      case 'USD':
+        return 'دولار أمريكي';
+      default:
+        return currency ?? '';
+    }
+  }
+
   @override
   void dispose() {
     amountCtrl.removeListener(_updateButtonState);
@@ -97,7 +147,7 @@ class _WalletChargeDesktopScreenState extends State<WalletChargeDesktopScreen> {
     expiryCtrl.removeListener(_updateButtonState);
     cvvCtrl.removeListener(_updateButtonState);
     userAccountNumberCtrl.removeListener(_updateButtonState);
-    
+
     amountCtrl.dispose();
     cardNumberCtrl.dispose();
     nameCtrl.dispose();
@@ -111,20 +161,24 @@ class _WalletChargeDesktopScreenState extends State<WalletChargeDesktopScreen> {
     final digits = val.replaceAll(RegExp(r'\D'), '');
     final groups = <String>[];
     for (int i = 0; i < digits.length; i += 4) {
-      groups.add(digits.substring(i, i + 4 > digits.length ? digits.length : i + 4));
+      groups.add(
+          digits.substring(i, i + 4 > digits.length ? digits.length : i + 4));
     }
     final formatted = groups.join(' ');
     if (formatted != cardNumberCtrl.text) {
-      cardNumberCtrl.value =
-          TextEditingValue(text: formatted, selection: TextSelection.collapsed(offset: formatted.length));
+      cardNumberCtrl.value = TextEditingValue(
+        text: formatted,
+        selection: TextSelection.collapsed(offset: formatted.length),
+      );
     }
   }
 
   Future<void> _pickImage() async {
     try {
       final ImagePicker picker = ImagePicker();
-      final XFile? image = await picker.pickImage(source: ImageSource.gallery);
-      
+      final XFile? image =
+          await picker.pickImage(source: ImageSource.gallery);
+
       if (image != null) {
         final bytes = await image.readAsBytes();
         setState(() {
@@ -139,7 +193,7 @@ class _WalletChargeDesktopScreenState extends State<WalletChargeDesktopScreen> {
         'فشل في اختيار الصورة',
         snackPosition: SnackPosition.BOTTOM,
         backgroundColor: Colors.red,
-        colorText: Colors.white
+        colorText: Colors.white,
       );
     }
   }
@@ -158,40 +212,41 @@ class _WalletChargeDesktopScreenState extends State<WalletChargeDesktopScreen> {
   Future<void> _processPayment() async {
     FocusScope.of(context).unfocus();
 
-    if (selectedPaymentMethod == 'card' && !_formKey.currentState!.validate()) {
+    if (selectedPaymentMethod == 'card' &&
+        !(_formKey.currentState?.validate() ?? false)) {
       return;
     }
 
     if (selectedPaymentMethod == 'bank') {
       if (selectedBankAccount == null) {
         Get.snackbar(
-          'خطأ', 
-          'الرجاء اختيار حساب بنكي', 
-          snackPosition: SnackPosition.BOTTOM, 
-          backgroundColor: Colors.red, 
-          colorText: Colors.white
+          'خطأ',
+          'الرجاء اختيار حساب بنكي',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
         );
         return;
       }
 
       if (transferProofImageBytes == null) {
         Get.snackbar(
-          'خطأ', 
-          'الرجاء رفع صورة إثبات التحويل', 
-          snackPosition: SnackPosition.BOTTOM, 
-          backgroundColor: Colors.red, 
-          colorText: Colors.white
+          'خطأ',
+          'الرجاء رفع صورة إثبات التحويل',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
         );
         return;
       }
 
       if (userAccountNumberCtrl.text.isEmpty) {
         Get.snackbar(
-          'خطأ', 
-          'الرجاء إدخال رقم حسابك', 
-          snackPosition: SnackPosition.BOTTOM, 
-          backgroundColor: Colors.red, 
-          colorText: Colors.white
+          'خطأ',
+          'الرجاء إدخال رقم حسابك',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
         );
         return;
       }
@@ -200,32 +255,34 @@ class _WalletChargeDesktopScreenState extends State<WalletChargeDesktopScreen> {
     setState(() => isProcessing = true);
 
     try {
-      final amount = double.tryParse(amountCtrl.text) ?? 0;
-      
+      final normalizedAmount = _normalizeAmount(amountCtrl.text);
+      final amount = double.tryParse(normalizedAmount) ?? 0;
+      final currencyLabel = _getCurrencyLabel(widget.wallet.currency);
+
       if (selectedPaymentMethod == 'card') {
-        await Future.delayed(Duration(seconds: 2));
-        
+        // هنا لاحقاً تربط بوابة الدفع
+        await Future.delayed(const Duration(seconds: 2));
+
         if (amount > 0) {
           walletController.creditWallet(
             walletUuid: widget.wallet.uuid,
             amount: amount,
-            note: "شحن محفظة:${widget.wallet.uuid}, مبلغ الشحن هو:$amount"
+            note:
+                "شحن محفظة:${widget.wallet.uuid}, مبلغ الشحن هو:$amount $currencyLabel",
           );
         }
-        
+
         Get.snackbar(
-          'نجاح', 
-          'تم شحن المحفظة بمبلغ ${amountCtrl.text} ل.س',
-          snackPosition: SnackPosition.BOTTOM, 
-          backgroundColor: Colors.green, 
-          colorText: Colors.white
+          'نجاح',
+          'تم شحن المحفظة بمبلغ ${amount.toStringAsFixed(0)} $currencyLabel',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.green,
+          colorText: Colors.white,
         );
         Get.back();
-        
       } else if (selectedPaymentMethod == 'bank') {
-        // استخدم الـ controller الموجود بدلاً من إنشاء واحد جديد
         _transferProofController.imageBytes.value = transferProofImageBytes;
-        
+
         final bool success = await _transferProofController.createProof(
           bankAccountId: selectedBankAccount!.id,
           walletId: int.parse(widget.wallet.id.toString()),
@@ -274,11 +331,13 @@ class _WalletChargeDesktopScreenState extends State<WalletChargeDesktopScreen> {
                   ),
                   SizedBox(height: 8.h),
                   Text(
-                    'لقد تم إرسال إثبات عملية التحويل بنجاح. سيتم التحقق منها وإبلاغك في النتيجة خلال 24 ساعة.',
+                    'لقد تم إرسال إثبات عملية التحويل بنجاح. سيتم التحقق منها وإبلاغك بالنتيجة خلال 24 ساعة.',
                     style: TextStyle(
                       fontFamily: AppTextStyles.appFontFamily,
                       fontSize: 12.sp,
-                      color: AppColors.textSecondary(themeController.isDarkMode.value),
+                      color: AppColors.textSecondary(
+                        themeController.isDarkMode.value,
+                      ),
                     ),
                     textAlign: TextAlign.center,
                   ),
@@ -306,7 +365,10 @@ class _WalletChargeDesktopScreenState extends State<WalletChargeDesktopScreen> {
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8.r),
                       ),
-                      padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 12.h),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 24.w,
+                        vertical: 12.h,
+                      ),
                     ),
                     child: Text(
                       'موافق',
@@ -326,25 +388,25 @@ class _WalletChargeDesktopScreenState extends State<WalletChargeDesktopScreen> {
           );
         } else {
           Get.snackbar(
-            'خطأ', 
+            'خطأ',
             'فشل في إرسال إثبات التحويل. يرجى المحاولة مرة أخرى.',
-            snackPosition: SnackPosition.BOTTOM, 
-            backgroundColor: Colors.red, 
+            snackPosition: SnackPosition.BOTTOM,
+            backgroundColor: Colors.red,
             colorText: Colors.white,
-            duration: Duration(seconds: 5),
+            duration: const Duration(seconds: 5),
           );
         }
       }
     } catch (e) {
       setState(() => isProcessing = false);
-      
+
       Get.snackbar(
-        'خطأ', 
+        'خطأ',
         'حدث خطأ غير متوقع: $e',
-        snackPosition: SnackPosition.BOTTOM, 
-        backgroundColor: Colors.red, 
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
         colorText: Colors.white,
-        duration: Duration(seconds: 5),
+        duration: const Duration(seconds: 5),
       );
     }
   }
@@ -355,20 +417,27 @@ class _WalletChargeDesktopScreenState extends State<WalletChargeDesktopScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // صندوق تعليمات التحويل
           Container(
             width: double.infinity,
             padding: EdgeInsets.all(16.w),
             decoration: BoxDecoration(
               color: AppColors.primary.withOpacity(0.1),
               borderRadius: BorderRadius.circular(12.r),
-              border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+              border: Border.all(
+                color: AppColors.primary.withOpacity(0.3),
+              ),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    Icon(Icons.info_outline, color: AppColors.primary, size: 18.r),
+                    Icon(
+                      Icons.info_outline,
+                      color: AppColors.primary,
+                      size: 18.r,
+                    ),
                     SizedBox(width: 8.w),
                     Text(
                       'تعليمات التحويل البنكي',
@@ -383,7 +452,7 @@ class _WalletChargeDesktopScreenState extends State<WalletChargeDesktopScreen> {
                 ),
                 SizedBox(height: 8.h),
                 Text(
-                  'قم بتحويل مالي من خلال اختيار اسم البنك المتوفر مع إثبات دليل التحويل. سيتم التحقق من عملية التحويل ثم شحن المحفظة.',
+                  'قم بتحويل المبلغ إلى أحد الحسابات البنكية المتاحة مع رفع صورة إثبات التحويل. بعد المراجعة سيتم شحن محفظتك.',
                   style: TextStyle(
                     fontFamily: AppTextStyles.appFontFamily,
                     fontSize: 12.sp,
@@ -395,39 +464,50 @@ class _WalletChargeDesktopScreenState extends State<WalletChargeDesktopScreen> {
             ),
           ),
           SizedBox(height: 16.h),
-          
+
           Text(
             'اختر الحساب البنكي للتحويل',
             style: TextStyle(
               fontFamily: AppTextStyles.appFontFamily,
               fontSize: 14.sp,
-              fontWeight: FontWeight.w600, 
-              color: AppColors.textSecondary(themeController.isDarkMode.value),
+              fontWeight: FontWeight.w600,
+              color: AppColors.textSecondary(
+                themeController.isDarkMode.value,
+              ),
             ),
           ),
           SizedBox(height: 8.h),
-          
+
           Obx(() {
             if (bankAccountController.isLoading.value) {
-              return Center(child: CircularProgressIndicator());
+              return const Center(child: CircularProgressIndicator());
             }
-            
+
             return Container(
               decoration: BoxDecoration(
                 color: AppColors.card(isDark),
                 borderRadius: BorderRadius.circular(12.r),
-                border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+                border: Border.all(
+                  color: AppColors.primary.withOpacity(0.3),
+                ),
               ),
               child: DropdownButton<BankAccountModel>(
                 value: selectedBankAccount,
                 isExpanded: true,
-                underline: SizedBox(),
-                padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
+                underline: const SizedBox(),
+                padding: EdgeInsets.symmetric(
+                  horizontal: 16.w,
+                  vertical: 12.h,
+                ),
                 hint: Padding(
                   padding: EdgeInsets.symmetric(horizontal: 8.w),
-                  child: Text('اختر الحساب البنكي', style: TextStyle(fontSize: 12.sp)),
+                  child: Text(
+                    'اختر الحساب البنكي',
+                    style: TextStyle(fontSize: 12.sp),
+                  ),
                 ),
-                items: bankAccountController.accounts.map((BankAccountModel account) {
+                items: bankAccountController.accounts
+                    .map((BankAccountModel account) {
                   return DropdownMenuItem<BankAccountModel>(
                     value: account,
                     child: Column(
@@ -463,7 +543,7 @@ class _WalletChargeDesktopScreenState extends State<WalletChargeDesktopScreen> {
               ),
             );
           }),
-          
+
           if (selectedBankAccount != null) ...[
             SizedBox(height: 16.h),
             Container(
@@ -490,10 +570,16 @@ class _WalletChargeDesktopScreenState extends State<WalletChargeDesktopScreen> {
                         ),
                       ),
                       IconButton(
-                        onPressed: () => _copyToClipboard(selectedBankAccount!.accountNumber),
-                        icon: Icon(Icons.copy, color: Colors.green, size: 18.r),
+                        onPressed: () => _copyToClipboard(
+                          selectedBankAccount!.accountNumber,
+                        ),
+                        icon: Icon(
+                          Icons.copy,
+                          color: Colors.green,
+                          size: 18.r,
+                        ),
                         padding: EdgeInsets.zero,
-                        constraints: BoxConstraints(),
+                        constraints: const BoxConstraints(),
                       ),
                     ],
                   ),
@@ -510,7 +596,7 @@ class _WalletChargeDesktopScreenState extends State<WalletChargeDesktopScreen> {
                   ),
                   SizedBox(height: 6.h),
                   Text(
-                    '${selectedBankAccount!.bankName}',
+                    selectedBankAccount!.bankName,
                     style: TextStyle(
                       fontFamily: AppTextStyles.appFontFamily,
                       fontSize: 12.sp,
@@ -521,9 +607,9 @@ class _WalletChargeDesktopScreenState extends State<WalletChargeDesktopScreen> {
               ),
             ),
           ],
-          
+
           SizedBox(height: 16.h),
-          
+
           TextFormField(
             controller: userAccountNumberCtrl,
             decoration: InputDecoration(
@@ -531,24 +617,35 @@ class _WalletChargeDesktopScreenState extends State<WalletChargeDesktopScreen> {
               hintText: 'أدخل رقم حسابك الذي ستقوم بالتحويل منه',
               filled: true,
               fillColor: AppColors.card(isDark),
-              prefixIcon: Icon(Icons.account_balance, color: AppColors.primary, size: 18.r),
+              prefixIcon: Icon(
+                Icons.account_balance,
+                color: AppColors.primary,
+                size: 18.r,
+              ),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12.r),
                 borderSide: BorderSide.none,
               ),
-              contentPadding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 14.h),
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 16.w,
+                vertical: 14.h,
+              ),
               labelStyle: TextStyle(fontSize: 12.sp),
               hintStyle: TextStyle(fontSize: 12.sp),
             ),
             style: TextStyle(fontSize: 12.sp),
-            validator: selectedPaymentMethod == 'bank' ? (v) {
-              if (v == null || v.isEmpty) return 'الرجاء إدخال رقم حسابك';
-              return null;
-            } : null,
+            validator: selectedPaymentMethod == 'bank'
+                ? (v) {
+                    if (v == null || v.isEmpty) {
+                      return 'الرجاء إدخال رقم حسابك';
+                    }
+                    return null;
+                  }
+                : null,
           ),
-          
+
           SizedBox(height: 16.h),
-          
+
           Text(
             'إثبات التحويل',
             style: TextStyle(
@@ -558,9 +655,9 @@ class _WalletChargeDesktopScreenState extends State<WalletChargeDesktopScreen> {
             ),
           ),
           SizedBox(height: 8.h),
-          
-          // تصميم محسّن لرفع الصور يعمل في الويب
-          Container(
+
+          // رفع صورة إثبات
+          SizedBox(
             width: double.infinity,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -574,7 +671,9 @@ class _WalletChargeDesktopScreenState extends State<WalletChargeDesktopScreen> {
                       color: AppColors.card(isDark),
                       borderRadius: BorderRadius.circular(12.r),
                       border: Border.all(
-                        color: transferProofImageBytes == null ? Colors.grey : AppColors.primary,
+                        color: transferProofImageBytes == null
+                            ? Colors.grey
+                            : AppColors.primary,
                         width: 2,
                       ),
                     ),
@@ -582,10 +681,19 @@ class _WalletChargeDesktopScreenState extends State<WalletChargeDesktopScreen> {
                         ? Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.cloud_upload, size: 32.r, color: Colors.grey),
+                              Icon(
+                                Icons.cloud_upload,
+                                size: 32.r,
+                                color: Colors.grey,
+                              ),
                               SizedBox(height: 8.h),
-                              Text('انقر لرفع صورة إثبات التحويل',
-                                  style: TextStyle(color: Colors.grey, fontSize: 12.sp)),
+                              Text(
+                                'انقر لرفع صورة إثبات التحويل',
+                                style: TextStyle(
+                                  color: Colors.grey,
+                                  fontSize: 12.sp,
+                                ),
+                              ),
                               SizedBox(height: 4.h),
                               Text(
                                 'يمكنك سحب وإفلات الصورة هنا أو النقر للاختيار',
@@ -617,7 +725,11 @@ class _WalletChargeDesktopScreenState extends State<WalletChargeDesktopScreen> {
                                     color: Colors.black.withOpacity(0.5),
                                     borderRadius: BorderRadius.circular(15.r),
                                   ),
-                                  child: Icon(Icons.check_circle, color: Colors.white, size: 16.r),
+                                  child: Icon(
+                                    Icons.check_circle,
+                                    color: Colors.white,
+                                    size: 16.r,
+                                  ),
                                 ),
                               ),
                               Positioned(
@@ -626,16 +738,19 @@ class _WalletChargeDesktopScreenState extends State<WalletChargeDesktopScreen> {
                                 right: 0,
                                 child: Center(
                                   child: Container(
-                                    padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 6.h),
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: 12.w,
+                                      vertical: 6.h,
+                                    ),
                                     decoration: BoxDecoration(
                                       color: Colors.black.withOpacity(0.7),
                                       borderRadius: BorderRadius.circular(6.r),
                                     ),
-                                    child: Text(
+                                    child: const Text(
                                       'إثبات التحويل',
                                       style: TextStyle(
                                         color: Colors.white,
-                                        fontSize: 10.sp,
+                                        fontSize: 10,
                                         fontWeight: FontWeight.bold,
                                       ),
                                     ),
@@ -646,7 +761,6 @@ class _WalletChargeDesktopScreenState extends State<WalletChargeDesktopScreen> {
                           ),
                   ),
                 ),
-                
                 if (transferProofImageBytes != null) ...[
                   SizedBox(height: 8.h),
                   Row(
@@ -655,11 +769,17 @@ class _WalletChargeDesktopScreenState extends State<WalletChargeDesktopScreen> {
                       ElevatedButton.icon(
                         onPressed: _pickImage,
                         icon: Icon(Icons.edit, size: 14.r),
-                        label: Text('تغيير الصورة', style: TextStyle(fontSize: 10.sp)),
+                        label: Text(
+                          'تغيير الصورة',
+                          style: TextStyle(fontSize: 10.sp),
+                        ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.primary,
                           foregroundColor: Colors.white,
-                          padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 16.w,
+                            vertical: 8.h,
+                          ),
                         ),
                       ),
                       SizedBox(width: 8.w),
@@ -670,10 +790,23 @@ class _WalletChargeDesktopScreenState extends State<WalletChargeDesktopScreen> {
                             _updateButtonState();
                           });
                         },
-                        icon: Icon(Icons.delete, size: 14.r, color: Colors.red),
-                        label: Text('حذف', style: TextStyle(fontSize: 10.sp, color: Colors.red)),
+                        icon: Icon(
+                          Icons.delete,
+                          size: 14.r,
+                          color: Colors.red,
+                        ),
+                        label: Text(
+                          'حذف',
+                          style: TextStyle(
+                            fontSize: 10.sp,
+                            color: Colors.red,
+                          ),
+                        ),
                         style: OutlinedButton.styleFrom(
-                          padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 16.w,
+                            vertical: 8.h,
+                          ),
                         ),
                       ),
                     ],
@@ -693,20 +826,27 @@ class _WalletChargeDesktopScreenState extends State<WalletChargeDesktopScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // صندوق معلومات الدفع بالبطاقة
           Container(
             width: double.infinity,
             padding: EdgeInsets.all(16.w),
             decoration: BoxDecoration(
               color: Colors.blue.withOpacity(0.1),
               borderRadius: BorderRadius.circular(12.r),
-              border: Border.all(color: Colors.blue.withOpacity(0.3)),
+              border: Border.all(
+                color: Colors.blue.withOpacity(0.3),
+              ),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    Icon(Icons.credit_card, color: Colors.blue, size: 18.r),
+                    Icon(
+                      Icons.credit_card,
+                      color: Colors.blue,
+                      size: 18.r,
+                    ),
                     SizedBox(width: 8.w),
                     Text(
                       'الدفع الآمن بالبطاقة',
@@ -738,15 +878,28 @@ class _WalletChargeDesktopScreenState extends State<WalletChargeDesktopScreen> {
             controller: cardNumberCtrl,
             keyboardType: TextInputType.number,
             onChanged: _onCardNumberChanged,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(19)],
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(19),
+            ],
             decoration: InputDecoration(
-              labelText: 'رقم البطاقة', 
-              hintText: 'xxxx xxxx xxxx xxxx', 
-              filled: true, 
-              fillColor: AppColors.card(isDark), 
-              prefixIcon: Icon(Icons.credit_card, color: AppColors.primary, size: 18.r), 
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r), borderSide: BorderSide.none),
-              contentPadding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 14.h),
+              labelText: 'رقم البطاقة',
+              hintText: 'xxxx xxxx xxxx xxxx',
+              filled: true,
+              fillColor: AppColors.card(isDark),
+              prefixIcon: Icon(
+                Icons.credit_card,
+                color: AppColors.primary,
+                size: 18.r,
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12.r),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 16.w,
+                vertical: 14.h,
+              ),
               labelStyle: TextStyle(fontSize: 12.sp),
               hintStyle: TextStyle(fontSize: 12.sp),
             ),
@@ -759,66 +912,97 @@ class _WalletChargeDesktopScreenState extends State<WalletChargeDesktopScreen> {
             },
           ),
           SizedBox(height: 16.h),
-          
+
           TextFormField(
-            controller: nameCtrl, 
-            keyboardType: TextInputType.name, 
+            controller: nameCtrl,
+            keyboardType: TextInputType.name,
             decoration: InputDecoration(
-              labelText: 'اسم صاحب البطاقة', 
-              hintText: 'أدخل الاسم كما هو مدون على البطاقة', 
-              filled: true, 
-              fillColor: AppColors.card(isDark), 
-              prefixIcon: Icon(Icons.person_outline, color: AppColors.primary, size: 18.r), 
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r), borderSide: BorderSide.none),
-              contentPadding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 14.h),
+              labelText: 'اسم صاحب البطاقة',
+              hintText: 'أدخل الاسم كما هو مدون على البطاقة',
+              filled: true,
+              fillColor: AppColors.card(isDark),
+              prefixIcon: Icon(
+                Icons.person_outline,
+                color: AppColors.primary,
+                size: 18.r,
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12.r),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 16.w,
+                vertical: 14.h,
+              ),
               labelStyle: TextStyle(fontSize: 12.sp),
               hintStyle: TextStyle(fontSize: 12.sp),
-            ), 
+            ),
             style: TextStyle(fontSize: 12.sp),
-            validator: (v) => (v ?? '').trim().isEmpty ? 'الرجاء إدخال الاسم' : null
+            validator: (v) =>
+                (v ?? '').trim().isEmpty ? 'الرجاء إدخال الاسم' : null,
           ),
           SizedBox(height: 16.h),
-          
+
           Row(
             children: [
               Expanded(
                 child: TextFormField(
-                  controller: expiryCtrl, 
-                  keyboardType: TextInputType.number, 
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(4)], 
+                  controller: expiryCtrl,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(4),
+                  ],
                   decoration: InputDecoration(
-                    labelText: 'انتهاء الصلاحية (MMYY)', 
-                    filled: true, 
-                    fillColor: AppColors.card(isDark), 
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r), borderSide: BorderSide.none),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 14.h),
+                    labelText: 'انتهاء الصلاحية (MMYY)',
+                    filled: true,
+                    fillColor: AppColors.card(isDark),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12.r),
+                      borderSide: BorderSide.none,
+                    ),
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 16.w,
+                      vertical: 14.h,
+                    ),
                     labelStyle: TextStyle(fontSize: 12.sp),
-                  ), 
+                  ),
                   style: TextStyle(fontSize: 12.sp),
-                  validator: (v) => (v ?? '').length < 4 ? 'تاريخ غير صحيح' : null
+                  validator: (v) =>
+                      (v ?? '').length < 4 ? 'تاريخ غير صحيح' : null,
                 ),
               ),
               SizedBox(width: 16.w),
               SizedBox(
-                width: 120.w, 
+                width: 120.w,
                 child: TextFormField(
-                  controller: cvvCtrl, 
-                  keyboardType: TextInputType.number, 
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(4)], 
+                  controller: cvvCtrl,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(4),
+                  ],
                   decoration: InputDecoration(
-                    labelText: 'CVV', 
-                    filled: true, 
-                    fillColor: AppColors.card(isDark), 
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r), borderSide: BorderSide.none),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 14.h),
+                    labelText: 'CVV',
+                    filled: true,
+                    fillColor: AppColors.card(isDark),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12.r),
+                      borderSide: BorderSide.none,
+                    ),
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 16.w,
+                      vertical: 14.h,
+                    ),
                     labelStyle: TextStyle(fontSize: 12.sp),
-                  ), 
+                  ),
                   style: TextStyle(fontSize: 12.sp),
-                  obscureText: true, 
-                  validator: (v) => (v ?? '').length < 3 ? 'CVV غير صحيح' : null
+                  obscureText: true,
+                  validator: (v) =>
+                      (v ?? '').length < 3 ? 'CVV غير صحيح' : null,
                 ),
               ),
-            ]
+            ],
           ),
           SizedBox(height: 16.h),
         ],
@@ -829,325 +1013,505 @@ class _WalletChargeDesktopScreenState extends State<WalletChargeDesktopScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = themeController.isDarkMode.value;
+    final currencyLabel = _getCurrencyLabel(widget.wallet.currency);
 
-    return Scaffold(     
-      endDrawer: _homeController.isServicesOrSettings.value
-        ? SettingsDrawerDeskTop(key: const ValueKey(1))
-        : DesktopServicesDrawer(key: const ValueKey(2)),
-        
+    final currentBalance =
+        double.tryParse(widget.wallet.balance.toString()) ?? 0.0;
+    final enteredAmount =
+        double.tryParse(_normalizeAmount(amountCtrl.text)) ?? 0.0;
+    final expectedBalance = currentBalance + enteredAmount;
+
+    final currentBalanceText = currentBalance.toStringAsFixed(0);
+    final expectedBalanceText =
+        expectedBalance > 0 ? expectedBalance.toStringAsFixed(0) : '-';
+
+    return Scaffold(
+      key: _scaffoldKey,
+      endDrawer: Obx(
+        () => AnimatedSwitcher(
+          duration: const Duration(milliseconds: 300),
+          child: _homeController.drawerType.value == DrawerType.settings
+              ? const SettingsDrawerDeskTop(key: ValueKey('settings'))
+              : const DesktopServicesDrawer(key: ValueKey('services')),
+        ),
+      ),
       backgroundColor: AppColors.background(isDark),
       body: Column(
         children: [
           TopAppBarDeskTop(),
-          SecondaryAppBarDeskTop(),
+          SecondaryAppBarDeskTop(scaffoldKey: _scaffoldKey),
           SizedBox(height: 16.h),
           Expanded(
-            child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: 32.w, vertical: 16.h),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // العمود الأيسر: ملخص العملية
-                  Expanded(
-                    flex: 1,
-                    child: Card(
-                      color: AppColors.card(isDark),
-                      elevation: 2,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12.r),
-                      ),
-                      child: Padding(
-                        padding: EdgeInsets.all(20.w),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Center(
-                              child: Text(
-                                'ملخص عملية الشحن',
-                                style: TextStyle(
-                                  fontFamily: AppTextStyles.appFontFamily,
-                                  fontSize: 16.sp,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.textPrimary(isDark),
-                                ),
-                              ),
-                            ),
-                            SizedBox(height: 16.h),
-                            Divider(),
-                            SizedBox(height: 16.h),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  'المحفظة:',
-                                  style: TextStyle(
-                                    fontFamily: AppTextStyles.appFontFamily,
-                                    color: AppColors.textSecondary(isDark),
-                                    fontSize: 12.sp,
-                                  ),
-                                ),
-                                Text(
-                                  widget.wallet.uuid,
-                                  style: TextStyle(
-                                    fontFamily: AppTextStyles.appFontFamily,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 12.sp,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            SizedBox(height: 12.h),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  'الرصيد الحالي:',
-                                  style: TextStyle(
-                                    fontFamily: AppTextStyles.appFontFamily,
-                                    color: AppColors.textSecondary(isDark),
-                                    fontSize: 12.sp,
-                                  ),
-                                ),
-                                Text(
-                                  '${widget.wallet.balance} ${widget.wallet.currency}',
-                                  style: TextStyle(
-                                    fontFamily: AppTextStyles.appFontFamily,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 12.sp,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            SizedBox(height: 16.h),
-                            Divider(),
-                            SizedBox(height: 16.h),
-                            TextFormField(
-                              controller: amountCtrl,
-                              keyboardType: TextInputType.number,
-                              decoration: InputDecoration(
-                                labelText: 'مبلغ الشحن',
-                                hintText: 'أدخل المبلغ المراد شحنه',
-                                filled: true,
-                                fillColor: AppColors.background(isDark),
-                                prefixIcon: Icon(Icons.attach_money, color: AppColors.primary, size: 18.r),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(8.r),
-                                  borderSide: BorderSide.none,
-                                ),
-                                contentPadding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 12.h),
-                              ),
-                              style: TextStyle(
-                                fontFamily: AppTextStyles.appFontFamily,
-                                fontSize: 12.sp,
-                              ),
-                              validator: (v) {
-                                final amount = double.tryParse(v ?? '');
-                                if (amount == null || amount <= 0) return 'الرجاء إدخال مبلغ صحيح';
-                                return null;
-                              },
-                            ),
-                            SizedBox(height: 16.h),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  'الإجمالي:',
-                                  style: TextStyle(
-                                    fontFamily: AppTextStyles.appFontFamily,
-                                    fontSize: 14.sp,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                                Text(
-                                  '${amountCtrl.text.isNotEmpty ? amountCtrl.text : '0'} ${widget.wallet.currency}',
+            child: Center(
+              child: Container(
+                width: 0.85.sw,
+                constraints: BoxConstraints(maxWidth: 1200.w),
+                padding: EdgeInsets.symmetric(
+                  horizontal: 16.w,
+                  vertical: 8.h,
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // العمود الأيسر: ملخص العملية
+                    Expanded(
+                      flex: 1,
+                      child: Card(
+                        color: AppColors.card(isDark),
+                        elevation: 2,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16.r),
+                        ),
+                        child: Padding(
+                          padding: EdgeInsets.all(20.w),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Center(
+                                child: Text(
+                                  'ملخص عملية الشحن',
                                   style: TextStyle(
                                     fontFamily: AppTextStyles.appFontFamily,
                                     fontSize: 16.sp,
-                                    fontWeight: FontWeight.w900,
-                                    color: AppColors.primary,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.textPrimary(isDark),
                                   ),
                                 ),
-                              ],
+                              ),
+                              SizedBox(height: 16.h),
+                              const Divider(),
+                              SizedBox(height: 12.h),
+
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    'المحفظة:',
+                                    style: TextStyle(
+                                      fontFamily: AppTextStyles.appFontFamily,
+                                      color: AppColors.textSecondary(isDark),
+                                      fontSize: 12.sp,
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: Text(
+                                      widget.wallet.uuid,
+                                      textAlign: TextAlign.end,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontFamily:
+                                            AppTextStyles.appFontFamily,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 12.sp,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              SizedBox(height: 8.h),
+
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    'العملة:',
+                                    style: TextStyle(
+                                      fontFamily: AppTextStyles.appFontFamily,
+                                      color: AppColors.textSecondary(isDark),
+                                      fontSize: 12.sp,
+                                    ),
+                                  ),
+                                  Text(
+                                    currencyLabel,
+                                    style: TextStyle(
+                                      fontFamily: AppTextStyles.appFontFamily,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 12.sp,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              SizedBox(height: 8.h),
+
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    'الرصيد الحالي:',
+                                    style: TextStyle(
+                                      fontFamily: AppTextStyles.appFontFamily,
+                                      color: AppColors.textSecondary(isDark),
+                                      fontSize: 12.sp,
+                                    ),
+                                  ),
+                                  Text(
+                                    '$currentBalanceText $currencyLabel',
+                                    style: TextStyle(
+                                      fontFamily: AppTextStyles.appFontFamily,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 12.sp,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              SizedBox(height: 16.h),
+                              const Divider(),
+                              SizedBox(height: 12.h),
+
+                              TextFormField(
+                                controller: amountCtrl,
+                                keyboardType: TextInputType.number,
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.digitsOnly,
+                                ],
+                                decoration: InputDecoration(
+                                  labelText: 'مبلغ الشحن',
+                                  hintText:
+                                      'أدخل المبلغ بالـ $currencyLabel',
+                                  filled: true,
+                                  fillColor: AppColors.card(isDark),
+                                  prefixIcon: Icon(
+                                    Icons.account_balance,
+                                    color: AppColors.primary,
+                                    size: 18.r,
+                                  ),
+                                  suffixText: currencyLabel,
+                                  suffixStyle: TextStyle(
+                                    fontFamily:
+                                        AppTextStyles.appFontFamily,
+                                    fontSize: 12.sp,
+                                    color: AppColors.textSecondary(isDark),
+                                  ),
+                                  border: OutlineInputBorder(
+                                    borderRadius:
+                                        BorderRadius.circular(12.r),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                  contentPadding: EdgeInsets.symmetric(
+                                    horizontal: 16.w,
+                                    vertical: 14.h,
+                                  ),
+                                ),
+                                style: TextStyle(
+                                  fontFamily: AppTextStyles.appFontFamily,
+                                  fontSize: 12.sp,
+                                ),
+                                validator: (v) {
+                                  if (v == null || v.isEmpty) {
+                                    return 'الرجاء إدخال مبلغ الشحن';
+                                  }
+                                  final amount = double.tryParse(v);
+                                  if (amount == null || amount <= 0) {
+                                    return 'الرجاء إدخال مبلغ صحيح';
+                                  }
+                                  return null;
+                                },
+                                onChanged: (_) => setState(() {}),
+                              ),
+
+                              SizedBox(height: 16.h),
+
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    'الإجمالي:',
+                                    style: TextStyle(
+                                      fontFamily: AppTextStyles.appFontFamily,
+                                      fontSize: 14.sp,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                  Text(
+                                    '${amountCtrl.text.isNotEmpty ? _normalizeAmount(amountCtrl.text) : '0'} $currencyLabel',
+                                    style: TextStyle(
+                                      fontFamily: AppTextStyles.appFontFamily,
+                                      fontSize: 16.sp,
+                                      fontWeight: FontWeight.w900,
+                                      color: AppColors.primary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              SizedBox(height: 8.h),
+
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      'الرصيد بعد الشحن ():',
+                                      style: TextStyle(
+                                        fontFamily:
+                                            AppTextStyles.appFontFamily,
+                                        fontSize: 12.sp,
+                                        color:
+                                            AppColors.textSecondary(isDark),
+                                      ),
+                                    ),
+                                  ),
+                                  Text(
+                                    '$expectedBalanceText $currencyLabel',
+                                    style: TextStyle(
+                                      fontFamily: AppTextStyles.appFontFamily,
+                                      fontSize: 13.sp,
+                                      fontWeight: FontWeight.w800,
+                                      color: AppColors.textPrimary(isDark),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              SizedBox(height: 12.h),
+
+                              Text(
+                                'ملاحظة: عملية الشحن لهذه المحفظة تتم بعملة $currencyLabel فقط.',
+                                style: TextStyle(
+                                  fontFamily: AppTextStyles.appFontFamily,
+                                  fontSize: 11.sp,
+                                  color: AppColors.textSecondary(isDark),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 20.w),
+
+                    // العمود الأيمن: طرق الدفع والنماذج
+                    Expanded(
+                      flex: 2,
+                      child: SingleChildScrollView(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'اختر طريقة الشحن',
+                              style: TextStyle(
+                                fontSize: 18.sp,
+                                fontWeight: FontWeight.w700,
+                                fontFamily: AppTextStyles.appFontFamily,
+                              ),
                             ),
+                            SizedBox(height: 4.h),
+                            Text(
+                              'سيتم شحن هذه المحفظة بعملة $currencyLabel.',
+                              style: TextStyle(
+                                fontFamily: AppTextStyles.appFontFamily,
+                                fontSize: 12.sp,
+                                color: AppColors.textSecondary(isDark),
+                              ),
+                            ),
+                            SizedBox(height: 16.h),
+
+                            // طرق الدفع
+                            Obx(() {
+                              final isCardEnabled =
+                                  _cardPaymentController.isEnabled.value;
+
+                              return Container(
+                                decoration: BoxDecoration(
+                                  color: AppColors.card(isDark),
+                                  borderRadius: BorderRadius.circular(12.r),
+                                ),
+                                child: Column(
+                                  children: [
+                                    ListTile(
+                                      leading: Icon(
+                                        Icons.account_balance,
+                                        color: AppColors.primary,
+                                        size: 20.r,
+                                      ),
+                                      title: Text(
+                                        'تحويل بنكي',
+                                        style: TextStyle(
+                                          fontFamily:
+                                              AppTextStyles.appFontFamily,
+                                          fontSize: 14.sp,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      subtitle: Text(
+                                        'تحويل مالي مع إثبات التحويل',
+                                        style: TextStyle(
+                                          fontFamily:
+                                              AppTextStyles.appFontFamily,
+                                          fontSize: 11.sp,
+                                          color: AppColors.textSecondary(
+                                            isDark,
+                                          ),
+                                        ),
+                                      ),
+                                      trailing: Radio(
+                                        value: 'bank',
+                                        groupValue: selectedPaymentMethod,
+                                        onChanged: (value) => setState(
+                                          () => selectedPaymentMethod =
+                                              value.toString(),
+                                        ),
+                                        activeColor: AppColors.primary,
+                                      ),
+                                      onTap: () => setState(
+                                        () => selectedPaymentMethod = 'bank',
+                                      ),
+                                      contentPadding: EdgeInsets.symmetric(
+                                        horizontal: 16.w,
+                                        vertical: 12.h,
+                                      ),
+                                    ),
+                                    if (isCardEnabled)
+                                      ListTile(
+                                        leading: Icon(
+                                          Icons.credit_card,
+                                          color: AppColors.primary,
+                                          size: 20.r,
+                                        ),
+                                        title: Text(
+                                          'بطاقة ائتمان',
+                                          style: TextStyle(
+                                            fontFamily:
+                                                AppTextStyles.appFontFamily,
+                                            fontSize: 14.sp,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        subtitle: Text(
+                                          'دفع آمن عبر البطاقة الائتمانية',
+                                          style: TextStyle(
+                                            fontFamily:
+                                                AppTextStyles.appFontFamily,
+                                            fontSize: 11.sp,
+                                            color: AppColors.textSecondary(
+                                              isDark,
+                                            ),
+                                          ),
+                                        ),
+                                        trailing: Radio(
+                                          value: 'card',
+                                          groupValue: selectedPaymentMethod,
+                                          onChanged: (value) => setState(
+                                            () => selectedPaymentMethod =
+                                                value.toString(),
+                                          ),
+                                          activeColor: AppColors.primary,
+                                        ),
+                                        onTap: () => setState(
+                                          () => selectedPaymentMethod = 'card',
+                                        ),
+                                        contentPadding: EdgeInsets.symmetric(
+                                          horizontal: 16.w,
+                                          vertical: 12.h,
+                                        ),
+                                      ),
+                                    if (!isCardEnabled)
+                                      ListTile(
+                                        leading: Icon(
+                                          Icons.credit_card_off,
+                                          color: Colors.grey,
+                                          size: 20.r,
+                                        ),
+                                        title: Text(
+                                          'الدفع بالبطاقة غير متاح حالياً',
+                                          style: TextStyle(
+                                            fontFamily:
+                                                AppTextStyles.appFontFamily,
+                                            color: Colors.grey,
+                                            fontStyle: FontStyle.italic,
+                                            fontSize: 12.sp,
+                                          ),
+                                        ),
+                                        subtitle: Text(
+                                          'يرجى استخدام التحويل البنكي للشحن',
+                                          style: TextStyle(
+                                            fontFamily:
+                                                AppTextStyles.appFontFamily,
+                                            fontSize: 11.sp,
+                                            color: Colors.grey,
+                                          ),
+                                        ),
+                                        contentPadding: EdgeInsets.symmetric(
+                                          horizontal: 16.w,
+                                          vertical: 12.h,
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              );
+                            }),
+                            SizedBox(height: 24.h),
+
+                            if (selectedPaymentMethod == 'card')
+                              _buildCreditCardSection(isDark),
+
+                            if (selectedPaymentMethod == 'bank')
+                              _buildBankTransferSection(isDark),
+
+                            SizedBox(height: 24.h),
+
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton(
+                                onPressed: _isFormValid && !isProcessing
+                                    ? _processPayment
+                                    : null,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: _isFormValid
+                                      ? AppColors.primary
+                                      : Colors.grey,
+                                  padding: EdgeInsets.symmetric(
+                                    vertical: 16.h,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12.r),
+                                  ),
+                                  elevation: 3,
+                                ),
+                                child: isProcessing
+                                    ? SizedBox(
+                                        height: 20.h,
+                                        width: 20.h,
+                                        child:
+                                            const CircularProgressIndicator(
+                                          color: Colors.white,
+                                          strokeWidth: 2.5,
+                                        ),
+                                      )
+                                    : Text(
+                                        'إتمام الشحن',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w900,
+                                          fontFamily:
+                                              AppTextStyles.appFontFamily,
+                                          fontSize: 14.sp,
+                                        ),
+                                      ),
+                              ),
+                            ),
+                            if (!_isFormValid) ...[
+                              SizedBox(height: 16.h),
+                              Center(
+                                child: Text(
+                                  'يرجى ملء جميع الحقول المطلوبة',
+                                  style: TextStyle(
+                                    fontFamily: AppTextStyles.appFontFamily,
+                                    fontSize: 12.sp,
+                                    color: Colors.orange,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                       ),
                     ),
-                  ),
-                  SizedBox(width: 20.w),
-                  
-                  // العمود الأيمن: طرق الدفع والنماذج
-                  Expanded(
-                    flex: 2,
-                    child: SingleChildScrollView(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'اختر طريقة الشحن',
-                            style: TextStyle(
-                              fontSize: 18.sp,
-                              fontWeight: FontWeight.w700,
-                              fontFamily: AppTextStyles.appFontFamily,
-                            ),
-                          ),
-                          SizedBox(height: 16.h),
-
-                          // طرق الدفع
-                          Obx(() {
-                            final isCardEnabled = _cardPaymentController.isEnabled.value;
-                            
-                            return Container(
-                              decoration: BoxDecoration(
-                                color: AppColors.card(isDark),
-                                borderRadius: BorderRadius.circular(12.r),
-                              ),
-                              child: Column(
-                                children: [
-                                  ListTile(
-                                    leading: Icon(Icons.account_balance, color: AppColors.primary, size: 20.r),
-                                    title: Text(
-                                      'تحويل بنكي',
-                                      style: TextStyle(
-                                        fontFamily: AppTextStyles.appFontFamily,
-                                        fontSize: 14.sp,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    subtitle: Text(
-                                      'تحويل مالي مع إثبات التحويل',
-                                      style: TextStyle(
-                                        fontFamily: AppTextStyles.appFontFamily,
-                                        fontSize: 11.sp,
-                                        color: AppColors.textSecondary(isDark),
-                                      ),
-                                    ),
-                                    trailing: Radio(
-                                      value: 'bank',
-                                      groupValue: selectedPaymentMethod,
-                                      onChanged: (value) => setState(() => selectedPaymentMethod = value.toString()),
-                                      activeColor: AppColors.primary,
-                                    ),
-                                    onTap: () => setState(() => selectedPaymentMethod = 'bank'),
-                                    contentPadding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
-                                  ),
-                                  
-                                  if (isCardEnabled)
-                                  ListTile(
-                                    leading: Icon(Icons.credit_card, color: AppColors.primary, size: 20.r),
-                                    title: Text(
-                                      'بطاقة ائتمان',
-                                      style: TextStyle(
-                                        fontFamily: AppTextStyles.appFontFamily,
-                                        fontSize: 14.sp,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    subtitle: Text(
-                                      'دفع آمن عبر البطاقة الائتمانية',
-                                      style: TextStyle(
-                                        fontFamily: AppTextStyles.appFontFamily,
-                                        fontSize: 11.sp,
-                                        color: AppColors.textSecondary(isDark),
-                                      ),
-                                    ),
-                                    trailing: Radio(
-                                      value: 'card',
-                                      groupValue: selectedPaymentMethod,
-                                      onChanged: (value) => setState(() => selectedPaymentMethod = value.toString()),
-                                      activeColor: AppColors.primary,
-                                    ),
-                                    onTap: () => setState(() => selectedPaymentMethod = 'card'),
-                                    contentPadding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
-                                  ),
-                                  
-                                  if (!isCardEnabled)
-                                  ListTile(
-                                    leading: Icon(Icons.credit_card_off, color: Colors.grey, size: 20.r),
-                                    title: Text(
-                                      'الدفع بالبطاقة غير متاح حالياً',
-                                      style: TextStyle(
-                                        fontFamily: AppTextStyles.appFontFamily,
-                                        color: Colors.grey,
-                                        fontStyle: FontStyle.italic,
-                                        fontSize: 12.sp,
-                                      ),
-                                    ),
-                                    subtitle: Text(
-                                      'يرجى استخدام التحويل البنكي للشحن',
-                                      style: TextStyle(
-                                        fontFamily: AppTextStyles.appFontFamily,
-                                        fontSize: 11.sp,
-                                        color: Colors.grey,
-                                      ),
-                                    ),
-                                    contentPadding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
-                                  ),
-                                ],
-                              ),
-                            );
-                          }),
-                          SizedBox(height: 24.h),
-
-                          // عرض القسم المناسب بناءً على طريقة الدفع المختارة
-                          if (selectedPaymentMethod == 'card')
-                            _buildCreditCardSection(isDark),
-
-                          if (selectedPaymentMethod == 'bank')
-                            _buildBankTransferSection(isDark),
-
-                          SizedBox(height: 24.h),
-
-                          // زر الدفع النهائي
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              onPressed: _isFormValid && !isProcessing ? _processPayment : null,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: _isFormValid ? AppColors.primary : Colors.grey,
-                                padding: EdgeInsets.symmetric(vertical: 16.h),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
-                                elevation: 3,
-                              ),
-                              child: isProcessing
-                                  ? SizedBox(
-                                      height: 20.h,
-                                      width: 20.h,
-                                      child: CircularProgressIndicator(
-                                        color: Colors.white,
-                                        strokeWidth: 2.5,
-                                      ),
-                                    )
-                                  : Text(
-                                      'إتمام الشحن',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w900,
-                                        fontFamily: AppTextStyles.appFontFamily,
-                                        fontSize: 14.sp,
-                                      ),
-                                    ),
-                            ),
-                          ),
-                          
-                          if (!_isFormValid) ...[
-                            SizedBox(height: 16.h),
-                            Center(
-                              child: Text(
-                                'يرجى ملء جميع الحقول المطلوبة',
-                                style: TextStyle(
-                                  fontFamily: AppTextStyles.appFontFamily,
-                                  fontSize: 12.sp,
-                                  color: Colors.orange,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

@@ -1,4 +1,3 @@
-import 'dart:html' as html;
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get/get.dart';
@@ -10,19 +9,17 @@ import 'package:tappuu_website/core/constant/app_text_styles.dart';
 import 'package:tappuu_website/core/constant/appcolors.dart';
 import 'package:tappuu_website/core/localization/changelanguage.dart';
 
-import '../../../../app_routes.dart';
 import '../../../../controllers/AdsManageSearchController.dart';
 import '../../../../controllers/BrowsingHistoryController.dart';
 import '../../../../controllers/LoadingController.dart';
 import '../../../../controllers/PopularHistoryController.dart';
+import '../../../viewAdsScreen/AdsScreen.dart';
 import '../../menubar.dart';
 
 class SubCategoriesScreenLeveLTwo extends StatefulWidget {
   final int SubCateId;
   final String subCateName;
-  final String subCateSlug;
   final String nameMainCate;
-  final String slugMainCate;
   final int MainId;
   final int allSubOnecount;
   final String? adsPeriod;
@@ -34,8 +31,6 @@ class SubCategoriesScreenLeveLTwo extends StatefulWidget {
     required this.nameMainCate,
     required this.MainId,
     required this.allSubOnecount,
-    required this.slugMainCate,
-    required this.subCateSlug,
     this.adsPeriod,
   });
 
@@ -58,7 +53,7 @@ class _SubCategoriesScreenLeveLTwoState extends State<SubCategoriesScreenLeveLTw
     
     // إعادة تعيين البيانات السابقة إذا كان التصنيف الفرعي مختلف
     if (controller.currentSubCategoryId.value != widget.SubCateId) {
-      controller.clearSubCategoryData(widget.SubCateId);
+      controller.clearSubCategoriesLevelTwo();
     }
     
     // جلب البيانات الجديدة
@@ -70,33 +65,13 @@ class _SubCategoriesScreenLeveLTwoState extends State<SubCategoriesScreenLeveLTw
         force: true
       );
     });
-
-    _updateBrowserUrl();
-  }
-
-  void _updateBrowserUrl() {
-    String urlPath = '';
-
-    if (widget.slugMainCate.isNotEmpty) {
-      urlPath += '/${widget.slugMainCate}';
-    }
-
-    if (widget.subCateSlug.isNotEmpty) {
-      urlPath += '/${widget.subCateSlug}';
-    }
-
-    if (widget.adsPeriod != null && widget.adsPeriod!.isNotEmpty) {
-      urlPath += '?ads_period=${widget.adsPeriod}';
-    }
-
-    html.window.history.replaceState({}, '', urlPath);
   }
 
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Get.find<ThemeController>().isDarkMode.value;
     final bgColor = AppColors.background(isDarkMode);
-
+    
     return Scaffold(
       key: _scaffoldKey,
       drawer: Menubar(),
@@ -113,31 +88,34 @@ class _SubCategoriesScreenLeveLTwoState extends State<SubCategoriesScreenLeveLTw
 
     return AppBar(
       backgroundColor: AppColors.primary,
-      leading: IconButton(
-        icon: Icon(
-          Icons.arrow_back_ios_new_rounded,
-          size: 20.w,
-          color: AppColors.onSurfaceDark,
-        ),
-        onPressed: () {
-          // مسح بيانات التصنيف الفرعي الحالي عند الرجوع
-          controller.clearSubCategoryData(widget.SubCateId);
-          Get.back();
-        },
-      ),
-      actions: [
-        InkWell(
-          onTap: () {
-            _scaffoldKey.currentState?.openDrawer();
-          },
-          child: Icon(
-            Icons.menu,
-            size: 30.w,
-            color: Colors.white,
+      leadingWidth: 100.w,
+      leading: Row(
+        mainAxisAlignment: MainAxisAlignment.start,
+        children: [
+          IconButton(
+            icon: Icon(
+              Icons.arrow_back_ios_new_rounded,
+              size: 20.w,
+              color: AppColors.onSurfaceDark,
+            ),
+            onPressed: () {
+              // مسح بيانات المستوى الثاني عند الرجوع
+              controller.clearSubCategoriesLevelTwo();
+              Get.back();
+            },
           ),
-        ),
-        SizedBox(width: 8.w),
-      ],
+          InkWell(
+            onTap: () {
+              _scaffoldKey.currentState?.openDrawer();
+            },
+            child: Icon(
+              Icons.menu,
+              size: 30.w,
+              color: Colors.white,
+            ),
+          ),
+        ],
+      ),
       centerTitle: true,
       title: Column(
         mainAxisSize: MainAxisSize.min,
@@ -146,11 +124,13 @@ class _SubCategoriesScreenLeveLTwoState extends State<SubCategoriesScreenLeveLTw
           Text(
             widget.subCateName,
             style: TextStyle(
-              fontSize: AppTextStyles.xlarge,
+              fontSize: AppTextStyles.large,
               fontWeight: FontWeight.w700,
               fontFamily: AppTextStyles.appFontFamily,
               color: AppColors.onSurfaceDark,
             ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
           if (showSubtitle) ...[
             SizedBox(height: 2.h),
@@ -182,30 +162,26 @@ class _SubCategoriesScreenLeveLTwoState extends State<SubCategoriesScreenLeveLTw
   }
 
   int _getHours() {
-    if (widget.adsPeriod == '24h') return 24;
-    if (widget.adsPeriod == '48h') return 48;
+    if (widget.adsPeriod == '24h') {
+      return 24;
+    } else if (widget.adsPeriod == '48h') {
+      return 48;
+    }
     return 0;
   }
 
   Widget _buildBody(Color bgColor) {
     return Obx(() {
-      
-      // حالة التحميل للمتصفح الحالي
-      final isLoading = controller.isSubCategoriesLevelTwoLoading(widget.SubCateId);
-      
-      if (isLoading) {
+      if (controller.isLoadingSubcategoryLevelTwo.value) {
         return _buildShimmerLoader(bgColor);
       }
 
-      // الحصول على القائمة من الماب
-      final list = controller.getSubCategoriesLevelTwoForSubCategory(widget.SubCateId);
-
-      if (list.isEmpty) {
+      if (controller.subCategoriesLevelTwo.isEmpty) {
         return Center(
           child: Text(
             'لا توجد تصنيفات فرعية'.tr,
             style: TextStyle(
-              fontSize: AppTextStyles.medium,
+              fontSize: AppTextStyles.large,
               fontFamily: AppTextStyles.appFontFamily,
               color: Get.find<ThemeController>().isDarkMode.value
                   ? AppColors.textPrimary(true)
@@ -217,11 +193,11 @@ class _SubCategoriesScreenLeveLTwoState extends State<SubCategoriesScreenLeveLTw
 
       return Column(
         children: [
-          _buildViewAllAdsLink(),
+          _buildViewAllAdsLink(_getHours()),
           Expanded(
             child: ListView.separated(
               padding: EdgeInsets.symmetric(vertical: 8.h, horizontal: 16.w),
-              itemCount: list.length,
+              itemCount: controller.subCategoriesLevelTwo.length,
               separatorBuilder: (context, index) => Divider(
                 height: 1,
                 thickness: 1,
@@ -230,7 +206,7 @@ class _SubCategoriesScreenLeveLTwoState extends State<SubCategoriesScreenLeveLTw
                     : Colors.grey[200],
               ),
               itemBuilder: (context, index) {
-                final subCategory = list[index];
+                final subCategory = controller.subCategoriesLevelTwo[index];
                 final translation = subCategory.translations.firstWhere(
                   (t) => t.language == Get.find<ChangeLanguageController>().currentLocale.value.languageCode,
                   orElse: () => subCategory.translations.first,
@@ -240,8 +216,8 @@ class _SubCategoriesScreenLeveLTwoState extends State<SubCategoriesScreenLeveLTw
                   idOfSubTwo: subCategory.id,
                   name: translation.name,
                   adsCount: subCategory.adsCount,
-                  slugSubTwo: subCategory.slug,
                   imageUrl: subCategory.image,
+                  hours: _getHours(),
                 );
               },
             ),
@@ -251,10 +227,9 @@ class _SubCategoriesScreenLeveLTwoState extends State<SubCategoriesScreenLeveLTw
     });
   }
 
-  Widget _buildViewAllAdsLink() {
+  Widget _buildViewAllAdsLink(int? hours) {
+    final isDarkMode = Get.find<ThemeController>().isDarkMode.value;
     final AdsController adsController = Get.find<AdsController>();
-    final int hours = _getHours();
-    final String? timeframe = hours > 0 ? adsController.toTimeframe(hours) : null;
 
     return Column(
       children: [
@@ -262,20 +237,17 @@ class _SubCategoriesScreenLeveLTwoState extends State<SubCategoriesScreenLeveLTw
           padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 0.h),
           child: InkWell(
             onTap: () {
+              final int? selectedHours = hours;
+              final String? tf = adsController.toTimeframe(selectedHours);
               Get.find<AdsController>().viewMode.value = 'vertical_simple';
-              final args = {
-                'categoryId': widget.MainId,
-                'subCategoryId': widget.SubCateId,
-                'nameOfMain': widget.nameMainCate,
-                'nameOFsub': widget.subCateName,
-                'categorySlug': widget.slugMainCate,
-                'subCategorySlug': widget.subCateSlug,
-                'titleOfpage': widget.subCateName,
-                'countofAds': widget.allSubOnecount,
-                if (widget.adsPeriod != null) 'adsPeriod': widget.adsPeriod,
-                if (timeframe != null) 'currentTimeframe': timeframe,
-              };
-              Get.toNamed(AppRoutes.adsScreenMobile, arguments: args);
+              Get.to(() => AdsScreen(
+                titleOfpage: widget.subCateName,
+                categoryId: widget.MainId,
+                subCategoryId: widget.SubCateId,
+                nameOfMain: widget.nameMainCate,
+                nameOFsub: widget.subCateName,
+                currentTimeframe: tf,
+              ));
             },
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -303,22 +275,16 @@ class _SubCategoriesScreenLeveLTwoState extends State<SubCategoriesScreenLeveLTw
                       ),
                     ),
                     IconButton(
-                      icon: Icon(Icons.arrow_forward_ios, size: 20.w, color: AppColors.buttonAndLinksColor),
+                      icon: Icon(Icons.arrow_forward_ios,
+                          size: 20.w, color: AppColors.buttonAndLinksColor),
                       onPressed: () {
-                        Get.find<AdsController>().viewMode.value = 'vertical_simple';
-                        final args = {
-                          'categoryId': widget.MainId,
-                          'subCategoryId': widget.SubCateId,
-                          'nameOfMain': widget.nameMainCate,
-                          'nameOFsub': widget.subCateName,
-                          'categorySlug': widget.slugMainCate,
-                          'subCategorySlug': widget.subCateSlug,
-                          'titleOfpage': widget.subCateName,
-                          'countofAds': widget.allSubOnecount,
-                          if (widget.adsPeriod != null) 'adsPeriod': widget.adsPeriod,
-                          if (timeframe != null) 'currentTimeframe': timeframe,
-                        };
-                        Get.toNamed(AppRoutes.adsScreenMobile, arguments: args);
+                        Get.to(() => AdsScreen(
+                          titleOfpage: widget.subCateName,
+                          categoryId: widget.MainId,
+                          subCategoryId: widget.SubCateId,
+                          nameOfMain: widget.nameMainCate,
+                          nameOFsub: widget.subCateName,
+                        ));
                       },
                     ),
                   ],
@@ -331,7 +297,7 @@ class _SubCategoriesScreenLeveLTwoState extends State<SubCategoriesScreenLeveLTw
         Divider(
           height: 1,
           thickness: 1.5,
-          color: Get.find<ThemeController>().isDarkMode.value ? Colors.grey[800] : Colors.grey[200],
+          color: isDarkMode ? Colors.grey[800] : Colors.grey[200],
         ),
       ],
     );
@@ -341,7 +307,7 @@ class _SubCategoriesScreenLeveLTwoState extends State<SubCategoriesScreenLeveLTw
     final isDarkMode = Get.find<ThemeController>().isDarkMode.value;
     final baseColor = isDarkMode ? Colors.grey[800]! : Colors.grey[300]!;
     final highlightColor = isDarkMode ? Colors.grey[700]! : Colors.grey[100]!;
-
+    
     return Shimmer.fromColors(
       baseColor: baseColor,
       highlightColor: highlightColor,
@@ -448,16 +414,17 @@ class _SubCategoriesScreenLeveLTwoState extends State<SubCategoriesScreenLeveLTw
     required int idOfSubTwo,
     required String name,
     required int adsCount,
-    required String slugSubTwo,
     required String? imageUrl,
+    required int? hours,
   }) {
     final isDarkMode = Get.find<ThemeController>().isDarkMode.value;
     final AdsController adsController = Get.find<AdsController>();
-    final int hours = _getHours();
-    final String? tf = hours > 0 ? adsController.toTimeframe(hours) : null;
 
     return InkWell(
       onTap: () {
+        final int? selectedHours = hours;
+        final String? tf = adsController.toTimeframe(selectedHours);
+        
         BrowsingHistoryController _browsing = Get.put(BrowsingHistoryController());
         Get.find<LoadingController>().currentUser != null
             ? _browsing.addHistory(
@@ -469,24 +436,17 @@ class _SubCategoriesScreenLeveLTwoState extends State<SubCategoriesScreenLeveLTw
         Get.find<PopularHistoryController>().addOrIncrement(
             categoryId: widget.MainId, subcat1Id: widget.SubCateId, subcat2Id: idOfSubTwo);
         Get.find<AdsController>().viewMode.value = 'vertical_simple';
-
-        final args = {
-          'categoryId': widget.MainId,
-          'subCategoryId': widget.SubCateId,
-          'subTwoCategoryId': idOfSubTwo,
-          'nameOfMain': widget.nameMainCate,
-          'nameOFsub': widget.subCateName,
-          'nameOFsubTwo': name,
-          'categorySlug': widget.slugMainCate,
-          'subCategorySlug': widget.subCateSlug,
-          'subTwoCategorySlug': slugSubTwo,
-          'titleOfpage': name,
-          'countofAds': adsCount,
-          if (widget.adsPeriod != null) 'adsPeriod': widget.adsPeriod,
-          if (tf != null) 'currentTimeframe': tf,
-        };
-
-        Get.toNamed(AppRoutes.adsScreenMobile, arguments: args);
+        
+        Get.to(() => AdsScreen(
+          titleOfpage: name,
+          categoryId: widget.MainId,
+          subCategoryId: widget.SubCateId,
+          subTwoCategoryId: idOfSubTwo,
+          nameOfMain: widget.nameMainCate,
+          nameOFsub: widget.subCateName,
+          nameOFsubTwo: name,
+          currentTimeframe: tf,
+        ));
       },
       child: Container(
         padding: EdgeInsets.symmetric(vertical: 10.h),
@@ -495,12 +455,13 @@ class _SubCategoriesScreenLeveLTwoState extends State<SubCategoriesScreenLeveLTw
           children: [
             Row(
               children: [
-                if (imageUrl != null && imageUrl.isNotEmpty) _buildImageWidget(imageUrl),
+                if (imageUrl != null && imageUrl.isNotEmpty)
+                  _buildImageWidget(imageUrl),
                 SizedBox(width: 8.w),
                 Text(
                   name,
                   style: TextStyle(
-                    fontSize: AppTextStyles.medium,
+                    fontSize: AppTextStyles.large,
                     fontWeight: FontWeight.w500,
                     fontFamily: AppTextStyles.appFontFamily,
                     color: AppColors.textPrimary(isDarkMode),

@@ -32,6 +32,13 @@ import '../SettingsDeskTop/SettingsDrawerDeskTop.dart';
 import '../secondary_app_bar_desktop.dart';
 import '../top_app_bar_desktop.dart';
 import 'DesktopConversationScreen.dart';
+// تجاهل التحذير لأن هذا مشروع ويب
+// ignore: avoid_web_libraries_in_flutter
+import 'dart:html' as html;
+import 'dart:ui' as ui show platformViewRegistry;
+import 'package:flutter/foundation.dart' show kIsWeb;
+
+
 class AdDetailsDesktop extends StatefulWidget {
   final Ad? ad;
 
@@ -50,6 +57,7 @@ class _AdDetailsDesktopState extends State<AdDetailsDesktop> {
   final FavoritesController _favoritesController = Get.put(FavoritesController());
   final FavoriteGroupsController _favoriteGroupsController = Get.put(FavoriteGroupsController());
   bool _isSeoDataLoading = false;
+  AreaController _areaController = Get.put(AreaController());
 
   @override
   void initState() {
@@ -1185,6 +1193,8 @@ void _showReportDialog() {
 
   @override
   Widget build(BuildContext context) {
+      final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
     final themeController = Get.find<ThemeController>();
     final isDarkMode = themeController.isDarkMode.value;
     final HomeController _homeController = Get.find<HomeController>();
@@ -1196,19 +1206,24 @@ void _showReportDialog() {
 
 
     return Obx(() {
+      
       return Scaffold(
-        endDrawer: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 300),
-          child: _homeController.isServicesOrSettings.value
-              ? SettingsDrawerDeskTop(key: const ValueKey(1))
-              : DesktopServicesDrawer(key: const ValueKey(2)),
-        ),
+
+        key: _scaffoldKey,
+    endDrawer: Obx(
+      () => AnimatedSwitcher(
+        duration: const Duration(milliseconds: 300),
+        child: _homeController.drawerType.value == DrawerType.settings
+            ? const SettingsDrawerDeskTop(key: ValueKey('settings'))
+            : const DesktopServicesDrawer(key: ValueKey('services')),
+      ),
+    ),
         backgroundColor: AppColors.background(isDarkMode),
         body: Column(
           children: [
             // القوائم العلوية
             TopAppBarDeskTop(),
-            SecondaryAppBarDeskTop(),
+            SecondaryAppBarDeskTop(scaffoldKey: _scaffoldKey,),
 
             Expanded(
               child: SingleChildScrollView(
@@ -1323,7 +1338,7 @@ void _showReportDialog() {
 
                     // الفوتر (في نهاية المحتوى وقابل للتمرير)
                     SizedBox(height: 40.h),
-                    Footer(),
+                    Footer(scaffoldKey: _scaffoldKey,),
                   ],
                 ),
               ),
@@ -2057,13 +2072,21 @@ Widget _buildCategoryHierarchy(bool isDarkMode, Ad ad) {
       Get.snackbar('خطأ', 'تعذر فتح واتساب');
     }
   }
-}
 
-// ─── معرض الوسائط (الصور والفيديوهات) ───────────────────────────────────────
+
+
+
+
+}// ─── معرض الوسائط (الصور والفيديوهات) ───────────────────────────────────────
 class _MediaGallery extends StatefulWidget {
   final Ad ad;
   final bool isDarkMode;
-  const _MediaGallery({ Key? key, required this.ad, required this.isDarkMode }) : super(key: key);
+
+  const _MediaGallery({
+    Key? key,
+    required this.ad,
+    required this.isDarkMode,
+  }) : super(key: key);
 
   @override
   __MediaGalleryState createState() => __MediaGalleryState();
@@ -2071,162 +2094,82 @@ class _MediaGallery extends StatefulWidget {
 
 class __MediaGalleryState extends State<_MediaGallery> {
   late final PageController _pageController;
-  int _currentPage = 0;
-  int _selectedIndex = 0;
-  static const int _perPage = 10; // 2 rows × 5 cols
+  int _currentIndex = 0;
+
+  // 🎥 إدارة الفيديو
   VideoPlayerController? _videoController;
   ChewieController? _chewieController;
-  bool _isVideoPlaying = false;
-  bool _isVideoInitialized = false;
-  bool _videoError = false;
   String? _currentVideoUrl;
+  bool _isInitializing = false;
+  bool _videoError = false;
+  String? _videoErrorMessage;
+
+  // صور + فيديوهات
+  List<MediaItem> get _mediaItems {
+    return [
+      // لو تحب الفيديوهات أولاً، بدّل الترتيب هنا
+      ...widget.ad.images.map(
+        (url) => MediaItem(type: MediaType.image, url: url),
+      ),
+      ...widget.ad.videos.map(
+        (url) => MediaItem(type: MediaType.video, url: url),
+      ),
+    ];
+  }
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController();
-    // تهيئة مشغل الفيديو الأول إذا كان هناك فيديو
-    if (widget.ad.videos.isNotEmpty) {
-      _currentVideoUrl = widget.ad.videos[0];
-      _initializeVideoPlayer(widget.ad.videos[0]);
-      
-    }
-  }
- // دالة لتحديث رابط المتصفح
-  
-  Future<void> _initializeVideoPlayer(String videoUrl) async {
-    // تنظيف المشغلات السابقة
-    _cleanUpVideoControllers();
-    
-    setState(() {
-      _isVideoInitialized = false;
-      _videoError = false;
-      _isVideoPlaying = false;
-    });
-
-    try {
-      _videoController = VideoPlayerController.network(videoUrl);
-      
-      // انتظار تهيئة الفيديو
-      await _videoController!.initialize().then((_) {
-        if (!mounted) return;
-        
-        _chewieController = ChewieController(
-          videoPlayerController: _videoController!,
-          autoPlay: false,
-          looping: false,
-          allowFullScreen: true,
-          aspectRatio: _videoController!.value.aspectRatio,
-          showControls: true,
-          errorBuilder: (context, errorMessage) {
-            return Center(
-              child: Text(
-                'خطأ في تحميل الفيديو',
-                style: TextStyle(color: Colors.white),
-              ),
-            );
-          },
-        );
-        
-        setState(() {
-          _isVideoInitialized = true;
-          _isVideoPlaying = false;
-          _currentVideoUrl = videoUrl;
-        });
-      });
-      
-      // متعقب حالة التشغيل
-      _videoController!.addListener(() {
-        if (mounted) {
-          setState(() {
-            _isVideoPlaying = _videoController!.value.isPlaying;
-          });
-        }
-      });
-    } catch (e) {
-      print('Error initializing video: $e');
-      setState(() {
-        _videoError = true;
-      });
-    }
-  }
-
-  void _cleanUpVideoControllers() {
-    if (_videoController != null) {
-      _videoController!.removeListener(() {});
-      _videoController!.dispose();
-      _videoController = null;
-    }
-    
-    if (_chewieController != null) {
-      _chewieController!.dispose();
-      _chewieController = null;
-    }
   }
 
   @override
   void dispose() {
-    _cleanUpVideoControllers();
+    _disposeVideoControllers();
     _pageController.dispose();
     super.dispose();
   }
 
-  // إنشاء قائمة الوسائط (صور + فيديوهات)
-  List<MediaItem> get _mediaItems {
-    List<MediaItem> items = [];
-    
-    // إضافة الفيديوهات أولاً
-    for (var video in widget.ad.videos) {
-      items.add(MediaItem(type: MediaType.video, url: video));
-    }
-    
-    // إضافة الصور
-    for (var image in widget.ad.images) {
-      items.add(MediaItem(type: MediaType.image, url: image));
-    }
-    
-    return items;
-  }
+  void _disposeVideoControllers() {
+    try {
+      _chewieController?.dispose();
+    } catch (_) {}
+    try {
+      _videoController?.dispose();
+    } catch (_) {}
 
-  int get _pageCount => (_mediaItems.length / _perPage).ceil();
-
-  List<MediaItem> _itemsForPage(int page) {
-    final start = page * _perPage;
-    return _mediaItems.sublist(
-      start,
-      (start + _perPage).clamp(0, _mediaItems.length),
-    );
+    _chewieController = null;
+    _videoController = null;
+    _currentVideoUrl = null;
+    _isInitializing = false;
+    _videoError = false;
+    _videoErrorMessage = null;
   }
 
   String _formatDate(DateTime date) {
     final diff = DateTime.now().difference(date);
     if (diff.inDays > 0) return '${'قبل'.tr} ${diff.inDays} ${'يوم'.tr}';
-    if (diff.inHours > 0) return  '${'قبل'.tr} ${diff.inHours} ${'ساعة'.tr}';
+    if (diff.inHours > 0) return '${'قبل'.tr} ${diff.inHours} ${'ساعة'.tr}';
     if (diff.inMinutes > 0) return '${'قبل'.tr} ${diff.inMinutes} ${'دقيقة'.tr}';
-    return 'الآن';
+    return 'الآن'.tr;
   }
 
-  void _playVideo(String videoUrl) {
-    if (_currentVideoUrl == videoUrl && _isVideoInitialized) {
-      // نفس الفيديو، تبديل التشغيل/الإيقاف
-      setState(() {
-        if (_isVideoPlaying) {
-          _chewieController?.pause();
-          _isVideoPlaying = false;
-        } else {
-          _chewieController?.play();
-          _isVideoPlaying = true;
-        }
-      });
-    } else {
-      // فيديو جديد، تهيئة المشغل
-      _initializeVideoPlayer(videoUrl);
-    }
-  }
+  // ===================== UI الرئيسي =====================
 
   @override
   Widget build(BuildContext context) {
-    final areaName = Get.find<AreaController>().getAreaNameById(widget.ad.areaId);
+    final mediaItems = _mediaItems;
+
+    if (mediaItems.isEmpty) {
+      return Center(
+        child: Icon(
+          Icons.image,
+          size: 100.w,
+          color: Colors.grey,
+        ),
+      );
+    }
+
     return Column(
       children: [
         // المنطقة الرئيسية (فيديو أو صورة)
@@ -2237,200 +2180,84 @@ class __MediaGalleryState extends State<_MediaGallery> {
             borderRadius: BorderRadius.circular(16.r),
           ),
           clipBehavior: Clip.hardEdge,
-          child: _buildMainMediaDisplay(),
+          child: _buildMainMediaDisplay(mediaItems),
         ),
-        SizedBox(height: 20.h),
+        SizedBox(height: 16.h),
 
-        // شبكة المصغرات + أسهم التنقل
-        SizedBox(
-          height: 2 * 100.h + 10.h,
-          child: Stack(
-            children: [
-              PageView.builder(
-                controller: _pageController,
-                itemCount: _pageCount,
-                onPageChanged: (p) {
-                  setState(() => _currentPage = p);
-                },
-                itemBuilder: (_, page) {
-                  final items = _itemsForPage(page);
-                  return GridView.builder(
-                    padding: EdgeInsets.zero,
-                    physics: NeverScrollableScrollPhysics(),
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 5,
-                      mainAxisSpacing: 5.h,
-                      crossAxisSpacing: 5.w,
-                      childAspectRatio: 1,
-                    ),
-                    itemCount: items.length,
-                    itemBuilder: (_, idx) {
-                      final globalIdx = page * _perPage + idx;
-                      final selected = globalIdx == _selectedIndex;
-                      final item = items[idx];
-                      
-                      return GestureDetector(
-                        onTap: () {
-                          setState(() => _selectedIndex = globalIdx);
-                          if (item.type == MediaType.video) {
-                            _playVideo(item.url);
-                          }
-                        },
-                        child: Container(
-                          decoration: BoxDecoration(
-                            border: Border.all(
-                              color: selected ? AppColors.primary : Colors.transparent,
-                              width: 2.w,
-                            ),
-                            borderRadius: BorderRadius.circular(8.r),
-                          ),
-                          clipBehavior: Clip.hardEdge,
-                          child: Stack(
-                            fit: StackFit.expand,
-                            children: [
-                              // الصورة المصغرة
-                              if (item.type == MediaType.image)
-                                Image.network(
-                                  item.url,
-                                  fit: BoxFit.cover,
-                                  loadingBuilder: (context, child, progress) {
-                                    if (progress == null) return child;
-                                    return Center(
-                                      child: CircularProgressIndicator(
-                                        value: progress.expectedTotalBytes != null
-                                          ? progress.cumulativeBytesLoaded / progress.expectedTotalBytes!
-                                          : null,
-                                      ),
-                                    );
-                                  },
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return Center(
-                                      child: Icon(Icons.broken_image, size: 30.w, color: Colors.grey),
-                                    );
-                                  },
-                                ),
-                              
-                              // فيديو مصغر
-                              if (item.type == MediaType.video)
-                                Image.network(
-                                  _getVideoThumbnail(item.url),
-                                  fit: BoxFit.cover,
-                                  loadingBuilder: (context, child, progress) {
-                                    if (progress == null) return child;
-                                    return Center(
-                                      child: CircularProgressIndicator(
-                                        value: progress.expectedTotalBytes != null
-                                          ? progress.cumulativeBytesLoaded / progress.expectedTotalBytes!
-                                          : null,
-                                      ),
-                                    );
-                                  },
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return Center(
-                                      child: Icon(Icons.broken_image, size: 30.w, color: Colors.grey),
-                                    );
-                                  },
-                                ),
-                              
-                              // أيقونة فيديو
-                              if (item.type == MediaType.video)
-                                Positioned(
-                                  bottom: 5.h,
-                                  right: 5.w,
-                                  child: Container(
-                                    padding: EdgeInsets.all(4.w),
-                                    decoration: BoxDecoration(
-                                      color: Colors.black54,
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: Icon(
-                                      Icons.play_arrow,
-                                      size: 14.w,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  );
-                },
-              ),
-              if (_currentPage > 0)
-                Positioned(
-                  left: 0,
-                  top: (2 * 100.h + 10.h) / 2 - 16.w,
-                  child: IconButton(
-                    icon: Icon(Icons.chevron_left, size: 32.w),
-                    onPressed: () => _pageController.previousPage(
-                      duration: Duration(milliseconds: 300),
-                      curve: Curves.ease,
-                    ),
-                  ),
-                ),
-              if (_currentPage < _pageCount - 1)
-                Positioned(
-                  right: 0,
-                  top: (2 * 100.h + 10.h) / 2 - 16.w,
-                  child: IconButton(
-                    icon: Icon(Icons.chevron_right, size: 32.w),
-                    onPressed: () => _pageController.nextPage(
-                      duration: Duration(milliseconds: 300),
-                      curve: Curves.ease,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-        SizedBox(height: 10.h),
-
-        // مؤشرات الصفحات + معلومات
+        // عدّاد الصفحات فوق المعرض
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            for (int i = 0; i < _pageCount; i++) ...[
-              Container(
-                margin: EdgeInsets.symmetric(horizontal: 4.w),
-                width: 8.w,
-                height: 8.w,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: i == _currentPage
-                      ? AppColors.primary
-                      : AppColors.textSecondary(widget.isDarkMode),
-                ),
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
+              decoration: BoxDecoration(
+                color: Colors.black54,
+                borderRadius: BorderRadius.circular(12.r),
               ),
-            ],
-            SizedBox(width: 12.w),
-            Text(
-              '${_mediaItems.where((i) => i.type == MediaType.image).length} ${'صورة'.tr}',
-              style: TextStyle(
-                fontFamily: AppTextStyles.appFontFamily,
-               fontSize: AppTextStyles.medium,
-                color: AppColors.textSecondary(widget.isDarkMode),
+              child: Text(
+                '${_currentIndex + 1}/${mediaItems.length}',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: AppTextStyles.medium,
+                  fontFamily: AppTextStyles.appFontFamily,
+                ),
+                textAlign: TextAlign.center,
               ),
             ),
-            if (widget.ad.videos.isNotEmpty) ...[
-              SizedBox(width: 10.w),
-              Text(
-                '${widget.ad.videos.length} ${'فيديو'.tr}',
-                style: TextStyle(
-                  fontFamily: AppTextStyles.appFontFamily,
-                 fontSize: AppTextStyles.medium,
-                  color: Colors.blue,
-                ),
-              ),
-            ],
           ],
         ),
+        SizedBox(height: 16.h),
 
+        // شريط مصغرات بسيط أفقي (اختياري – يبقى احترافي)
+        SizedBox(
+          height: 90.h,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: EdgeInsets.symmetric(horizontal: 8.w),
+            itemCount: mediaItems.length,
+            separatorBuilder: (_, __) => SizedBox(width: 8.w),
+            itemBuilder: (_, index) {
+              final item = mediaItems[index];
+              final selected = index == _currentIndex;
+
+              return GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _currentIndex = index;
+                  });
+
+                  if (item.type == MediaType.video) {
+                    _openOrPlayVideo(item.url);
+                  } else {
+                    // لو طلعنا من الفيديو → نوقفه
+                    if (_videoController != null &&
+                        _videoController!.value.isPlaying) {
+                      _videoController!.pause();
+                    }
+                  }
+                },
+                child: Container(
+                  width: 110.w,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(10.r),
+                    border: Border.all(
+                      color: selected ? AppColors.primary : Colors.transparent,
+                      width: 2.w,
+                    ),
+                  ),
+                  clipBehavior: Clip.hardEdge,
+                  child: _buildThumbnail(item),
+                ),
+              );
+            },
+          ),
+        ),
+
+        SizedBox(height: 20.h),
         Divider(color: AppColors.divider(widget.isDarkMode)),
         SizedBox(height: 20.h),
 
-        // معلومات الإعلان
+        // معلومات الإعلان: التاريخ
         Row(
           children: [
             Icon(Icons.calendar_today, size: 18.sp, color: AppColors.grey),
@@ -2439,25 +2266,29 @@ class __MediaGalleryState extends State<_MediaGallery> {
               '${'تاريخ النشر:'.tr} ${_formatDate(widget.ad.createdAt)}',
               style: TextStyle(
                 fontFamily: AppTextStyles.appFontFamily,
-               fontSize: AppTextStyles.medium,
+                fontSize: AppTextStyles.medium,
                 color: AppColors.grey,
               ),
             ),
           ],
         ),
         SizedBox(height: 10.h),
+
+        // معلومات الإعلان: الموقع
         Row(
           children: [
-            Icon(Icons.location_on, size: 18.sp,
-                color: AppColors.textSecondary(widget.isDarkMode)),
+            Icon(
+              Icons.location_on,
+              size: 18.sp,
+              color: AppColors.textSecondary(widget.isDarkMode),
+            ),
             SizedBox(width: 8.w),
             Expanded(
               child: Text(
-                                              '${widget.ad.city?.name??""}, ${widget.ad.area?.name??""}',
-
+                '${widget.ad.city?.name ?? ""}, ${widget.ad.area?.name ?? ""}',
                 style: TextStyle(
                   fontFamily: AppTextStyles.appFontFamily,
-                 fontSize: AppTextStyles.medium,
+                  fontSize: AppTextStyles.medium,
                   color: AppColors.textSecondary(widget.isDarkMode),
                 ),
                 maxLines: 1,
@@ -2470,63 +2301,153 @@ class __MediaGalleryState extends State<_MediaGallery> {
     );
   }
 
-  Widget _buildMainMediaDisplay() {
-    if (_mediaItems.isEmpty) {
-      return Center(
-        child: Icon(Icons.image, size: 100.w, color: Colors.grey),
-      );
+  // ===================== المعرض الرئيسي =====================
+
+  Widget _buildMainMediaDisplay(List<MediaItem> mediaItems) {
+    final safeIndex = _currentIndex.clamp(0, mediaItems.length - 1);
+    final item = mediaItems[safeIndex];
+
+    if (item.type == MediaType.video) {
+      // لو هذا الفيديو هو الحالي ومهيأ → أعرض المشغّل
+      if (_currentVideoUrl == item.url &&
+          _chewieController != null &&
+          _videoController != null &&
+          _videoController!.value.isInitialized &&
+          !_videoError &&
+          !_isInitializing) {
+        return _buildActiveVideoPlayer(item.url);
+      }
+
+      // لو في خطأ
+      if (_videoError) {
+        return _buildVideoErrorState(item.url);
+      }
+
+      // في مرحلة التحميل / التهيئة
+      if (_isInitializing) {
+        return _buildVideoLoadingState();
+      }
+
+      // لسه ما طلبنا تشغيله → ثامبنيل كبير مع زر تشغيل
+      return _buildVideoThumbnailMain(item.url);
     }
 
-    final selectedItem = _mediaItems[_selectedIndex];
-    
-    if (selectedItem.type == MediaType.video) {
-      return _buildVideoDisplay(selectedItem.url);
-    } else {
-      return _buildImageDisplay(selectedItem.url);
+    // صورة
+    return _buildImageDisplay(item.url);
+  }
+
+  // ===================== تشغيل / تهيئة الفيديو =====================
+
+  Future<void> _openOrPlayVideo(String url) async {
+    debugPrint('🎥 Trying to play video URL => $url');
+
+    // نفس الفيديو ومهيأ → Toggle Play/Pause
+    if (_currentVideoUrl == url &&
+        _videoController != null &&
+        _videoController!.value.isInitialized &&
+        !_videoError) {
+      if (_videoController!.value.isPlaying) {
+        await _videoController!.pause();
+      } else {
+        await _videoController!.play();
+      }
+      setState(() {});
+      return;
+    }
+
+    _disposeVideoControllers();
+    setState(() {
+      _currentVideoUrl = url;
+      _isInitializing = true;
+      _videoError = false;
+      _videoErrorMessage = null;
+    });
+
+    try {
+      final controller = VideoPlayerController.networkUrl(Uri.parse(url));
+      _videoController = controller;
+
+      controller.addListener(() {
+        if (!mounted) return;
+        final value = controller.value;
+
+        if (value.hasError && !_videoError) {
+          debugPrint('🎥 video_player errorDescription => ${value.errorDescription}');
+          setState(() {
+            _videoError = true;
+            _videoErrorMessage = value.errorDescription;
+            _isInitializing = false;
+          });
+        } else if (value.isInitialized && _isInitializing) {
+          setState(() {
+            _isInitializing = false;
+          });
+        }
+      });
+
+      await controller.initialize();
+
+      if (!mounted) return;
+
+      if (controller.value.hasError) {
+        setState(() {
+          _videoError = true;
+          _videoErrorMessage = controller.value.errorDescription;
+          _isInitializing = false;
+        });
+        return;
+      }
+
+      // تأكد أن الصوت مرفوع
+      await controller.setVolume(1.0);
+
+      final chewie = ChewieController(
+        videoPlayerController: controller,
+        autoPlay: true,
+        looping: false,
+        allowFullScreen: true,
+        aspectRatio: controller.value.aspectRatio == 0
+            ? 16 / 9
+            : controller.value.aspectRatio,
+        showControls: true,
+        errorBuilder: (_, __) => _buildVideoErrorState(url),
+      );
+
+      setState(() {
+        _chewieController = chewie;
+        _isInitializing = false;
+        _videoError = false;
+        _videoErrorMessage = null;
+      });
+
+      controller.play();
+    } catch (e) {
+      debugPrint('🎥 Video init error: $e');
+      if (!mounted) return;
+      setState(() {
+        _isInitializing = false;
+        _videoError = true;
+        _videoErrorMessage = e.toString();
+      });
     }
   }
 
-  Widget _buildVideoDisplay(String videoUrl) {
-    if (_videoError) {
-      return _buildVideoErrorState();
-    }
-    
-    if (!_isVideoInitialized || _chewieController == null) {
+  Widget _buildActiveVideoPlayer(String url) {
+    if (_chewieController == null ||
+        _videoController == null ||
+        !_videoController!.value.isInitialized) {
       return _buildVideoLoadingState();
     }
 
     return Stack(
       fit: StackFit.expand,
       children: [
-        // مشغل الفيديو
-        Chewie(controller: _chewieController!),
-        
-        // زر التشغيل/الإيقاف
-        if (!_isVideoPlaying)
-          Center(
-            child: GestureDetector(
-              onTap: () {
-                setState(() {
-                  _chewieController?.play();
-                  _isVideoPlaying = true;
-                });
-              },
-              child: Container(
-                padding: EdgeInsets.all(20.w),
-                decoration: BoxDecoration(
-                  color: Colors.black54,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.play_arrow,
-                  size: 50.w,
-                  color: Colors.white,
-                ),
-              ),
-            ),
+        Container(
+          color: Colors.black,
+          child: Chewie(
+            controller: _chewieController!,
           ),
-        
-        // مؤشر الفيديو
+        ),
         Positioned(
           top: 15.h,
           right: 15.w,
@@ -2556,17 +2477,123 @@ class __MediaGalleryState extends State<_MediaGallery> {
   }
 
   Widget _buildVideoLoadingState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+    return Container(
+      color: Colors.black,
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const CircularProgressIndicator(color: Colors.white),
+            SizedBox(height: 20.h),
+            Text(
+              'جاري تحميل الفيديو...'.tr,
+              style: TextStyle(
+                fontSize: AppTextStyles.medium,
+                color: Colors.white,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVideoErrorState(String url) {
+    return Container(
+      color: Colors.grey[900],
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.error_outline, size: 60.w, color: Colors.red),
+            SizedBox(height: 20.h),
+            Text(
+              'حدث خطأ في تحميل الفيديو'.tr,
+              style: TextStyle(
+                fontSize: AppTextStyles.xlarge,
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontFamily: AppTextStyles.appFontFamily,
+              ),
+            ),
+            if (_videoErrorMessage != null) ...[
+              SizedBox(height: 10.h),
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16.w),
+                child: Text(
+                  _videoErrorMessage!,
+                  style: TextStyle(
+                    fontSize: AppTextStyles.small,
+                    color: Colors.grey[300],
+                    fontFamily: AppTextStyles.appFontFamily,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ],
+            SizedBox(height: 20.h),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.refresh),
+              label: Text('إعادة المحاولة'.tr),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                padding: EdgeInsets.symmetric(
+                  horizontal: 24.w,
+                  vertical: 12.h,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(30.r),
+                ),
+              ),
+              onPressed: () => _openOrPlayVideo(url),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ===================== الثامبنيل للفيديو / الصورة =====================
+
+  Widget _buildVideoThumbnailMain(String url) {
+    return GestureDetector(
+      onTap: () => _openOrPlayVideo(url),
+      child: Stack(
+        fit: StackFit.expand,
         children: [
-          CircularProgressIndicator(),
-          SizedBox(height: 20.h),
-          Text(
-            'جاري تحميل الفيديو...'.tr,
-            style: TextStyle(
-              fontSize: AppTextStyles.medium,
-              color: Colors.white
+          Container(
+            color: Colors.black,
+            child: Center(
+              child: Icon(
+                Icons.play_circle_fill,
+                size: 64.w,
+                color: Colors.white,
+              ),
+            ),
+          ),
+          Positioned(
+            top: 15.h,
+            right: 15.w,
+            child: Container(
+              padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 5.h),
+              decoration: BoxDecoration(
+                color: Colors.black54,
+                borderRadius: BorderRadius.circular(20.r),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.videocam, size: 16.w, color: Colors.white),
+                  SizedBox(width: 5.w),
+                  Text(
+                    'فيديو'.tr,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: AppTextStyles.medium,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -2574,43 +2601,70 @@ class __MediaGalleryState extends State<_MediaGallery> {
     );
   }
 
-  Widget _buildVideoErrorState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+  Widget _buildThumbnail(MediaItem item) {
+    if (item.type == MediaType.video) {
+      return Stack(
+        fit: StackFit.expand,
         children: [
-          Icon(Icons.error, size: 50.w, color: Colors.red),
-          SizedBox(height: 20.h),
-          Text(
-            'تعذر تحميل الفيديو'.tr,
-            style: TextStyle(
-              fontSize: AppTextStyles.medium,
-              color: Colors.white
+          Container(
+            color: Colors.black87,
+            child: Center(
+              child: Icon(
+                Icons.play_circle_fill,
+                size: 28.w,
+                color: Colors.white,
+              ),
             ),
           ),
-          SizedBox(height: 20.h),
-          ElevatedButton(
-            onPressed: () => _initializeVideoPlayer(widget.ad.videos[_selectedIndex]),
-            child: Text('إعادة المحاولة'.tr),
+          Positioned(
+            top: 4.h,
+            right: 4.w,
+            child: Container(
+              padding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 2.h),
+              decoration: BoxDecoration(
+                color: Colors.black54,
+                borderRadius: BorderRadius.circular(8.r),
+              ),
+              child: Text(
+                'فيديو'.tr,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 9.sp,
+                ),
+              ),
+            ),
           ),
         ],
-      ),
-    );
-  }
+      );
+    }
 
-  Widget _buildImageDisplay(String imageUrl) {
     return Image.network(
-      imageUrl,
+      item.url,
       fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) => Container(
+        color: Colors.grey[300],
+        child: Icon(
+          Icons.broken_image,
+          size: 26.w,
+          color: Colors.grey,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildImageDisplay(String url) {
+    return Image.network(
+      url,
+      fit: BoxFit.contain,
       width: double.infinity,
       loadingBuilder: (context, child, loadingProgress) {
         if (loadingProgress == null) return child;
         return Center(
           child: CircularProgressIndicator(
             value: loadingProgress.expectedTotalBytes != null
-              ? loadingProgress.cumulativeBytesLoaded / 
-                loadingProgress.expectedTotalBytes!
-              : null,
+                ? loadingProgress.cumulativeBytesLoaded /
+                    loadingProgress.expectedTotalBytes!
+                : null,
           ),
         );
       },
@@ -2628,18 +2682,14 @@ class __MediaGalleryState extends State<_MediaGallery> {
       },
     );
   }
-
-  String _getVideoThumbnail(String videoUrl) {
-    // يمكن استبدال هذا بمنطق لاستخراج صورة مصغرة من الفيديو
-    return 'https://img.freepik.com/free-photo/abstract-blur-empty-green-gradient-studio-well-use-as-background-website-template-frame-business-report_1258-54622.jpg';
-  }
 }
+
+// ================= MODELS =================
 
 enum MediaType { image, video }
 
 class MediaItem {
   final MediaType type;
   final String url;
-
   MediaItem({required this.type, required this.url});
 }

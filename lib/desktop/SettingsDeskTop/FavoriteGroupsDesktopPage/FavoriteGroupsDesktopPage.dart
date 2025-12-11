@@ -302,16 +302,21 @@ class _FavoriteGroupsDesktopPageState extends State<FavoriteGroupsDesktopPage> {
   @override
   Widget build(BuildContext context) {
     final isDark = themeController.isDarkMode.value;
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
     final HomeController _homeController = Get.find<HomeController>();
 
+    final HomeController homeController = Get.find<HomeController>();
     return  Scaffold(     
-       endDrawer: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 300),
-          child: _homeController.isServicesOrSettings.value
-              ? SettingsDrawerDeskTop(key: const ValueKey(1))
-              : DesktopServicesDrawer(key: const ValueKey(2)),
-        ),
+       key: _scaffoldKey,
+    endDrawer: Obx(
+      () => AnimatedSwitcher(
+        duration: const Duration(milliseconds: 300),
+        child: homeController.drawerType.value == DrawerType.settings
+            ? const SettingsDrawerDeskTop(key: ValueKey('settings'))
+            : const DesktopServicesDrawer(key: ValueKey('services')),
+      ),
+    ),
         backgroundColor: AppColors.background(isDark),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _showCreateGroupDialog(isDark),
@@ -321,7 +326,7 @@ class _FavoriteGroupsDesktopPageState extends State<FavoriteGroupsDesktopPage> {
       body: Column(
         children: [           
           TopAppBarDeskTop(),
-          SecondaryAppBarDeskTop(),
+          SecondaryAppBarDeskTop(scaffoldKey: _scaffoldKey,),
          SizedBox(height: 20.h,),
           Expanded(
             child: Container(

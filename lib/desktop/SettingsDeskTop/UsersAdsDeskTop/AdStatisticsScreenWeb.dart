@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:tappuu_website/desktop/SettingsDeskTop/UsersAdsDeskTop/EditAdScreenDeskTop.dart';
 import 'package:tappuu_website/core/data/model/PremiumPackage.dart' as prm;
 
+import '../../../controllers/AdsManageController.dart';
 import '../../../controllers/CardPaymentController.dart';
 import '../../../controllers/PremiumPackageController.dart';
 import '../../../controllers/ThemeController.dart';
@@ -181,6 +182,7 @@ class _AdStatisticsScreenWebState extends State<AdStatisticsScreenWeb> {
   Widget build(BuildContext context) {
     final themeController = Get.find<ThemeController>();
     final isDarkMode = themeController.isDarkMode.value;
+    final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
     final HomeController _homeController = Get.find<HomeController>();
 
@@ -190,14 +192,20 @@ class _AdStatisticsScreenWebState extends State<AdStatisticsScreenWeb> {
     final hasActive = activePackages.isNotEmpty;
 
     return Scaffold(     
-       endDrawer: _homeController.isServicesOrSettings.value
-           ? SettingsDrawerDeskTop(key: const ValueKey(1))
-           : DesktopServicesDrawer(key: const ValueKey(2)),
+        key: _scaffoldKey,
+    endDrawer: Obx(
+      () => AnimatedSwitcher(
+        duration: const Duration(milliseconds: 300),
+        child: _homeController.drawerType.value == DrawerType.settings
+            ? const SettingsDrawerDeskTop(key: ValueKey('settings'))
+            : const DesktopServicesDrawer(key: ValueKey('services')),
+      ),
+    ),
         backgroundColor: AppColors.background(themeController.isDarkMode.value),
       body: Column(
         children: [  
             TopAppBarDeskTop(),
-      SecondaryAppBarDeskTop(),
+      SecondaryAppBarDeskTop(scaffoldKey: _scaffoldKey,),
          SizedBox(height: 20.h,),
           Expanded(
             child: SingleChildScrollView(
@@ -933,6 +941,8 @@ class _AdStatisticsScreenWebState extends State<AdStatisticsScreenWeb> {
 
   // بطاقة أزرار التحكم
   Widget _buildActionsCard(bool isDarkMode) {
+    ManageAdController _manage = Get.find<ManageAdController>();
+
     return Container(
       alignment: Alignment.center,
       width: 400.w,
@@ -1033,7 +1043,11 @@ class _AdStatisticsScreenWebState extends State<AdStatisticsScreenWeb> {
                               SizedBox(width: 12.w),
                               Expanded(
                                 child: ElevatedButton(
-                                  onPressed: () => Get.back(result: true),
+                                  onPressed: () {
+
+                                    Get.back(result: true);
+                                  
+                                  } ,
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: Colors.red,
                                     foregroundColor: Colors.white,
@@ -1054,7 +1068,7 @@ class _AdStatisticsScreenWebState extends State<AdStatisticsScreenWeb> {
                 );
                 
                 if (confirmed == true) {
-                  // TODO: تنفيذ حذف الإعلان
+                   _manage.deleteAd(widget.ad.id);
                   Get.back(); // العودة للشاشة السابقة بعد الحذف
                 }
               },

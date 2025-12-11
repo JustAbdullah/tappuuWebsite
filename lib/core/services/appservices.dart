@@ -1,43 +1,93 @@
 // lib/core/services/appservices.dart
 import 'dart:convert';
+import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 
-/// Service مركزي للوصول إلى SharedPreferences وعمليات صغيرة مرتبطة بالـ API
+import '../../controllers/editable_text_controller.dart';
+
 class AppServices {
   late SharedPreferences sharedPreferences;
 
   AppServices._private();
 
-  /// استدعاء للتهيئة: await AppServices.init();
+  /// استدعاء للتهيئة:
+  /// - يجهّز SharedPreferences.
+  /// - يسجل EditableTextController (لو مش مسجل).
+  /// - يطلق جلب النصوص المتغيرة والخطوط في الخلفية (بدون await).
   static Future<AppServices> init() async {
     AppServices services = AppServices._private();
     services.sharedPreferences = await SharedPreferences.getInstance();
+
+    try {
+      // نضمن وجود الكنترولر بشكل دائم، لكن بدون شغل شبكات ثقيل هنا
+      if (!Get.isRegistered<EditableTextController>()) {
+        Get.put(EditableTextController(), permanent: true);
+      }
+      final editableCtrl = Get.find<EditableTextController>();
+
+      // الشبكات + تحميل الخطوط في الخلفية، بدون تعطيل الإقلاع
+      () async {
+        try {
+          await editableCtrl.fetchAll();
+          if (kDebugMode) {
+            debugPrint(
+              'AppServices (WEB): editable texts fetched in background (count=${editableCtrl.items.length})',
+            );
+          }
+
+          try {
+            final futures = editableCtrl.items.map(
+              (e) => editableCtrl.ensureFontLoaded(e),
+            );
+            await Future.wait(futures);
+            if (kDebugMode) {
+              debugPrint('AppServices (WEB): fonts preloaded for editable texts.');
+            }
+          } catch (e) {
+            if (kDebugMode) {
+              debugPrint('AppServices (WEB): error preloading fonts: $e');
+            }
+          }
+        } catch (e) {
+          if (kDebugMode) {
+            debugPrint(
+              'AppServices (WEB): failed to fetch editable texts in background: $e',
+            );
+          }
+        }
+      }();
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('AppServices (WEB): EditableTextController init error: $e');
+      }
+    }
+
     return services;
   }
 
   // ------ إعدادات الـ API ------
-  final String _baseUrl = 'https://stayinme.arabiagroup.net/lar_stayInMe/public/api';
+  final String _baseUrl =
+      'https://stayinme.arabiagroup.net/lar_stayInMe/public/api';
   String get baseUrl => _baseUrl;
 
   // ------ مفاتيح SharedPreferences ------
   static const String _kAppLogoKey = 'app_logo_url';
-  static const String _kAppLogoRawKey = 'app_logo_raw'; // raw json (for change detection)
+  static const String _kAppLogoRawKey = 'app_logo_raw';
 
-  static const String _kWaitingScreenKey = 'waiting_screen'; // stored data JSON
+  static const String _kWaitingScreenKey = 'waiting_screen';
   static const String _kWaitingScreenRawKey = 'waiting_screen_raw';
 
   // ------ حالات / flags ------
   RxBool isRefreshingPremium = false.obs;
 
   // ============================
-  // App logo helpers (with diff-check)
+  // App logo helpers
   // ============================
-
-  /// Fetches app-logo from API and updates local cache only if changed.
-  Future<void> fetchAndStoreAppLogo({Duration timeout = const Duration(seconds: 30)}) async {
+  Future<void> fetchAndStoreAppLogo(
+      {Duration timeout = const Duration(seconds: 30)}) async {
     final uri = Uri.parse('$_baseUrl/app-logo');
     try {
       final res = await http.get(uri).timeout(timeout);
@@ -50,7 +100,6 @@ class AppServices {
           return;
         }
 
-        // تغيّر أو لم يكن موجود -> حاول استخراج الرابط وتخزينه
         final body = json.decode(raw);
         String? url;
         if (body is Map<String, dynamic>) {
@@ -70,19 +119,23 @@ class AppServices {
           if (kDebugMode) debugPrint('App logo updated and saved: $url');
           return;
         } else {
-          // لا يوجد رابط صالح في الرد -> امسح المفتاح المخزن (لتفادي روابط معطوبة)
           if (sharedPreferences.containsKey(_kAppLogoKey)) {
             await sharedPreferences.remove(_kAppLogoKey);
             await sharedPreferences.remove(_kAppLogoRawKey);
-            if (kDebugMode) debugPrint('App logo response has no url -> cleared cached logo.');
+            if (kDebugMode) {
+              debugPrint(
+                  'App logo response has no url -> cleared cached logo.');
+            }
           }
         }
       } else {
-        if (kDebugMode) debugPrint('fetchAndStoreAppLogo HTTP error: ${res.statusCode}');
+        if (kDebugMode) {
+          debugPrint(
+              'fetchAndStoreAppLogo HTTP error: ${res.statusCode}');
+        }
       }
     } catch (e) {
       if (kDebugMode) debugPrint('fetchAndStoreAppLogo error: $e');
-      // on network error: keep previous cached value to avoid making app worse
     }
   }
 
@@ -109,12 +162,10 @@ class AppServices {
   }
 
   // ============================
-  // Waiting screen helpers (with diff-check)
+  // Waiting screen helpers
   // ============================
-  ///
-  /// GET /waiting-screen
-  /// Stores raw JSON and parsed map under keys and returns parsed map if updated or null if nothing changed.
-  Future<Map<String, dynamic>?> fetchAndStoreWaitingScreen({Duration timeout = const Duration(seconds: 8)}) async {
+  Future<Map<String, dynamic>?> fetchAndStoreWaitingScreen(
+      {Duration timeout = const Duration(seconds: 8)}) async {
     final uri = Uri.parse('$_baseUrl/waiting-screen');
     try {
       final res = await http.get(uri).timeout(timeout);
@@ -124,36 +175,43 @@ class AppServices {
 
         if (prevRaw != null && prevRaw == raw) {
           if (kDebugMode) debugPrint('WaitingScreen: no change detected.');
-          // لا نعيد تطبيق أي شيء
           return null;
         }
 
-        // parse and save
         final body = json.decode(raw);
-        if (body is Map<String, dynamic> && (body['success'] == true) && body['data'] != null) {
+        if (body is Map<String, dynamic> &&
+            (body['success'] == true) &&
+            body['data'] != null) {
           final data = body['data'] as Map<String, dynamic>;
-          await sharedPreferences.setString(_kWaitingScreenKey, json.encode(data));
+          await sharedPreferences.setString(
+              _kWaitingScreenKey, json.encode(data));
           await sharedPreferences.setString(_kWaitingScreenRawKey, raw);
           if (kDebugMode) debugPrint('WaitingScreen updated and cached.');
           return data;
         } else {
-          // response not valid -> clear stored
           if (sharedPreferences.containsKey(_kWaitingScreenKey)) {
             await sharedPreferences.remove(_kWaitingScreenKey);
             await sharedPreferences.remove(_kWaitingScreenRawKey);
-            if (kDebugMode) debugPrint('WaitingScreen response invalid -> cleared cached.');
+            if (kDebugMode) {
+              debugPrint(
+                  'WaitingScreen response invalid -> cleared cached.');
+            }
           }
         }
       } else {
-        if (kDebugMode) debugPrint('fetchAndStoreWaitingScreen HTTP error: ${res.statusCode}');
+        if (kDebugMode) {
+          debugPrint(
+              'fetchAndStoreWaitingScreen HTTP error: ${res.statusCode}');
+        }
       }
     } catch (e) {
-      if (kDebugMode) debugPrint('fetchAndStoreWaitingScreen error: $e');
+      if (kDebugMode) {
+        debugPrint('fetchAndStoreWaitingScreen error: $e');
+      }
     }
     return null;
   }
 
-  /// return stored parsed waiting screen map or null
   Map<String, dynamic>? getStoredWaitingScreen() {
     try {
       final raw = sharedPreferences.getString(_kWaitingScreenKey);
@@ -183,7 +241,6 @@ class AppServices {
   // ============================
   // Utilities
   // ============================
-  /// call endpoints like refresh premium
   Future<void> refreshPremiumAdsOnServer() async {
     try {
       isRefreshingPremium.value = true;
@@ -193,10 +250,15 @@ class AppServices {
         final body = json.decode(response.body);
         if (kDebugMode) debugPrint('refreshPremiumAdsOnServer: $body');
       } else {
-        if (kDebugMode) debugPrint('refreshPremiumAdsOnServer failed: ${response.statusCode}');
+        if (kDebugMode) {
+          debugPrint(
+              'refreshPremiumAdsOnServer failed: ${response.statusCode}');
+        }
       }
     } catch (e) {
-      if (kDebugMode) debugPrint('refreshPremiumAdsOnServer error: $e');
+      if (kDebugMode) {
+        debugPrint('refreshPremiumAdsOnServer error: $e');
+      }
     } finally {
       isRefreshingPremium.value = false;
     }

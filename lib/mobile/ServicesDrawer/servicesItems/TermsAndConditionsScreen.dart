@@ -56,7 +56,7 @@ class TermsAndConditionsScreen extends StatelessWidget {
               children: [
                 Text(terms.content,
                   style: TextStyle(
-                    fontSize: AppTextStyles.medium,
+                    fontSize: AppTextStyles.large,
 
                     height: 1.8,
                     color: textColor,

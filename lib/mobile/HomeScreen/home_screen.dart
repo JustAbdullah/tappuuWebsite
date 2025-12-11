@@ -6,6 +6,7 @@ import '../../controllers/AdsManageSearchController.dart';
 import '../../controllers/BrowsingHistoryController.dart';
 import '../../controllers/PopularHistoryController.dart';
 import '../../controllers/ThemeController.dart';
+import '../../controllers/WaitingScreenController.dart';
 import '../../controllers/home_controller.dart';
 import '../../core/constant/appcolors.dart';
 import '../../core/constant/images_path.dart';
@@ -19,6 +20,7 @@ import '../UserSettings/itemsUserSettings/FavoritesScreen/FavoritesScreen.dart';
 import '../UserSettings/itemsUserSettings/SearchHistoryScreen/SearchHistoryAdItem.dart';
 import '../UserSettings/itemsUserSettings/SearchHistoryScreen/SearchHistoryScreen.dart';
 import '../UserSettings/itemsUserSettings/UserInfoPage.dart';
+import '../urgent/MainCategoriesWithUrgentScreen.dart';
 import '../viewAdsScreen/AdItem.dart';
 import '../viewAdsScreen/AdsScreen.dart';
 import 'homeItems/LoginPopup.dart';
@@ -34,7 +36,6 @@ import 'package:tappuu_website/controllers/ViewsController.dart';
 import 'package:shimmer/shimmer.dart';
 
 import 'menubar.dart';
-import 'urgent/MainCategoriesWithUrgentScreen.dart';
 
 
 class HomeScreen extends StatefulWidget {
@@ -127,7 +128,7 @@ void initState() {
               pinned: true,
               floating: false,
               expandedHeight: 0,
-              toolbarHeight: 60.h,
+              toolbarHeight:56.h,
               backgroundColor: AppColors.appBar(isDarkMode),
               flexibleSpace:  Directionality(
           textDirection: TextDirection.ltr, // نجبر اتجاه اليسار - يمين هنا فقط
@@ -140,7 +141,7 @@ void initState() {
                 MainCategoriesScreen(),
                
                     SizedBox(height:10.h,),
-              // قسم العروض العاجلة
+                // قسم العروض العاجلة
                 _buildUrgentSection(
                   hours: '24h',
                   isDarkMode: isDarkMode,
@@ -659,10 +660,11 @@ Widget _buildSearchField(bool isDarkMode) {
             Expanded(
               child: InkWell(
                 onTap: () {
-                  Get.to(() => AdsScreen(
+                   Get.to(() => AdsScreen(
                     categoryId: null,
                     titleOfpage: "البحث والفلترة!".tr,
                   ));
+                 
                 },
                 child: Text(
                   'ابحث عن إعلان ...'.tr,
@@ -676,24 +678,7 @@ Widget _buildSearchField(bool isDarkMode) {
             ),
             
             // أيقونة البحث بالصورة
-            InkWell(
-              onTap: () {
-                Get.to(() => AdsScreen(
-                    categoryId: null,
-                    titleOfpage: "البحث والفلترة!".tr,
-                    openImageSearch: true,
-                  ));
-              },
-              child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: 8.w),
-                child: Icon(
-                  Icons.camera_alt,
-                  color: AppColors.grey,
-                  size: 24.w,
-                ),
-              ),
-            ),
-            
+         
             // أيقونة البحث الصوتي
             InkWell(
               onTap: () {
@@ -805,12 +790,15 @@ Widget _buildSearchField(bool isDarkMode) {
       ),
     );
   }
-  
   Widget _buildAppBar(bool isDarkMode) {
+
+    final WaitingScreenController waiting =
+      Get.put(WaitingScreenController(), permanent: true);
+        final waitingImage = waiting.imageUrl.value;
   return   Directionality(
           textDirection: TextDirection.rtl, // نجبر اتجاه اليسار - يمين هنا فقط
           child:  Container(
-      height: 70.h,
+      height: 56.h,
       padding: EdgeInsets.symmetric(horizontal: 12.w,vertical: 5.h),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.start,
@@ -820,7 +808,7 @@ Widget _buildSearchField(bool isDarkMode) {
           Directionality(
             textDirection: TextDirection.rtl, // نجبر اتجاه اليسار - يمين هنا فقط
             child: InkWell(
-              onTap: () {
+              onTap: () { print(waitingImage.toString());
                 _scaffoldKey.currentState?.openDrawer();
               },
               child: Icon(
@@ -831,12 +819,11 @@ Widget _buildSearchField(bool isDarkMode) {
             ),
           ),  SizedBox(width: 15.w),
       Padding(
-                  padding:  EdgeInsets.only(top: 7.h),
+                  padding:  EdgeInsets.only(top: 0.h),
                   child:EditableTextWidget(
   keyName: 'mainTitle',
   textAlign: TextAlign.center,
   fontWeight: FontWeight.w500,
-  height: 0.5.h,
 ),
                 ),
           SizedBox(width: 0.w),
@@ -955,7 +942,7 @@ Widget _buildSearchField(bool isDarkMode) {
                       title,
                       style: TextStyle(
                         fontFamily: AppTextStyles.appFontFamily,
-                        fontSize: AppTextStyles.medium,
+                        fontSize: AppTextStyles.large,
 
                         fontWeight: FontWeight.bold,
                         color: AppColors.textPrimary(isDarkMode),
@@ -983,7 +970,7 @@ Widget _buildSearchField(bool isDarkMode) {
                             'إظهار'.tr,
                             style: TextStyle(
                               fontFamily: AppTextStyles.appFontFamily,
-                             fontSize: AppTextStyles.small,
+                              fontSize: 11.sp,
                               fontWeight: FontWeight.w700,
                               color: AppColors.buttonAndLinksColor,
                               decoration: TextDecoration.underline,

@@ -44,7 +44,7 @@ class AddAdMechanismScreen extends StatelessWidget {
               // مقدمة
               Text('لإضافة إعلان جديد في تطبيق Stay in Me، يرجى اتباع الخطوات التالية بدقة. هذه الآلية تضمن وصول إعلانك للجمهور المستهدف بفعالية.'.tr,
                 style: TextStyle(
-                  fontSize: AppTextStyles.medium,
+                  fontSize: AppTextStyles.large,
 
                   height: 1.8,
                   color: textColor,

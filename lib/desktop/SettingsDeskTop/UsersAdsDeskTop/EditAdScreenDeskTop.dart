@@ -33,6 +33,8 @@ class EditAdScreenDeskTop extends StatefulWidget {
 }
 
 class _EditAdScreenDeskTopState extends State<EditAdScreenDeskTop> {
+    final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
   final ManageAdController controller = Get.find<ManageAdController>();
   final ThemeController themeC = Get.find<ThemeController>();
   final AreaController areaController = Get.find<AreaController>();
@@ -75,12 +77,15 @@ class _EditAdScreenDeskTopState extends State<EditAdScreenDeskTop> {
     final themeController = Get.find<ThemeController>();
 
     return  Scaffold(     
-       endDrawer: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 300),
-          child: _homeController.isServicesOrSettings.value
-              ? SettingsDrawerDeskTop(key: const ValueKey(1))
-              : DesktopServicesDrawer(key: const ValueKey(2)),
-        ),
+       key: _scaffoldKey,
+    endDrawer: Obx(
+      () => AnimatedSwitcher(
+        duration: const Duration(milliseconds: 300),
+        child: _homeController.drawerType.value == DrawerType.settings
+            ? const SettingsDrawerDeskTop(key: ValueKey('settings'))
+            : const DesktopServicesDrawer(key: ValueKey('services')),
+      ),
+    ),
         backgroundColor: AppColors.background(themeController.isDarkMode.value),
       body: _buildDesktopBody(),
     );
@@ -114,7 +119,7 @@ class _EditAdScreenDeskTopState extends State<EditAdScreenDeskTop> {
     return Column(
       children: [
           TopAppBarDeskTop(),
-          SecondaryAppBarDeskTop(),
+          SecondaryAppBarDeskTop(scaffoldKey: _scaffoldKey,),
          SizedBox(height: 20.h,),
         Expanded(
           child: Obx(() {

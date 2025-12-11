@@ -48,7 +48,7 @@ Get.back();
                   'لا تتوفر بيانات المستخدم'.tr,
                   style: TextStyle(
                     fontFamily: AppTextStyles.appFontFamily,
-                    fontSize: AppTextStyles.medium,
+                    fontSize: AppTextStyles.large,
 
                     color: AppColors.textPrimary(isDarkMode),
                   ),
@@ -156,7 +156,7 @@ Get.back();
                 value,
                 style: TextStyle(
                   fontFamily: AppTextStyles.appFontFamily,
-                  fontSize: AppTextStyles.medium,
+                  fontSize: AppTextStyles.large,
 
                   fontWeight: FontWeight.w600,
                   color: AppColors.textPrimary(isDarkMode),

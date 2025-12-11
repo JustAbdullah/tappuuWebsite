@@ -23,19 +23,23 @@ class UserInfoPageDeskTop extends StatelessWidget {
     final isDarkMode = themeController.isDarkMode.value;
     final currentUser = loadingController.currentUser;
     final HomeController _homeController = Get.find<HomeController>();
+       final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
     return  Scaffold(     
-       endDrawer: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 300),
-          child: _homeController.isServicesOrSettings.value
-              ? SettingsDrawerDeskTop(key: const ValueKey(1))
-              : DesktopServicesDrawer(key: const ValueKey(2)),
-        ),
+       key: _scaffoldKey,
+    endDrawer: Obx(
+      () => AnimatedSwitcher(
+        duration: const Duration(milliseconds: 300),
+        child: _homeController.drawerType.value == DrawerType.settings
+            ? const SettingsDrawerDeskTop(key: ValueKey('settings'))
+            : const DesktopServicesDrawer(key: ValueKey('services')),
+      ),
+    ),
         backgroundColor: AppColors.background(themeController.isDarkMode.value),
       body:  Column(
         children: [
             TopAppBarDeskTop(),
-          SecondaryAppBarDeskTop(),
+          SecondaryAppBarDeskTop(scaffoldKey: _scaffoldKey,),
          SizedBox(height: 20.h,),
           currentUser == null
               ? Center(

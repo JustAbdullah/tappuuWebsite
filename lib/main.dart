@@ -9,6 +9,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:flutter_web_plugins/flutter_web_plugins.dart';
+import 'package:flutter/foundation.dart' show kIsWeb, kReleaseMode;
+
+// WebView for web
+import 'package:webview_flutter_platform_interface/webview_flutter_platform_interface.dart';
+import 'package:webview_flutter_web/webview_flutter_web.dart';
 
 import 'package:tappuu_website/app_routes.dart';
 import 'package:tappuu_website/firebase_options.dart';
@@ -27,7 +32,10 @@ import 'core/services/font_service.dart';
 import 'core/services/font_size_service.dart';
 import 'enhanced_navigator_observer.dart';
 
+final GlobalKey<NavigatorState> navigatorKey = Get.key;
+bool _allowExit = false;
 
+/// Firebase init in background
 Future<void> _initializeFirebaseServices() async {
   try {
     await initializeFirebase();
@@ -47,14 +55,9 @@ Future<void> initializeFirebase() async {
   }
 }
 
-final GlobalKey<NavigatorState> navigatorKey = Get.key;
-bool _allowExit = false;
-
+/// نسجل فقط الأشياء الخفيفة دائمًا، والباقي lazy
 void registerPersistentControllers() {
-  if (!Get.isRegistered<HomeController>()) {
-    Get.put(HomeController(), permanent: true);
-    debugPrint('Main -> HomeController registered permanent');
-  }
+  // Theme + Loading مهمين لكل التطبيق
   if (!Get.isRegistered<ThemeController>()) {
     Get.put(ThemeController(), permanent: true);
     debugPrint('Main -> ThemeController registered permanent');
@@ -63,22 +66,25 @@ void registerPersistentControllers() {
     Get.put(LoadingController(), permanent: true);
     debugPrint('Main -> LoadingController registered permanent');
   }
+
+  // باقي الكنترولات نسجلها lazy عشان ما تنشأ إلا عند استخدامها
+  if (!Get.isRegistered<HomeController>()) {
+    Get.lazyPut<HomeController>(() => HomeController(), fenix: true);
+    debugPrint('Main -> HomeController registered lazy');
+  }
   if (!Get.isRegistered<ManageAdController>()) {
-    Get.put(ManageAdController(), permanent: true);
-    debugPrint('Main -> ManageAdController registered permanent');
+    Get.lazyPut<ManageAdController>(() => ManageAdController(), fenix: true);
+    debugPrint('Main -> ManageAdController registered lazy');
   }
   if (!Get.isRegistered<AdsController>()) {
-    Get.put(AdsController(), permanent: true);
-    debugPrint('Main -> AdsController registered permanent');
+    Get.lazyPut<AdsController>(() => AdsController(), fenix: true);
+    debugPrint('Main -> AdsController registered lazy');
   }
 
-  // NEW: Register EditableTextController as a persistent controller
-  if (!Get.isRegistered<EditableTextController>()) {
-    Get.put(EditableTextController(), permanent: true);
-    debugPrint('Main -> EditableTextController registered permanent');
-  }
+  // EditableTextController يُسجَّل من AppServices.init في الخلفية
 }
 
+/// -------- BrowserHistorySync كما هو تقريبًا --------
 class BrowserHistorySync extends NavigatorObserver {
   final List<String> _stack = [];
   bool _syncingFromBrowser = false;
@@ -92,7 +98,11 @@ class BrowserHistorySync extends NavigatorObserver {
     _stack.clear();
     _stack.add(initialRoute);
     try {
-      html.window.history.replaceState({'route': initialRoute, 'index': 0}, '', initialRoute);
+      html.window.history.replaceState(
+        {'route': initialRoute, 'index': 0},
+        '',
+        initialRoute,
+      );
     } catch (e) {
       debugPrint('HistorySync init error: $e');
     }
@@ -117,7 +127,11 @@ class BrowserHistorySync extends NavigatorObserver {
     _stack.add(name);
     try {
       final url = _routeToUrl(name);
-      html.window.history.pushState({'route': name, 'index': _stack.length - 1}, '', url);
+      html.window.history.pushState(
+        {'route': name, 'index': _stack.length - 1},
+        '',
+        url,
+      );
     } catch (e) {
       debugPrint('HistorySync pushState error: $e');
     }
@@ -141,7 +155,11 @@ class BrowserHistorySync extends NavigatorObserver {
     _stack.add(newRoute);
     try {
       final url = _routeToUrl(newRoute);
-      html.window.history.replaceState({'route': newRoute, 'index': _stack.length - 1}, '', url);
+      html.window.history.replaceState(
+        {'route': newRoute, 'index': _stack.length - 1},
+        '',
+        url,
+      );
     } catch (e) {
       debugPrint('HistorySync replaceState error: $e');
     }
@@ -187,7 +205,11 @@ class BrowserHistorySync extends NavigatorObserver {
     _stack.add(newRoute);
     try {
       final url = _routeToUrl(newRoute);
-      html.window.history.pushState({'route': newRoute, 'index': 0}, '', url);
+      html.window.history.pushState(
+        {'route': newRoute, 'index': 0},
+        '',
+        url,
+      );
     } catch (e) {
       debugPrint('HistorySync handleOffAllNavigation error: $e');
     }
@@ -196,67 +218,95 @@ class BrowserHistorySync extends NavigatorObserver {
 
 final BrowserHistorySync historyObserver = BrowserHistorySync();
 
-/// Normalize incoming path: remove leading `/web` if present.
-/// Examples:
-///   '/web/ads/x' -> '/ads/x'
-///   '/web' -> '/'
-///   '/' -> '/'
 String _normalizePath(String rawPath) {
   if (rawPath.isEmpty) return '/';
-  if (rawPath == '/web') return '/';
-  if (rawPath.startsWith('/web/')) return rawPath.substring(4); // remove "/web"
+
+  // ✅ توحيد /index.html و /index إلى /
+  if (rawPath == '/index.html' || rawPath == '/index') {
+    return '/';
+  }
+
+  // ✅ توحيد /web و /web/ إلى /
+  if (rawPath == '/web' || rawPath == '/web/') {
+    return '/';
+  }
+
+  // ✅ إذا الرابط يبدأ بـ /web/ نشيل /web
+  if (rawPath.startsWith('/web/')) {
+    return rawPath.substring(4); // يحوّل /web/ads/... إلى /ads/...
+  }
+
   return rawPath;
 }
 
-// دالة مبسطة لتهيئة الخدمات الأساسية فقط
+/// AppServices + SharedPreferences + editable-texts
+/// ملاحظة: ما عاد نستخدمه كشيء "حرج للإقلاع" – ينفذ في الخلفية
 Future<void> _initializeEssentialServices() async {
   try {
-    // 1) تهيئة AppServices الأساسية فقط (بدون جلب البيانات)
-    final appServices = await AppServices.init();
-    Get.put(appServices, permanent: true);
-    debugPrint('✅ Basic AppServices initialized');
+    final appServices = await Future.any<AppServices?>([
+      AppServices.init(),
+      Future.delayed(const Duration(seconds: 5), () => null),
+    ]);
 
+    if (appServices != null) {
+      if (!Get.isRegistered<AppServices>()) {
+        Get.put(appServices, permanent: true);
+      }
+      debugPrint('✅ AppServices initialized');
+    } else {
+      debugPrint('⚠️ AppServices init timeout, will continue without it');
+    }
   } catch (e) {
-    debugPrint("❌ Basic AppServices error: $e");
+    debugPrint("❌ AppServices error: $e");
   }
 }
 
-// دالة منفصلة لجلب البيانات الثقيلة بعد تحميل التطبيق
+/// الخدمات الثقيلة بعد أول Frame (شعار، شاشة انتظار، حجم الخطوط، الخطوط…)
 void _initializeHeavyServices() {
   WidgetsBinding.instance.addPostFrameCallback((_) async {
     debugPrint('🚀 Starting heavy services initialization...');
 
-    final appServices = Get.find<AppServices>();
+    AppServices? appServices;
+    try {
+      if (Get.isRegistered<AppServices>()) {
+        appServices = Get.find<AppServices>();
+      }
+    } catch (_) {
+      appServices = null;
+    }
 
-    // تشغيل جميع الخدمات الثقيلة بشكل متوازي مع مهلات قصيرة
-    final heavyServices = [
-      // 1) جلب اللوجو (أقصى وقت 2 ثانية)
-      () async {
-        try {
-          await Future.any([
-            appServices.fetchAndStoreAppLogo(),
-            Future.delayed(const Duration(seconds: 2)),
-          ]);
-          debugPrint('✅ App logo fetched');
-        } catch (e) {
-          debugPrint('❌ App logo error: $e');
-        }
-      },
+    final List<Future<void> Function()> heavyServices = [];
 
-      // 2) جلب شاشة الانتظار (أقصى وقت 2 ثانية)
-      () async {
-        try {
-          await Future.any([
-            appServices.fetchAndStoreWaitingScreen(),
-            Future.delayed(const Duration(seconds: 2)),
-          ]);
-          debugPrint('✅ Waiting screen fetched');
-        } catch (e) {
-          debugPrint('❌ Waiting screen error: $e');
-        }
-      },
+    // فقط لو AppServices موجود
+    if (appServices != null) {
+      heavyServices.addAll([
+        () async {
+          try {
+            await Future.any([
+              appServices!.fetchAndStoreAppLogo(),
+              Future.delayed(const Duration(seconds: 2)),
+            ]);
+            debugPrint('✅ App logo fetched');
+          } catch (e) {
+            debugPrint('❌ App logo error: $e');
+          }
+        },
+        () async {
+          try {
+            await Future.any([
+              appServices!.fetchAndStoreWaitingScreen(),
+              Future.delayed(const Duration(seconds: 2)),
+            ]);
+            debugPrint('✅ Waiting screen fetched');
+          } catch (e) {
+            debugPrint('❌ Waiting screen error: $e');
+          }
+        },
+      ]);
+    }
 
-      // 3) جلب أحجام الخطوط (أقصى وقت 1.5 ثانية)
+    // حجم الخطوط + الخطوط
+    heavyServices.addAll([
       () async {
         try {
           await Future.any([
@@ -268,8 +318,6 @@ void _initializeHeavyServices() {
           debugPrint('❌ Font sizes error: $e');
         }
       },
-
-      // 4) تحميل الخطوط (أقصى وقت 3 ثواني)
       () async {
         try {
           await Future.any([
@@ -281,63 +329,31 @@ void _initializeHeavyServices() {
           debugPrint('❌ Fonts error: $e');
         }
       },
+    ]);
 
-      // 5) NEW: جلب Editable Texts بشكل متزامن (أقصى وقت 4 ثواني)
-      () async {
-        try {
-          if (Get.isRegistered<EditableTextController>()) {
-            final editableCtrl = Get.find<EditableTextController>();
-            await Future.any([
-              editableCtrl.fetchAll(),
-              Future.delayed(const Duration(seconds: 4)),
-            ]);
-            debugPrint('✅ Editable texts fetched (or timeout)');
-          } else {
-            debugPrint('ℹ️ EditableTextController not registered yet.');
-          }
-        } catch (e) {
-          debugPrint('❌ Editable texts fetch error: $e');
-        }
-      },
-    ];
-
-    // تشغيل جميع الخدمات بشكل متوازي
     await Future.wait(heavyServices.map((service) => service()));
     debugPrint('🎉 All heavy services completed');
   });
 }
 
-Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-
-  // 1) تهيئة الخدمات الأساسية السريعة أولاً
-  await _initializeEssentialServices();
-
-  // 2) تسجيل الكونترولر الأساسية
-  await Get.putAsync(() async => ColorController());
-  final colorController = Get.find<ColorController>();
-
-  // 3) تهيئة Firebase بشكل غير متزامن (لا ننتظره)
-  unawaited(_initializeFirebaseServices());
-
-  // 4) إعدادات النظام الأساسية
-  setUrlStrategy(PathUrlStrategy());
-  await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+void _setupSystemUiAndOrientation() {
+  // على الويب تقريباً no-op لكن تترك للتوافق
+  unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       systemNavigationBarColor: Colors.transparent,
       statusBarColor: Colors.transparent,
     ),
   );
+  SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]).catchError((e) {
+    debugPrint('❌ Orientation setup error: $e');
+  });
+}
 
-  // 5) تسجيل الكونترولر الإضافية
-  if (!Get.isRegistered<ChangeLanguageController>()) {
-    Get.put(ChangeLanguageController(), permanent: true);
-  }
-
-  registerPersistentControllers();
-
-  // 6) إعدادات التاريخ والروابط
+void _setupBrowserHooks() {
   try {
     final rawInitialPath = html.window.location.pathname ?? '/';
     final initialPath = _normalizePath(rawInitialPath);
@@ -347,7 +363,6 @@ Future<void> main() async {
     debugPrint('❌ History observer error: $e');
   }
 
-  // 7) إعدادات المتصفح
   try {
     html.window.onBeforeUnload.listen((html.Event event) {
       try {
@@ -368,23 +383,61 @@ Future<void> main() async {
       await _confirmOrCancelExit();
     }
   });
+}
 
-  // 8) إعدادات التوجيه
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-    DeviceOrientation.portraitDown
-  ]);
+/// ColorController + primaryColor في الخلفية
+Future<void> _initColorControllerAndFetchPrimary() async {
+  try {
+    if (!Get.isRegistered<ColorController>()) {
+      await Get.putAsync(() async => ColorController());
+    }
+    final colorController = Get.find<ColorController>();
+    await Future.any([
+      colorController.fetchPrimaryColor(),
+      Future.delayed(const Duration(milliseconds: 1500)),
+    ]);
+    debugPrint('✅ Primary color fetched');
+  } catch (e) {
+    debugPrint('❌ Primary color error: $e');
+  }
+}
 
-  // 9) جلب اللون الأساسي بسرعة (1.5 ثانية كحد أقصى)
-  unawaited(Future.any([
-    colorController.fetchPrimaryColor(),
-    Future.delayed(const Duration(milliseconds: 1500)),
-  ]).then((_) => debugPrint('✅ Primary color fetched')));
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
 
-  // 10) تشغيل التطبيق فوراً
+  // كتم debugPrint في نسخة release لتخفيف الضوضاء والأثر
+  if (kReleaseMode) {
+    debugPrint = (String? message, {int? wrapWidth}) {};
+  }
+
+  // WebView للويب (reCAPTCHA وغيره)
+  if (kIsWeb) {
+    WebViewPlatform.instance = WebWebViewPlatform();
+    debugPrint('✅ WebViewPlatform initialized for Web');
+  }
+
+  // URL strategy + System UI
+  setUrlStrategy(PathUrlStrategy());
+  _setupSystemUiAndOrientation();
+
+  // اللغة + الكنترولرات الأساسية
+  if (!Get.isRegistered<ChangeLanguageController>()) {
+    Get.put(ChangeLanguageController(), permanent: true);
+  }
+  registerPersistentControllers();
+
+  // شغّل التطبيق بأسرع ما يمكن (بدون انتظار أي شبكات)
   runApp(const MyApp());
 
-  // 11) بدء الخدمات الثقيلة بعد تحميل التطبيق
+  // بعد تشغيل التطبيق نبدأ الخلفية:
+  if (kIsWeb) {
+    _setupBrowserHooks();
+  }
+
+  // AppServices, Firebase, ColorController, heavy services كلها في الخلفية
+  unawaited(_initializeEssentialServices());
+  unawaited(_initializeFirebaseServices());
+  unawaited(_initColorControllerAndFetchPrimary());
   _initializeHeavyServices();
 }
 
@@ -402,11 +455,11 @@ Future<void> _confirmOrCancelExit() async {
         actions: [
           TextButton(
             onPressed: () => Get.back(result: false),
-            child: const Text('لا')
+            child: const Text('لا'),
           ),
           TextButton(
             onPressed: () => Get.back(result: true),
-            child: const Text('نعم')
+            child: const Text('نعم'),
           ),
         ],
       ),
@@ -454,7 +507,7 @@ class _MyAppState extends State<MyApp> {
 
   void _handleInitialDeepLink() {
     try {
-      // 1) معالجة بيانات الإعلان من window.__AD_DATA__
+      // 1) بيانات الإعلان من window.__AD_DATA__ (seo-inject.php)
       try {
         final dynamic adData = js_util.getProperty(html.window, '__AD_DATA__');
         if (adData != null) {
@@ -482,7 +535,7 @@ class _MyAppState extends State<MyApp> {
         debugPrint('❌ __AD_DATA__ error: $e');
       }
 
-      // 2) معالجة الروابط العميقة
+      // 2) الروابط العميقة /ads/... و /ad/...
       final rawPath = html.window.location.pathname ?? '/';
       final path = _normalizePath(rawPath);
       final queryParams = html.window.location.search;
@@ -502,16 +555,24 @@ class _MyAppState extends State<MyApp> {
   void _handleAdsScreenDeepLink(String path, String queryParams) {
     try {
       final uri = Uri.parse('https://example.com$path');
-      final segments = uri.pathSegments.where((s) => s.trim().isNotEmpty).toList();
+      final segments =
+          uri.pathSegments.where((s) => s.trim().isNotEmpty).toList();
 
       final Map<String, dynamic> arguments = {};
 
       final adsIndex = segments.indexWhere((segment) => segment == 'ads');
-      final effectiveSegments = adsIndex >= 0 ? segments.sublist(adsIndex + 1) : segments;
+      final effectiveSegments =
+          adsIndex >= 0 ? segments.sublist(adsIndex + 1) : segments;
 
-      if (effectiveSegments.isNotEmpty) arguments['categorySlug'] = effectiveSegments[0];
-      if (effectiveSegments.length > 1) arguments['subCategorySlug'] = effectiveSegments[1];
-      if (effectiveSegments.length > 2) arguments['subTwoCategorySlug'] = effectiveSegments[2];
+      if (effectiveSegments.isNotEmpty) {
+        arguments['categorySlug'] = effectiveSegments[0];
+      }
+      if (effectiveSegments.length > 1) {
+        arguments['subCategorySlug'] = effectiveSegments[1];
+      }
+      if (effectiveSegments.length > 2) {
+        arguments['subTwoCategorySlug'] = effectiveSegments[2];
+      }
 
       if (queryParams.isNotEmpty) {
         final params = Uri.splitQueryString(queryParams);
@@ -521,7 +582,8 @@ class _MyAppState extends State<MyApp> {
         }
         if (params.containsKey('featured')) {
           final featuredValue = params['featured']?.toLowerCase();
-          arguments['onlyFeatured'] = featuredValue == 'true' || featuredValue == '1';
+          arguments['onlyFeatured'] =
+              featuredValue == 'true' || featuredValue == '1';
         }
       }
 
@@ -553,7 +615,6 @@ class _MyAppState extends State<MyApp> {
       designSize: const Size(1440, 900),
       minTextAdapt: true,
       splitScreenMode: true,
-      // إضافة loading widget أثناء الانتظار
       builder: (_, child) {
         return Directionality(
           textDirection: TextDirection.rtl,
@@ -561,10 +622,10 @@ class _MyAppState extends State<MyApp> {
             theme: ThemeData(
               fontFamily: 'Tajawal',
               textTheme: ThemeData.light().textTheme.apply(
-                fontFamily: 'Tajawal',
-                bodyColor: Colors.black,
-                displayColor: Colors.black,
-              ),
+                    fontFamily: 'Tajawal',
+                    bodyColor: Colors.black,
+                    displayColor: Colors.black,
+                  ),
             ),
             darkTheme: ThemeData.dark().copyWith(),
             navigatorKey: navigatorKey,
@@ -577,6 +638,7 @@ class _MyAppState extends State<MyApp> {
             initialRoute: AppRoutes.initial,
             getPages: AppRoutes.pages,
             initialBinding: BindingsBuilder(() {
+              // AdsController لو احتجته فورًا
               if (!Get.isRegistered<AdsController>()) {
                 Get.put(AdsController(), permanent: false);
               }

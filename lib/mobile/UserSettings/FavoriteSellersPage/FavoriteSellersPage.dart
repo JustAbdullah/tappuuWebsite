@@ -102,7 +102,7 @@ class _FavoriteSellersUnifiedPageState extends State<FavoriteSellersUnifiedPage>
                     'لا توجد بائعين مفضّلين'.tr,
                     style: TextStyle(
                       fontFamily: AppTextStyles.appFontFamily,
-                      fontSize: AppTextStyles.medium,
+                      fontSize: AppTextStyles.large,
 
                       color: AppColors.textPrimary(isDark),
                     ),

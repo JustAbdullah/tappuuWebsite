@@ -3,16 +3,16 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get/get.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:tappuu_website/controllers/home_controller.dart';
+import 'package:tappuu_website/controllers/ThemeController.dart';
+import 'package:tappuu_website/core/constant/app_text_styles.dart';
+import 'package:tappuu_website/core/constant/appcolors.dart';
+import 'package:tappuu_website/core/localization/changelanguage.dart';
 
-import '../../../controllers/AdsManageSearchController.dart';
-import '../../../controllers/ThemeController.dart';
-import '../../../controllers/home_controller.dart';
-import '../../../core/constant/app_text_styles.dart';
-import '../../../core/constant/appcolors.dart';
-import '../../../core/localization/changelanguage.dart';
-import '../../viewAdsScreen/AdsScreen.dart';
-import '../homeItems/SubCategories/subCategoriesScreen.dart';
-import '../menubar.dart';
+import '../../controllers/AdsManageSearchController.dart';
+import '../HomeScreen/homeItems/SubCategories/subCategoriesScreen.dart';
+import '../HomeScreen/menubar.dart';
+import '../viewAdsScreen/AdsScreen.dart';
 
 class UrgentCategoriesScreen extends StatefulWidget {
   final String period;
@@ -236,7 +236,6 @@ String _getAppBarSubTitle() {
                   name: translation.name,
                   adsCount: category.adsCount,
                   imageUrl: category.image,
-                  slug: category.slug
                 );
               },
             ),
@@ -466,8 +465,6 @@ String _getAppBarSubTitle() {
     required String name,
     required int adsCount,
     required String? imageUrl,
-        required String? slug,
-
   }) {
     final isDarkMode = Get.find<ThemeController>().isDarkMode.value;
     
@@ -480,7 +477,7 @@ print(widget.period);
               categoryId: id,
               categoryName: name,
               countOfAdsInCategory: adsCount,
-              adsPeriod: widget. period, categorslug:slug! ,
+              adsPeriod: widget. period,
               
             ));
           

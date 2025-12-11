@@ -13,12 +13,13 @@ import '../MyConversationsScreen/MyConversationsScreen.dart';
 import '../UserAds/UserAdsScreen.dart';
 import 'FavoriteGroupsPage/FavoriteGroupsPage.dart';
 import 'FavoriteSellersPage/FavoriteSellersPage.dart';
+import 'MyCompanyInvitesScreen/MyCompanyInvitesScreen.dart';
 import 'MyReportsScreen/MyReportsScreen.dart';
+import 'SendCompanyInvitesScreen/SendCompanyInvitesScreen.dart';
 import 'TransferProofsPage/TransferProofsPage.dart';
 import 'UserWalletsPage/UserWalletsPage.dart' ;
 import 'itemsUserSettings/AdvertiserProfilesScreen.dart';
 import 'itemsUserSettings/CurrencySettingsPage.dart';
-import 'itemsUserSettings/LanguageSettingsPage.dart';
 import 'itemsUserSettings/SearchHistoryDirectPage/SearchHistoryDirectPage.dart';
 import 'itemsUserSettings/SearchHistoryScreen/SearchHistoryScreen.dart';
 import 'itemsUserSettings/UserInfoPage.dart';
@@ -59,19 +60,21 @@ class SettingsDrawer extends StatelessWidget {
                       color: AppColors.appBar(isDarkMode),
                       borderRadius: BorderRadius.only(
                         bottomLeft: Radius.circular(12.r),
-                                  bottomRight: Radius.circular(12.r)),
+                        bottomRight: Radius.circular(12.r),
+                      ),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('الإعدادات'.tr, 
-                            style: TextStyle(
-                              fontFamily: AppTextStyles.appFontFamily,
-                              color: AppColors.onPrimary,
-                              fontSize: AppTextStyles.xxlarge,
-
-                              fontWeight: FontWeight.w700,
-                            )),
+                        Text(
+                          'الإعدادات'.tr,
+                          style: TextStyle(
+                            fontFamily: AppTextStyles.appFontFamily,
+                            color: AppColors.onPrimary,
+                            fontSize: AppTextStyles.xxlarge,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                         IconButton(
                           icon: Icon(Icons.close, color: AppColors.onPrimary, size: 24.w),
                           onPressed: () => Navigator.pop(context),
@@ -79,7 +82,7 @@ class SettingsDrawer extends StatelessWidget {
                       ],
                     ),
                   ),
-                  
+
                   Expanded(
                     child: ListView(
                       padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 24.h),
@@ -91,15 +94,24 @@ class SettingsDrawer extends StatelessWidget {
                           items: [
                             _buildItem(
                               title: 'إضافة إعلان جديد'.tr,
-                              onTap: () => _handleAddNewAd(),
+                              onTap: () {
+                                Get.back(); // close drawer
+                                Get.to(() => AddAdScreen());
+                              },
                             ),
                             _buildItem(
                               title: 'إدارة الإعلانات'.tr,
-                              onTap: () => _handleManageAds(),
+                              onTap: () {
+                                Get.back();
+                                Get.to(() => UserAdsScreen(statusAds: 'published', name: 'إعلاناتي المنشورة'));
+                              },
                             ),
                             _buildItem(
                               title: 'غير المنشورة'.tr,
-                              onTap: () => _handleUnpublishedAds(),
+                              onTap: () {
+                                Get.back();
+                                Get.to(() => UserAdsScreen(statusAds: 'under_review', name: 'إعلاناتي تحت المراجعة'));
+                              },
                             ),
                           ],
                           cardColor: cardColor,
@@ -107,51 +119,69 @@ class SettingsDrawer extends StatelessWidget {
                           textColor: textColor,
                           iconColor: iconColor,
                         ),
-                        
+
                         SizedBox(height: 16.h),
-                        
+
                         // Account Section
                         _section(
                           title: 'حسابي'.tr,
                           icon: Icons.person_outline,
                           items: [
+
+                            
                             _buildItem(
                               title: 'معلوماتي'.tr,
-                              onTap: () => _handleMyInfo(),
-                            ),
-                             _buildItem(
-                              title: 'محفظتي'.tr,
-                              onTap: () => _handleUserWalletsPage(),
-                            ),
-                             _buildItem(
-                              title: 'عمليات التحويل'.tr,
-                              onTap: () => _handleTransferProofsPage(),
-                            ),
+                              onTap: () {
+                                Get.back();
+                                Get.to(() => UserInfoPage());
+                              },
 
-                            _buildItem(
-                              title: 'تعيين كلمة المرور'.tr,
-                              onTap: () => _handleChangePassword(),
                             ),
                                _buildItem(
-                              title: 'المحادثات'.tr,
-                              onTap: () => _handleConversations(),
-                            ),   _buildItem(
+                              title: 'الرسائل'.tr,
+                              onTap: () {
+                                Get.back();
+                                Get.to(() => ConversationsListScreen());
+                              },
+                            ),
+                            _buildItem(
+                              title: 'محفظتي'.tr,
+                              onTap: () {
+                                Get.back();
+                                Get.to(() => UserWalletsPage(userId: Get.find<LoadingController>().currentUser?.id ?? 0));
+                              },
+                            ),
+                            _buildItem(
+                              title: 'عمليات التحويل'.tr,
+                              onTap: () {
+                                Get.back();
+                                Get.to(() => TransferProofsPage(userId: Get.find<LoadingController>().currentUser?.id ?? 0));
+                              },
+                            ),
+                            _buildItem(
+                              title: 'تعيين كلمة المرور'.tr,
+                              onTap: () {
+                                Get.back();
+                                Get.to(() => ResetPasswordScreen());
+                              },
+                            ),
+                         
+                            _buildItem(
                               title: 'بلاغاتي'.tr,
-                              onTap: () =>   _handleLMyReports(),
+                              onTap: () {
+                                Get.back();
+                                Get.to(() => MyReportsScreen());
+                              },
                             ),
                           ],
-
-
                           cardColor: cardColor,
                           primary: primary,
                           textColor: textColor,
                           iconColor: iconColor,
                         ),
-                        
 
-                      
                         SizedBox(height: 16.h),
-                        
+
                         // Advertisers Section
                         _section(
                           title: 'المعلنين'.tr,
@@ -159,11 +189,29 @@ class SettingsDrawer extends StatelessWidget {
                           items: [
                             _buildItem(
                               title: 'إدارة المعلنين'.tr,
-                              onTap: () => _handleManageAdvertisers(),
+                              onTap: () {
+                                Get.back();
+                                Get.to(() => AdvertiserProfilesScreen());
+                              },
                             ),
                             _buildItem(
                               title: 'إضافة معلن جديد'.tr,
-                              onTap: () => _handleAddNewAdvertiser(),
+                              onTap: () {
+                                Get.back();
+                                Get.to(() => AdvertiserDataScreen());
+                              },
+                            ), _buildItem(
+                              title: 'الشركات والاعضاء'.tr,
+                              onTap: () {
+                                Get.back();
+                                Get.to(() => SendCompanyInvitesScreen());
+                              },
+                            ), _buildItem(
+                              title: 'دعوات الانضمام'.tr,
+                              onTap: () {
+                                Get.back();
+                                Get.to(() => MyCompanyInvitesScreen());
+                              },
                             ),
                           ],
                           cardColor: cardColor,
@@ -171,9 +219,9 @@ class SettingsDrawer extends StatelessWidget {
                           textColor: textColor,
                           iconColor: iconColor,
                         ),
-                        
+
                         SizedBox(height: 16.h),
-                        
+
                         // Favorites Section
                         _section(
                           title: 'المفضلات'.tr,
@@ -181,19 +229,31 @@ class SettingsDrawer extends StatelessWidget {
                           items: [
                             _buildItem(
                               title: 'مفضلاتي من الإعلانات'.tr,
-                              onTap: () => _handleFavoriteAds(),
+                              onTap: () {
+                                Get.back();
+                                Get.to(() => FavoriteGroupsPage());
+                              },
                             ),
                             _buildItem(
                               title: 'سجل المشاهدات الأخيرة'.tr,
-                              onTap: () => _handleViewHistory(),
+                              onTap: () {
+                                Get.back();
+                                Get.to(() => SearchHistoryScreen());
+                              },
                             ),
-                         _buildItem(
+                            _buildItem(
                               title: 'سجل البحث'.tr,
-                              onTap: () => _handleSearchHistory(),
+                              onTap: () {
+                                Get.back();
+                                Get.to(() => SearchHistoryDirectPage());
+                              },
                             ),
                             _buildItem(
                               title: 'الباعة المفضلين'.tr,
-                              onTap: () => _handleFavoriteSellers(),
+                              onTap: () {
+                                Get.back();
+                                Get.to(() => FavoriteSellersUnifiedPage());
+                              },
                             ),
                           ],
                           cardColor: cardColor,
@@ -201,28 +261,33 @@ class SettingsDrawer extends StatelessWidget {
                           textColor: textColor,
                           iconColor: iconColor,
                         ),
-                        
+
                         SizedBox(height: 16.h),
-                        
+
                         // Appearance Section
                         _section(
                           title: 'المظهر'.tr,
                           icon: Icons.palette_outlined,
                           items: [
-                         /*   _buildItem(
+                            /* _buildItem(
                               title: 'اللغة'.tr,
-                              onTap: () => _handleLanguageSettings(context),
+                              onTap: () {
+                                Get.back();
+                                Get.to(() => LanguageSettingsPage());
+                              },
                               showArrow: true,
                             ),*/
                             _buildItem(
                               title: 'العملة'.tr,
-                              onTap: () => _handleCurrencySettings(),
+                              onTap: () {
+                                Get.back();
+                                Get.to(() => CurrencySettingsPage());
+                              },
                               showArrow: true,
                             ),
                             _buildThemeToggleItem(
                               onToggle: (value) => themeController.toggleTheme(),
                               isDarkMode: isDarkMode,
-                              
                             ),
                           ],
                           cardColor: cardColor,
@@ -230,28 +295,69 @@ class SettingsDrawer extends StatelessWidget {
                           textColor: textColor,
                           iconColor: iconColor,
                         ),
-                        
+
                         SizedBox(height: 24.h),
-                        
+
                         // Divider
                         Divider(height: 1.h, color: dividerColor, thickness: 0.5),
                         SizedBox(height: 16.h),
-                        
+
                         // Actions with improved styling
                         _actionTile(
-                          'تسجيل خروج'.tr, 
+                          'تسجيل خروج'.tr,
                           Icons.logout,
                           AppColors.error,
                           iconColor: iconColor,
-                          onTap: () => _handleLogout(),
+                          onTap: () {
+                            Get.back(); // close drawer first
+                            Get.dialog(
+                              AlertDialog(
+                                title: Text('تسجيل الخروج'.tr),
+                                content: Text('هل أنت متأكد أنك تريد تسجيل الخروج؟'.tr),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Get.back(),
+                                    child: Text('إلغاء'.tr),
+                                  ),
+                                  TextButton(
+                                    onPressed: () {
+                                      Get.find<LoadingController>().logout();
+                                    },
+                                    child: Text('تسجيل الخروج'.tr),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
                         ),
                         SizedBox(height: 8.h),
                         _actionTile(
-                          'حذف الحساب'.tr, 
+                          'حذف الحساب'.tr,
                           Icons.delete_outline,
                           AppColors.error,
                           iconColor: iconColor,
-                          onTap: () => _handleDeleteAccount(),
+                          onTap: () {
+                            Get.back(); // close drawer first
+                            Get.dialog(
+                              AlertDialog(
+                                title: Text('حذف الحساب'.tr),
+                                content: Text('هل أنت متأكد أنك تريد حذف حسابك؟ هذه العملية لا يمكن التراجع عنها.'.tr),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Get.back(),
+                                    child: Text('إلغاء'.tr),
+                                  ),
+                                  TextButton(
+                                    onPressed: () {
+                                      Get.find<AuthController>().deleteUser(Get.find<LoadingController>().currentUser?.id ?? 0);
+                                      Get.back();
+                                    },
+                                    child: Text('حذف الحساب'.tr, style: TextStyle(color: Colors.red)),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
                         ),
                       ],
                     ),
@@ -281,23 +387,22 @@ class SettingsDrawer extends StatelessWidget {
         children: [
           ListTile(
             contentPadding: EdgeInsets.symmetric(horizontal: 8.w),
-            title: Text(title, 
-                style: TextStyle(
-                  fontSize: AppTextStyles.medium,
-
-                  color: AppColors.textPrimary(isDarkMode),
-                  fontFamily: AppTextStyles.appFontFamily,
-                )),
+            title: Text(
+              title,
+              style: TextStyle(
+                fontSize: AppTextStyles.medium,
+                color: AppColors.textPrimary(isDarkMode),
+                fontFamily: AppTextStyles.appFontFamily,
+              ),
+            ),
             trailing: showArrow
-                ? Icon(Icons.arrow_forward_ios, 
-                      size: 16.w, 
-                      color: iconColor)
+                ? Icon(Icons.arrow_forward_ios, size: 16.w, color: iconColor)
                 : null,
             onTap: onTap,
             minLeadingWidth: 0,
             visualDensity: VisualDensity.compact,
           ),
-          Divider(height: 0.5.h, color: AppColors.divider(isDarkMode)), 
+          Divider(height: 0.5.h, color: AppColors.divider(isDarkMode)),
         ],
       ),
     );
@@ -316,13 +421,14 @@ class SettingsDrawer extends StatelessWidget {
         children: [
           ListTile(
             contentPadding: EdgeInsets.symmetric(horizontal: 8.w),
-            title: Text('ثيم التطبيق'.tr, 
-                style: TextStyle(
-                  fontSize: AppTextStyles.medium,
-
-                  color: AppColors.textPrimary(isDarkMode),
-                  fontFamily: AppTextStyles.appFontFamily,
-                )),
+            title: Text(
+              'ثيم التطبيق'.tr,
+              style: TextStyle(
+                fontSize: AppTextStyles.medium,
+                color: AppColors.textPrimary(isDarkMode),
+                fontFamily: AppTextStyles.appFontFamily,
+              ),
+            ),
             trailing: Switch(
               value: isDarkMode,
               onChanged: onToggle,
@@ -333,7 +439,7 @@ class SettingsDrawer extends StatelessWidget {
             minLeadingWidth: 0,
             visualDensity: VisualDensity.compact,
           ),
-          Divider(height: 0.5.h, color: AppColors.divider(isDarkMode)), 
+          Divider(height: 0.5.h, color: AppColors.divider(isDarkMode)),
         ],
       ),
     );
@@ -364,18 +470,19 @@ class SettingsDrawer extends StatelessWidget {
               children: [
                 Icon(icon, color: primary, size: 22.w),
                 SizedBox(width: 12.w),
-                Text(title, 
-                    style: TextStyle(
-                      fontSize: AppTextStyles.large,
-
-                      fontWeight: FontWeight.w600,
-                      color: primary,
-                      fontFamily: AppTextStyles.appFontFamily,
-                    )),
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: AppTextStyles.large,
+                    fontWeight: FontWeight.w600,
+                    color: primary,
+                    fontFamily: AppTextStyles.appFontFamily,
+                  ),
+                ),
               ],
             ),
           ),
-          
+
           // Section items
           ...items,
         ],
@@ -390,14 +497,15 @@ class SettingsDrawer extends StatelessWidget {
     return ListTile(
       contentPadding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
       leading: Icon(icon, color: color),
-      title: Text(text, 
-          style: TextStyle(
-            color: color,
-            fontWeight: FontWeight.w600,
-            fontSize: AppTextStyles.medium,
-
-            fontFamily: AppTextStyles.appFontFamily,
-          )),
+      title: Text(
+        text,
+        style: TextStyle(
+          color: color,
+          fontWeight: FontWeight.w600,
+          fontSize: AppTextStyles.medium,
+          fontFamily: AppTextStyles.appFontFamily,
+        ),
+      ),
       onTap: onTap,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8.r),
@@ -405,142 +513,5 @@ class SettingsDrawer extends StatelessWidget {
       minLeadingWidth: 24.w,
     );
   }
-
-  // ============== معالجات الأحداث ============== //
-  
-  void _handleLanguageSettings(BuildContext context) {
-    Get.to(()=>LanguageSettingsPage());
-      
-   
-   
-  }
-  void _handleLMyReports() {
-    Get.to(()=>MyReportsScreen());
-      
-   
-   
-  }
-
-  
-
- void _handleCurrencySettings() {
-  Get.to(()=>CurrencySettingsPage());
- 
 }
-  void _handleAddNewAd() {
-   Get.to(()=>AddAdScreen());
-  }
-
-  void _handleManageAds() {
-     Get.to(()=>UserAdsScreen(statusAds: 'published', name:'إعلاناتي المنشورة'));
-
-  }
-
-  void _handleUnpublishedAds() {
-     Get.to(()=>UserAdsScreen(statusAds: 'under_review', name:'إعلاناتي تحت المراجعة'));
-
-  }
-
-  void _handleMyInfo() {
-   Get.to(()=>UserInfoPage());
-  }
-
-   void _handleUserWalletsPage() {
-      Get.to(()=>UserWalletsPage(userId:  Get.find<LoadingController>().currentUser?.id??0));
-
-  }
-   void _handleTransferProofsPage() {
-      Get.to(()=>TransferProofsPage(userId:  Get.find<LoadingController>().currentUser?.id??0));
-
-  }
-
-
-
-  void _handleChangePassword() {
-Get.to(()=> ResetPasswordScreen());  }
-
-   void _handleConversations() {
-      Get.to(()=>ConversationsListScreen());
-
-  }
-
-
-  void _handleManageAdvertisers() {
-  Get.to(()=>AdvertiserProfilesScreen());
-  }
-
-  void _handleAddNewAdvertiser() {
-    Get.to(()=>AdvertiserDataScreen());
-  }
-
-  void _handleFavoriteAds() {    Get.to(()=>FavoriteGroupsPage());
-
-    
-
-  }
-
-  void _handleViewHistory() {
-    Get.to(()=>SearchHistoryScreen());
-   
-  }
-
-
-
-  void _handleSearchHistory() {
-    Get.to(()=>SearchHistoryDirectPage());
-   
-  }
-
-  void _handleFavoriteSellers() {
-    Get.to(()=>FavoriteSellersUnifiedPage());
-   
-  }
-
-
-
-
- 
-
-  void _handleLogout() {
-    Get.dialog(
-      AlertDialog(
-        title: Text('تسجيل الخروج'.tr),
-        content: Text('هل أنت متأكد أنك تريد تسجيل الخروج؟'.tr),
-        actions: [
-          TextButton(
-            onPressed: () => Get.back(),
-            child: Text('إلغاء'.tr),
-          ),
-          TextButton(
-            onPressed: () {
-              Get.find<LoadingController>().logout();
-            },
-            child: Text('تسجيل الخروج'.tr),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _handleDeleteAccount() {
-    Get.dialog(
-      AlertDialog(
-        title: Text('حذف الحساب'.tr),
-        content: Text('هل أنت متأكد أنك تريد حذف حسابك؟ هذه العملية لا يمكن التراجع عنها.'.tr),
-        actions: [
-          TextButton(
-            onPressed: () => Get.back(),
-            child: Text('إلغاء'.tr),
-          ),
-          TextButton(
-            onPressed: () {
-              Get.find<AuthController>().deleteUser(Get.find<LoadingController>().currentUser?.id??0);
-              Get.back();
-            },
-            child: Text('حذف الحساب'.tr, style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
-  }
-}
+//.One..Page .//

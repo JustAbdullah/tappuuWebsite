@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../core/data/model/Attribute.dart';
 import '../core/data/model/category.dart' as cate;
@@ -6,6 +8,8 @@ import 'package:http/http.dart' as http;
 import '../core/data/model/subcategory_level_one.dart';
 import '../core/data/model/subcategory_level_two.dart';
 import '../core/localization/changelanguage.dart';
+
+enum DrawerType { services, settings }
 
 class HomeController extends GetxController
     with GetSingleTickerProviderStateMixin {
@@ -111,53 +115,97 @@ class HomeController extends GetxController
   }
 
   // ==================== [دوال جلب البيانات المعدلة] ====================
+Future<void> fetchCategories(
+  String language, {
+  String? adsPeriod,
+}) async {
+  // لو فيه تحميل شغال حالياً لا تكرر
+  if (isLoadingCategories.value) return;
 
-  Future<void> fetchCategories(String language, {String? adsPeriod}) async {
-    categoriesList.clear();
-    isLoadingCategories.value = true;
-    currentAdsPeriod.value = adsPeriod ?? '';
+  isLoadingCategories.value = true;
+  currentAdsPeriod.value = adsPeriod ?? '';
 
-    try {
-      Uri uri = Uri.parse('$_baseUrl/categories/$language');
+  try {
+    Uri uri = Uri.parse('$_baseUrl/categories/$language');
 
-      if (adsPeriod != null && adsPeriod.isNotEmpty) {
-        uri = uri.replace(queryParameters: {'ads_period': adsPeriod});
-      }
+    if (adsPeriod != null && adsPeriod.isNotEmpty) {
+      uri = uri.replace(queryParameters: {'ads_period': adsPeriod});
+    }
 
-      final response = await http.get(uri);
+    final response = await http
+        .get(uri)
+        .timeout(const Duration(seconds: 60));
 
-      if (response.statusCode == 200) {
-        final Map<String, dynamic> jsonResponse = json.decode(response.body);
+    if (response.statusCode == 200) {
+      final Map<String, dynamic> jsonResponse =
+          json.decode(response.body);
 
-        if (jsonResponse['status'] == 'success') {
-          final List<dynamic> data = jsonResponse['data'] as List<dynamic>;
-          categoriesList.value = data
-              .map((category) => cate.Category.fromJson(category as Map<String, dynamic>))
-              .toList();
+      if (jsonResponse['status'] == 'success') {
+        final List<dynamic> data =
+            jsonResponse['data'] as List<dynamic>;
 
-          for (var category in categoriesList) {
-            _categoriesCache[category.id] = category;
+        /// ✅ نبني قائمة مؤقتة ثم نحدّث القائمة الأساسية مرة واحدة
+        final loadedCategories = data
+            .map((category) => cate.Category.fromJson(
+                  category as Map<String, dynamic>,
+                ))
+            .toList();
+
+        // نمسح الكاش السابق ونضيف الجديد
+        _categoriesCache.clear();
+        for (var category in loadedCategories) {
+          _categoriesCache[category.id] = category;
+        }
+
+        // نحدّث الـ RxList مرة واحدة (بدون clear في حال فشل الريسبونس)
+        categoriesList
+          ..clear()
+          ..addAll(loadedCategories);
+
+        // نوسّع كل التصنيفات افتراضياً
+        expandedCategoryIds.value =
+            categoriesList.map((c) => c.id).toList();
+
+        // ⚠️ تحميل التصنيفات الفرعية بالتسلسل لتقليل 429
+        for (final category in categoriesList) {
+          try {
+            await fetchSubcategories(
+              category.id,
+              Get.find<ChangeLanguageController>()
+                  .currentLocale
+                  .value
+                  .languageCode,
+              adsPeriod: adsPeriod,
+            );
+          } catch (e, st) {
+            debugPrint(
+                '❌ fetchSubcategories error for category ${category.id}: $e');
+            debugPrint('$st');
           }
-
-          expandedCategoryIds.value = categoriesList.map((c) => c.id).toList();
-
-          for (final category in categoriesList) {
-            fetchSubcategories(category.id, Get.find<ChangeLanguageController>().currentLocale.value.languageCode, adsPeriod: adsPeriod);
-          }
-        } else {
-          print("Success false: ${jsonResponse['message']}");
         }
       } else {
-        print("Error ${response.statusCode}: ${response.body}");
+        debugPrint(
+            "❌ Success=false in categories: ${jsonResponse['message']}");
       }
-    } catch (e, st) {
-      print("Error fetching categories: $e\n$st");
-    } finally {
-      isLoadingCategories.value = false;
+    } else if (response.statusCode == 429) {
+      debugPrint(
+          "⚠️ fetchCategories -> 429 Too Many Requests (بنترك التصنيفات الحالية كما هي)");
+      // مهم: ما نعمل clear() عشان الواجهة ما تفضى
+    } else {
+      debugPrint(
+          "❌ Error ${response.statusCode} in categories: ${response.body}");
     }
+  } on TimeoutException {
+    debugPrint("⏱️ fetchCategories timeout");
+  } catch (e, st) {
+    debugPrint("❌ Error fetching categories: $e\n$st");
+  } finally {
+    isLoadingCategories.value = false;
   }
+}
 
-  Future<void> fetchSubcategories(int categoryId, String language, {String? adsPeriod, bool force = false}) async {
+
+  Future<void> fetchSubcategories(int categoryId, String language, {String? adsPeriod, bool force = false, }) async {
     final String period = adsPeriod ?? '';
 
     final bool needsRefresh = force ||
@@ -407,11 +455,29 @@ class HomeController extends GetxController
     }
   }
 
-  RxBool isServicesOrSettings = false.obs;
 
-  void toggleDrawerType(bool isServices) {
-    isServicesOrSettings.value = isServices;
+////Open Settings And Services..///
+
+
+ final drawerType = DrawerType.services.obs;
+
+  void openServicesDrawer(GlobalKey<ScaffoldState> scaffoldKey) {
+    drawerType.value = DrawerType.services;
+    _openDrawer(scaffoldKey);
   }
+
+  void openSettingsDrawer(GlobalKey<ScaffoldState> scaffoldKey) {
+    drawerType.value = DrawerType.settings;
+    _openDrawer(scaffoldKey);
+  }
+
+  void _openDrawer(GlobalKey<ScaffoldState> scaffoldKey) {
+    // نضمن إنه يتم الفتح بعد تحديث الواجهة
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      scaffoldKey.currentState?.openEndDrawer();
+    });
+  }
+
 
   Future<void> fetchAttributes(int categoryId, String language) async {
     attributes.clear();
@@ -469,4 +535,17 @@ class HomeController extends GetxController
   void setAdsPeriod(String period) {
     currentAdsPeriod.value = period;
   }
+
+   // ------ مسح بيانات التصنيفات الفرعية فقط ------
+  void clearSubCategories() {
+    subCategories.clear();
+    subCategoriesLevelTwo.clear();
+    currentSubCategoryId.value = null;
+  }
+
+  // ------ مسح بيانات المستوى الثاني فقط ------
+  void clearSubCategoriesLevelTwo() {
+    subCategoriesLevelTwo.clear();
+  }
+
 }

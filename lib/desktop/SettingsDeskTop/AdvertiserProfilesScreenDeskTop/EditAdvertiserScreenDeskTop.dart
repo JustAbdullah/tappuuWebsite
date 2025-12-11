@@ -29,6 +29,7 @@ class NoScrollbarScrollBehavior extends ScrollBehavior {
 
 class EditAdvertiserScreenDeskTop extends StatelessWidget {
   EditAdvertiserScreenDeskTop({Key? key}) : super(key: key);
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   final ThemeController themeC = Get.find<ThemeController>();
   final LoadingController loadingC = Get.find<LoadingController>();
@@ -40,18 +41,21 @@ class EditAdvertiserScreenDeskTop extends StatelessWidget {
     final HomeController _homeController = Get.find<HomeController>();
 
     return Scaffold(     
-      endDrawer: AnimatedSwitcher(
+      key: _scaffoldKey,
+    endDrawer: Obx(
+      () => AnimatedSwitcher(
         duration: const Duration(milliseconds: 300),
-        child: _homeController.isServicesOrSettings.value
-            ? SettingsDrawerDeskTop(key: const ValueKey(1))
-            : DesktopServicesDrawer(key: const ValueKey(2)),
+        child: _homeController.drawerType.value == DrawerType.settings
+            ? const SettingsDrawerDeskTop(key: ValueKey('settings'))
+            : const DesktopServicesDrawer(key: ValueKey('services')),
       ),
+    ),
       backgroundColor: AppColors.background(isDarkMode),
       body: SafeArea(
         child: Column(
           children: [
             TopAppBarDeskTop(),
-            SecondaryAppBarDeskTop(),
+            SecondaryAppBarDeskTop(scaffoldKey: _scaffoldKey,),
             Expanded(
               child: ScrollConfiguration(
                 behavior: NoScrollbarScrollBehavior(),

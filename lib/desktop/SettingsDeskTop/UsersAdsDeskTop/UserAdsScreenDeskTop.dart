@@ -22,6 +22,8 @@ class UserAdsScreenDeskTop extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+      final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
     final themeController = Get.find<ThemeController>();
     final isDarkMode = themeController.isDarkMode.value;
     final adsController = Get.put(ManageAdController());
@@ -37,14 +39,20 @@ class UserAdsScreenDeskTop extends StatelessWidget {
 final HomeController _homeController = Get.find<HomeController>();
 
     return  Scaffold(     
-       endDrawer: _homeController.isServicesOrSettings.value
-           ? SettingsDrawerDeskTop(key: const ValueKey(1))
-           : DesktopServicesDrawer(key: const ValueKey(2)),
+        key: _scaffoldKey,
+    endDrawer: Obx(
+      () => AnimatedSwitcher(
+        duration: const Duration(milliseconds: 300),
+        child: _homeController.drawerType.value == DrawerType.settings
+            ? const SettingsDrawerDeskTop(key: ValueKey('settings'))
+            : const DesktopServicesDrawer(key: ValueKey('services')),
+      ),
+    ),
         backgroundColor: AppColors.background(themeController.isDarkMode.value),
       body: Column(
         children: [  
             TopAppBarDeskTop(),
-      SecondaryAppBarDeskTop(),
+      SecondaryAppBarDeskTop(scaffoldKey: _scaffoldKey,),
          SizedBox(height: 20.h,),
           Expanded(
          

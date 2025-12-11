@@ -302,7 +302,7 @@ class _PremiumPackagesScreenState extends State<PremiumPackagesScreen> {
                                             child: Text(
                                               'الدفع الآن'.tr,
                                               style: TextStyle(
-                                                fontSize: AppTextStyles.medium,
+                                                fontSize: AppTextStyles.large,
                                                 fontWeight: FontWeight.bold,
                                                 color: Colors.white,
                                               ),
@@ -356,7 +356,7 @@ class _PremiumPackagesScreenState extends State<PremiumPackagesScreen> {
                 Text('ارتقِ بإعلاناتك — اجذب الزبائن الآن'.tr,
                     style: TextStyle(
                       fontFamily: AppTextStyles.appFontFamily,
-                      fontSize: AppTextStyles.medium,
+                      fontSize: AppTextStyles.large,
                       fontWeight: FontWeight.w700,
                       color: Colors.white,
                     )),
@@ -386,7 +386,7 @@ class _PremiumPackagesScreenState extends State<PremiumPackagesScreen> {
           SizedBox(height: 16.h),
           Text('لا توجد باقات نشطة حاليًا'.tr, 
             style: TextStyle(
-              fontSize: AppTextStyles.medium, 
+              fontSize: AppTextStyles.large, 
               fontWeight: FontWeight.w600, 
               color: AppColors.textPrimary(isDark)
             )),
@@ -457,7 +457,7 @@ class HorizontalPackageCard extends StatelessWidget {
                       child: Text(
                         pkg.name,
                         style: TextStyle(
-                          fontSize: AppTextStyles.medium,
+                          fontSize: AppTextStyles.large,
                           fontWeight: FontWeight.w800,
                           fontFamily: AppTextStyles.appFontFamily,
                           color: AppColors.textPrimary(isDark),
@@ -476,7 +476,7 @@ class HorizontalPackageCard extends StatelessWidget {
                       priceText,
                       style: TextStyle(
                         fontFamily: AppTextStyles.appFontFamily,
-                        fontSize: AppTextStyles.medium,
+                        fontSize: AppTextStyles.large,
                         fontWeight: FontWeight.w800,
                         color: AppColors.primary ,
                       ),

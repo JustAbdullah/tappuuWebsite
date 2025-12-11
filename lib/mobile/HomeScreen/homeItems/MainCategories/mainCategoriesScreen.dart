@@ -17,7 +17,7 @@ class MainCategoriesScreen extends StatelessWidget {
     const Color.fromARGB(255, 59, 184, 200),
     const Color.fromARGB(255, 133, 190, 68),
     const Color.fromARGB(255, 236, 160, 47),
-    const Color(0xFFF48FB1),
+    const Color.fromARGB(255, 38, 6, 17),
     const Color(0xFF90CAF9),
     const Color(0xFFA5D6A7),
     const Color(0xFFCE93D8),
@@ -53,7 +53,6 @@ class MainCategoriesScreen extends StatelessWidget {
                 description: translation.description,
                 color: iconColors[controller.categoriesList.indexOf(category) % iconColors.length],
            countAds: category.adsCount,
-           slug: category.slug
               );
             }).toList(),
           ],
@@ -158,7 +157,6 @@ class MainCategoriesScreen extends StatelessWidget {
     required String description,
     required Color color,
     required int countAds,
-    required String slug,
   }) {
     final isDarkMode = Get.find<ThemeController>().isDarkMode.value;
     
@@ -168,13 +166,15 @@ class MainCategoriesScreen extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           onTap: () {
+              controller.resetAdsPeriod(); // Reset first
+
             controller.nameOfMainCate.value = name;
             controller.idOfMainCate.value = id;
             Get.to(() => SubCategoriesScreen(
-              categorslug:slug ,
               categoryId: id,
               categoryName: name,
               countOfAdsInCategory: countAds,
+              adsPeriod: null
             ));
           },
           borderRadius: BorderRadius.circular(12.r),
@@ -232,7 +232,8 @@ class MainCategoriesScreen extends StatelessWidget {
                       Text(
                         name,
                         style: TextStyle(
-                          fontSize: AppTextStyles.medium,
+                          fontSize: AppTextStyles.large,
+
                           fontWeight: FontWeight.w700,
                           fontFamily: AppTextStyles.appFontFamily,
                           color: AppColors.textPrimary(isDarkMode),
@@ -246,7 +247,8 @@ class MainCategoriesScreen extends StatelessWidget {
                       Text(
                         description,
                         style: TextStyle(
-                         fontSize: AppTextStyles.medium,
+                          fontSize: AppTextStyles.small,
+
                           fontFamily: AppTextStyles.appFontFamily,
                           color: AppColors.textSecondary(isDarkMode).withOpacity(0.8),
                           height: 1.4,

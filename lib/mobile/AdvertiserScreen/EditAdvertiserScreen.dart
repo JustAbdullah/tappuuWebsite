@@ -67,7 +67,7 @@ class EditAdvertiserScreen extends StatelessWidget {
                 child: Text(
                   'قم بتحديث بياناتك ليظهر للمستخدمين بشكل صحيح'.tr,
                   style: TextStyle(
-                    fontSize: AppTextStyles.medium,
+                    fontSize: AppTextStyles.large,
                     fontFamily: AppTextStyles.appFontFamily,
                     color: AppColors.textSecondary(isDarkMode),
                   ),
@@ -401,7 +401,7 @@ class EditAdvertiserScreen extends StatelessWidget {
           child: Text(
             title,
             style: TextStyle(
-              fontSize: AppTextStyles.medium,
+              fontSize: AppTextStyles.large,
               fontWeight: FontWeight.w600,
               color: isSelected
                   ? AppColors.onPrimary
@@ -477,7 +477,7 @@ class EditAdvertiserScreen extends StatelessWidget {
             ),
           ),
           style: TextStyle(
-            fontSize: AppTextStyles.medium,
+            fontSize: AppTextStyles.large,
             color: AppColors.textPrimary(isDarkMode),
           ),
         ),

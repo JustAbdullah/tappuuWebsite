@@ -16,6 +16,7 @@ dependencies:
 
 
 
+  
   cupertino_icons: ^1.0.8
   intl: ^0.19.0
   http: ^1.0.0
@@ -50,9 +51,13 @@ dependencies:
   flutter_svg: ^2.0.5 
   googleapis_auth: ^1.5.0
   speech_to_text: ^6.3.0
-  audioplayers: ^5.0.0
-
-
+  audioplayers: ^5.0.0 
+  webview_flutter: ^4.4.0
+  webview_flutter_wkwebview: 3.17.0
+  webview_flutter_web: ^0.2.3+4   
+  universal_html: ^2.2.1
+  js: ^0.6.7
+  g_recaptcha_v3: ^0.0.5
 
 
   
@@ -68,7 +73,7 @@ dev_dependencies:
   
 flutter_native_splash:
   color: "#F2B81B"
-  image: "assets/images/play_store_512.png"
+  image: "assets/images/logo-png-Black.png"
   android: true
   ios: true
   web: true

@@ -10,7 +10,7 @@ import '../../core/constant/app_text_styles.dart';
 import '../../core/constant/appcolors.dart';
 import '../../core/constant/images_path.dart';
 import '../HomeScreen/home_screen.dart';
-import 'AdDetailsScreen.dart'; // عدّل المسار إذا لازم
+import 'AdDetailsScreen.dart'; 
 
 class AdLoadingCleanScreen extends StatefulWidget {
   final String adId;
@@ -136,7 +136,7 @@ class _AdLoadingCleanScreenState extends State<AdLoadingCleanScreen>
         mainAxisSize: MainAxisSize.min,
         children: [
           Text('جارٍ تحميل تفاصيل الإعلان'.tr,
-              style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: AppTextStyles.medium,
+              style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: AppTextStyles.large,
  fontWeight: FontWeight.w700, color: AppColors.textPrimary(false))),
           SizedBox(height: 8.h),
           Text('اسمح لنا بجلب أفضل عرض للتفاصيل — لن يأخذ وقتًا طويلًا.'.tr,

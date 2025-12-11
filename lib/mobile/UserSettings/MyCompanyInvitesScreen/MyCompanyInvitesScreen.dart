@@ -2,14 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
+import 'package:tappuu_website/core/constant/appcolors.dart';
+import 'package:tappuu_website/core/constant/app_text_styles.dart';
 
-import '../../../controllers/CompanyInvitesController.dart';
-import '../../../controllers/LoadingController.dart';
-import '../../../controllers/ThemeController.dart';
-import '../../../core/constant/app_text_styles.dart';
-import '../../../core/constant/appcolors.dart';
-import '../../../core/data/model/company_invite.dart';
+import 'package:tappuu_website/controllers/ThemeController.dart';
+import 'package:tappuu_website/controllers/CompanyInvitesController.dart';
+import 'package:tappuu_website/controllers/LoadingController.dart';
+
 import 'AcceptInviteDetailsScreen.dart';
+import 'package:tappuu_website/core/data/model/company_invite.dart';
 
 class MyCompanyInvitesScreen extends StatefulWidget {
   const MyCompanyInvitesScreen({Key? key}) : super(key: key);

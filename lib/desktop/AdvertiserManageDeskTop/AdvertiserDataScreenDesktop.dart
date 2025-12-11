@@ -18,7 +18,8 @@ import '../top_app_bar_desktop.dart';
 // سلوك التمرير بدون شريط تمرير
 class NoScrollbarScrollBehavior extends ScrollBehavior {
   @override
-  Widget buildScrollbar(BuildContext context, Widget child, ScrollableDetails details) {
+  Widget buildScrollbar(
+      BuildContext context, Widget child, ScrollableDetails details) {
     return child;
   }
 
@@ -39,30 +40,38 @@ class AdvertiserDataScreenDeskTop extends StatelessWidget {
     final isDarkMode = themeC.isDarkMode.value;
     final AdvertiserController controller = Get.put(AdvertiserController());
     final HomeController _homeController = Get.find<HomeController>();
+    final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
     return Scaffold(
-      endDrawer: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 300),
-        child: _homeController.isServicesOrSettings.value
-            ? SettingsDrawerDeskTop(key: const ValueKey(1))
-            : DesktopServicesDrawer(key: const ValueKey(2)),
+      key: _scaffoldKey,
+      endDrawer: Obx(
+        () => AnimatedSwitcher(
+          duration: const Duration(milliseconds: 300),
+          child: _homeController.drawerType.value == DrawerType.settings
+              ? const SettingsDrawerDeskTop(key: ValueKey('settings'))
+              : const DesktopServicesDrawer(key: ValueKey('services')),
+        ),
       ),
       backgroundColor: AppColors.background(isDarkMode),
       body: SafeArea(
         child: Column(
           children: [
             TopAppBarDeskTop(),
-            SecondaryAppBarDeskTop(),
+            SecondaryAppBarDeskTop(
+              scaffoldKey: _scaffoldKey,
+            ),
             Expanded(
               child: ScrollConfiguration(
                 behavior: NoScrollbarScrollBehavior(),
                 child: SingleChildScrollView(
-                  padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 10.h),
+                  padding:
+                      EdgeInsets.symmetric(horizontal: 20.w, vertical: 10.h),
                   child: Center(
                     child: ConstrainedBox(
                       constraints: BoxConstraints(
                         maxWidth: 700.w,
-                        minHeight: MediaQuery.of(context).size.height - 200.h,
+                        minHeight:
+                            MediaQuery.of(context).size.height - 200.h,
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -81,7 +90,8 @@ class AdvertiserDataScreenDeskTop extends StatelessWidget {
                           SizedBox(height: 20.h),
 
                           // حقل نوع الحساب (Reactive)
-                          Obx(() => _buildAccountTypeField(controller, isDarkMode)),
+                          Obx(() =>
+                              _buildAccountTypeField(controller, isDarkMode)),
                           SizedBox(height: 20.h),
 
                           // حقول البيانات (Reactive hints inside)
@@ -136,7 +146,8 @@ class AdvertiserDataScreenDeskTop extends StatelessWidget {
     );
   }
 
-  Widget _buildLogoSection(AdvertiserController controller, bool isDarkMode) {
+  Widget _buildLogoSection(
+      AdvertiserController controller, bool isDarkMode) {
     return Column(
       children: [
         Text(
@@ -153,85 +164,92 @@ class AdvertiserDataScreenDeskTop extends StatelessWidget {
 
         // تصميم دائرة الشعار
         Center(
-          child: Obx(() => Container(
-                width: 100.w,
-                height: 100.h,
-                decoration: BoxDecoration(
-                  color: AppColors.surface(isDarkMode),
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: AppColors.primary.withOpacity(0.5),
-                    width: 1.5,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 6,
-                      offset: Offset(0, 2),
-                    )
-                  ],
+          child: Obx(
+            () => Container(
+              width: 100.w,
+              height: 100.h,
+              decoration: BoxDecoration(
+                color: AppColors.surface(isDarkMode),
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: AppColors.primary.withOpacity(0.5),
+                  width: 1.5,
                 ),
-                child: Stack(
-                  children: [
-                    if (controller.logoBytes.value != null)
-                      ClipOval(
-                        child: Image.memory(
-                          controller.logoBytes.value!,
-                          fit: BoxFit.cover,
-                          width: double.infinity,
-                          height: double.infinity,
-                        ),
-                      ),
-                    Positioned.fill(
-                      child: Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(100),
-                          onTap: () => controller.pickLogo(),
-                          child: controller.logoBytes.value == null
-                              ? Center(
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(
-                                        Icons.add_a_photo,
-                                        size: 24.w,
-                                        color: AppColors.primary,
-                                      ),
-                                      SizedBox(height: 6.h),
-                                      Text(
-                                        'إضافة شعار'.tr,
-                                        style: TextStyle(
-                                          fontSize: AppTextStyles.small,
-                                          color: AppColors.primary,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                )
-                              : Container(),
-                        ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  )
+                ],
+              ),
+              child: Stack(
+                children: [
+                  if (controller.logoBytes.value != null)
+                    ClipOval(
+                      child: Image.memory(
+                        controller.logoBytes.value!,
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                        height: double.infinity,
                       ),
                     ),
-                    if (controller.logoBytes.value != null)
-                      Positioned(
-                        bottom: 6.h,
-                        right: 6.w,
-                        child: GestureDetector(
-                          onTap: () => controller.removeLogo(),
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: AppColors.primary,
-                              shape: BoxShape.circle,
-                            ),
-                            padding: EdgeInsets.all(4.w),
-                            child: Icon(Icons.close, color: Colors.white, size: 12.w),
+                  Positioned.fill(
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(100),
+                        onTap: () => controller.pickLogo(),
+                        child: controller.logoBytes.value == null
+                            ? Center(
+                                child: Column(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.add_a_photo,
+                                      size: 24.w,
+                                      color: AppColors.primary,
+                                    ),
+                                    SizedBox(height: 6.h),
+                                    Text(
+                                      'إضافة شعار'.tr,
+                                      style: TextStyle(
+                                        fontSize: AppTextStyles.small,
+                                        color: AppColors.primary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            : Container(),
+                      ),
+                    ),
+                  ),
+                  if (controller.logoBytes.value != null)
+                    Positioned(
+                      bottom: 6.h,
+                      right: 6.w,
+                      child: GestureDetector(
+                        onTap: () => controller.removeLogo(),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: AppColors.primary,
+                            shape: BoxShape.circle,
+                          ),
+                          padding: EdgeInsets.all(4.w),
+                          child: Icon(
+                            Icons.close,
+                            color: Colors.white,
+                            size: 12.w,
                           ),
                         ),
                       ),
-                  ],
-                ),
-              )),
+                    ),
+                ],
+              ),
+            ),
+          ),
         ),
         SizedBox(height: 10.h),
         Text(
@@ -247,7 +265,8 @@ class AdvertiserDataScreenDeskTop extends StatelessWidget {
   }
 
   // إضافة حقل نوع الحساب
-  Widget _buildAccountTypeField(AdvertiserController controller, bool isDarkMode) {
+  Widget _buildAccountTypeField(
+      AdvertiserController controller, bool isDarkMode) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -270,16 +289,20 @@ class AdvertiserDataScreenDeskTop extends StatelessWidget {
                   onTap: () => controller.setAccountType('individual'),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 220),
-                    padding: EdgeInsets.symmetric(vertical: 12.h, horizontal: 8.w),
+                    padding: EdgeInsets.symmetric(
+                        vertical: 12.h, horizontal: 8.w),
                     decoration: BoxDecoration(
                       color: controller.accountType.value == 'individual'
                           ? AppColors.primary
                           : AppColors.surface(isDarkMode),
                       borderRadius: BorderRadius.circular(8.r),
                       border: Border.all(
-                        color: controller.accountType.value == 'individual'
-                            ? AppColors.primary
-                            : AppColors.textSecondary(isDarkMode).withOpacity(0.5),
+                        color:
+                            controller.accountType.value == 'individual'
+                                ? AppColors.primary
+                                : AppColors
+                                    .textSecondary(isDarkMode)
+                                    .withOpacity(0.5),
                         width: 1.0,
                       ),
                     ),
@@ -289,9 +312,10 @@ class AdvertiserDataScreenDeskTop extends StatelessWidget {
                         style: TextStyle(
                           fontSize: AppTextStyles.medium,
                           fontWeight: FontWeight.w600,
-                          color: controller.accountType.value == 'individual'
-                              ? AppColors.onPrimary
-                              : AppColors.textPrimary(isDarkMode),
+                          color:
+                              controller.accountType.value == 'individual'
+                                  ? AppColors.onPrimary
+                                  : AppColors.textPrimary(isDarkMode),
                         ),
                       ),
                     ),
@@ -307,7 +331,8 @@ class AdvertiserDataScreenDeskTop extends StatelessWidget {
                   onTap: () => controller.setAccountType('company'),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 220),
-                    padding: EdgeInsets.symmetric(vertical: 12.h, horizontal: 8.w),
+                    padding: EdgeInsets.symmetric(
+                        vertical: 12.h, horizontal: 8.w),
                     decoration: BoxDecoration(
                       color: controller.accountType.value == 'company'
                           ? AppColors.primary
@@ -316,7 +341,9 @@ class AdvertiserDataScreenDeskTop extends StatelessWidget {
                       border: Border.all(
                         color: controller.accountType.value == 'company'
                             ? AppColors.primary
-                            : AppColors.textSecondary(isDarkMode).withOpacity(0.5),
+                            : AppColors
+                                .textSecondary(isDarkMode)
+                                .withOpacity(0.5),
                         width: 1.0,
                       ),
                     ),
@@ -326,9 +353,10 @@ class AdvertiserDataScreenDeskTop extends StatelessWidget {
                         style: TextStyle(
                           fontSize: AppTextStyles.medium,
                           fontWeight: FontWeight.w600,
-                          color: controller.accountType.value == 'company'
-                              ? AppColors.onPrimary
-                              : AppColors.textPrimary(isDarkMode),
+                          color:
+                              controller.accountType.value == 'company'
+                                  ? AppColors.onPrimary
+                                  : AppColors.textPrimary(isDarkMode),
                         ),
                       ),
                     ),
@@ -342,7 +370,8 @@ class AdvertiserDataScreenDeskTop extends StatelessWidget {
     );
   }
 
-  Widget _buildFormFields(AdvertiserController controller, bool isDarkMode) {
+  Widget _buildFormFields(
+      AdvertiserController controller, bool isDarkMode) {
     return Column(
       children: [
         // حقل اسم المعلن
@@ -439,7 +468,7 @@ class AdvertiserDataScreenDeskTop extends StatelessWidget {
               BoxShadow(
                 color: Colors.black.withOpacity(0.03),
                 blurRadius: 4,
-                offset: Offset(0, 2),
+                offset: const Offset(0, 2),
               )
             ],
           ),
@@ -455,14 +484,19 @@ class AdvertiserDataScreenDeskTop extends StatelessWidget {
                 fontFamily: AppTextStyles.appFontFamily,
                 color: AppColors.textSecondary(isDarkMode),
               ),
-              prefixIcon: Icon(icon, size: 18.w, color: AppColors.primary),
+              prefixIcon: Icon(
+                icon,
+                size: 18.w,
+                color: AppColors.primary,
+              ),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10.r),
                 borderSide: BorderSide.none,
               ),
               filled: true,
               fillColor: Colors.transparent,
-              contentPadding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 12.h),
+              contentPadding: EdgeInsets.symmetric(
+                  horizontal: 12.w, vertical: 12.h),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10.r),
                 borderSide: BorderSide(
@@ -497,30 +531,30 @@ class AdvertiserDataScreenDeskTop extends StatelessWidget {
             onPressed: (isValid && !isSaving)
                 ? () async {
                     try {
-                      btnController.setSaving(true);
+                      // كل المنطق (رفع الشعار + إنشاء/تعديل) داخل الكنترولر
+                      await btnController.saveProfileChanges(
+                          loadingC.currentUser?.id ?? 0);
 
-                      if (btnController.logoPath.value != null) {
-                        await btnController.uploadLogoToServer();
+                      // لو المستخدم اختار شعار لكن ما رجع رابط من السيرفر، ما نطلع من الصفحة
+                      if (btnController.logoBytes.value != null &&
+                          btnController.uploadedImageUrls.value.isEmpty) {
+                        Get.snackbar(
+                          'تنبيه',
+                          'يبدو أن رفع الشعار فشل، تأكد من اتصالك وجرب مرة أخرى.',
+                          snackPosition: SnackPosition.BOTTOM,
+                        );
+                        return;
                       }
 
-                      final profile = AdvertiserProfile(
-                        userId: loadingC.currentUser?.id ?? 0,
-                        logo: btnController.uploadedImageUrls.value,
-                        name: btnController.businessNameCtrl.text,
-                        description: btnController.descriptionCtrl.text,
-                        contactPhone: btnController.contactPhoneCtrl.text,
-                        whatsappPhone: btnController.whatsappPhoneCtrl.text,
-                        whatsappCallNumber: btnController.whatsappCallNumberCtrl.text,
-                        accountType: btnController.accountType.value,
-                      );
-
-                      await btnController.createProfile(profile);
+                      // لو وصلنا هنا، نروح للصفحة الرئيسية
                       Get.back();
                       Get.offAll(() => HomeDeciderView());
                     } catch (e) {
-                      Get.snackbar('خطأ'.tr, '${'فشل في حفظ البيانات:'.tr} $e');
-                    } finally {
-                      btnController.setSaving(false);
+                      Get.snackbar(
+                        'خطأ'.tr,
+                        '${'فشل في حفظ البيانات:'.tr} $e',
+                        snackPosition: SnackPosition.BOTTOM,
+                      );
                     }
                   }
                 : null,

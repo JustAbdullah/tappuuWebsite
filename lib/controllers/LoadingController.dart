@@ -2,11 +2,14 @@
 
 import 'dart:async';
 import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+
 import 'package:tappuu_website/controllers/home_controller.dart';
+
 import '../HomeDeciderView.dart';
 import '../core/data/model/user.dart';
 import 'SearchHistoryController.dart';
@@ -15,6 +18,7 @@ import 'sharedController.dart';
 class LoadingController extends GetxController {
   var isLoading = RxBool(true);
   var isGo = RxBool(false);
+
   User? currentUser;
   Rxn<User> currentUserToFix = Rxn<User>();
 
@@ -24,6 +28,33 @@ class LoadingController extends GetxController {
   @override
   void onInit() {
     super.onInit();
+    // ✅ استرجاع جلسة المستخدم مباشرة بعد إنشاء الكنترولر
+    restoreUserFromStorage();
+  }
+
+  /// استرجاع المستخدم من SharedPreferences بدون تنقل ولا FCM
+  Future<void> restoreUserFromStorage() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonString = prefs.getString('user');
+
+      if (jsonString == null || jsonString.isEmpty) {
+        debugPrint('[LoadingController] no stored user in prefs.');
+        return;
+      }
+
+      final map = jsonDecode(jsonString) as Map<String, dynamic>;
+      final restoredUser = User.fromJson(map);
+
+      currentUser = restoredUser;
+      currentUserToFix.value = restoredUser;
+
+      debugPrint(
+          '[LoadingController] restored user from storage (id=${restoredUser.id})');
+    } catch (e, st) {
+      debugPrint('❌ [LoadingController] failed to restore user: $e');
+      debugPrint('❌ [LoadingController] stack:\n$st');
+    }
   }
 
   // ===================== Helpers for topics storage =====================
@@ -115,11 +146,13 @@ class LoadingController extends GetxController {
     try {
       await FirebaseMessaging.instance.unsubscribeFromTopic(fcmTopic);
       await _removeSavedTopic(stored);
-      debugPrint('[unsubscribe] Unsubscribed from $fcmTopic and removed $stored');
+      debugPrint(
+          '[unsubscribe] Unsubscribed from $fcmTopic and removed $stored');
       await printSavedTopics();
       return true;
     } catch (e, st) {
-      debugPrint('[unsubscribe] Error unsubscribing from $fcmTopic: $e\n$st');
+      debugPrint(
+          '[unsubscribe] Error unsubscribing from $fcmTopic: $e\n$st');
       return false;
     }
   }
@@ -156,7 +189,8 @@ class LoadingController extends GetxController {
       await printSavedTopics();
       return true;
     } catch (e, st) {
-      debugPrint('[subscribe] Error subscribing fallback $topic: $e\n$st');
+      debugPrint(
+          '[subscribe] Error subscribing fallback $topic: $e\n$st');
       return false;
     }
   }
@@ -174,7 +208,8 @@ class LoadingController extends GetxController {
         await printSavedTopics();
         return true;
       } catch (e, st) {
-        debugPrint('[unsubscribe] Error unsubscribing from all: $e\n$st');
+        debugPrint(
+            '[unsubscribe] Error unsubscribing from all: $e\n$st');
         return false;
       }
     }
@@ -187,11 +222,13 @@ class LoadingController extends GetxController {
     try {
       await FirebaseMessaging.instance.unsubscribeFromTopic(topic);
       await _removeSavedTopic(topic);
-      debugPrint('[unsubscribe] Unsubscribed from topic (fallback): $topic');
+      debugPrint(
+          '[unsubscribe] Unsubscribed from topic (fallback): $topic');
       await printSavedTopics();
       return true;
     } catch (e, st) {
-      debugPrint('[unsubscribe] Error unsubscribing fallback $topic: $e\n$st');
+      debugPrint(
+          '[unsubscribe] Error unsubscribing fallback $topic: $e\n$st');
       return false;
     }
   }
@@ -209,11 +246,14 @@ class LoadingController extends GetxController {
   // يعيد التأكد من الاشتراكات حسب سجلات البحث على السيرفر، ويحتاج userId
   Future<void> ensureSubscriptionsFromSearchHistory(int userId) async {
     try {
-      final searchCtrl = Get.put(SearchHistoryController(), permanent: false);
+      final searchCtrl =
+          Get.put(SearchHistoryController(), permanent: false);
       await searchCtrl.fetchSearchHistory(userId: userId);
 
       // سجلات تطلب إشعارات الهاتف
-      final notifyRecords = searchCtrl.searchHistoryList.where((s) => s.notifyPhone == true).toList();
+      final notifyRecords = searchCtrl.searchHistoryList
+          .where((s) => s.notifyPhone == true)
+          .toList();
 
       final expectedIds = <int>{};
       for (final r in notifyRecords) {
@@ -227,17 +267,20 @@ class LoadingController extends GetxController {
       for (final id in expectedIds) {
         final stored = id.toString();
         if (!saved.contains(stored)) {
-          debugPrint('[ensure] topic $stored expected but missing locally -> subscribing');
+          debugPrint(
+              '[ensure] topic $stored expected but missing locally -> subscribing');
           await subscribeToCategoryId(id);
         } else {
           // To be safe, attempt a re-subscribe (idempotent) to fix server-side loss
           final fcmTopic = _fcmTopicFromStored(stored);
-          debugPrint('[ensure] topic $stored exists locally -> re-subscribing to $fcmTopic');
+          debugPrint(
+              '[ensure] topic $stored exists locally -> re-subscribing to $fcmTopic');
           try {
             await FirebaseMessaging.instance.subscribeToTopic(fcmTopic);
             debugPrint('[ensure] re-subscribed to $fcmTopic');
           } catch (e) {
-            debugPrint('[ensure] re-subscribe failed for $fcmTopic: $e');
+            debugPrint(
+                '[ensure] re-subscribe failed for $fcmTopic: $e');
           }
         }
       }
@@ -248,138 +291,155 @@ class LoadingController extends GetxController {
         final id = int.tryParse(s);
         if (id == null) continue;
         if (!expectedIds.contains(id)) {
-          debugPrint('[ensure] topic $s saved locally but no longer expected -> unsubscribing');
+          debugPrint(
+              '[ensure] topic $s saved locally but no longer expected -> unsubscribing');
           await unsubscribeFromCategoryId(id);
         }
       }
 
       // أخيراً: طباعة تقرير
       await printSavedTopics();
-      debugPrint('[ensure] Subscriptions synced with search history for user $userId');
+      debugPrint(
+          '[ensure] Subscriptions synced with search history for user $userId');
     } catch (e, st) {
       debugPrint('[ensure] Error ensuring subscriptions: $e\n$st');
     }
   }
 
   // ======================================================================
-Future<void> loadUserData() async {
-  if (isGo.value) return;
+  Future<void> loadUserData() async {
+    if (isGo.value) return;
 
-  final shared = Get.find<SharedController>();
-  SharedPreferences prefs = await SharedPreferences.getInstance();
+    final shared = Get.find<SharedController>();
+    SharedPreferences prefs = await SharedPreferences.getInstance();
 
-  debugPrint('loadUserData: start');
+    debugPrint('loadUserData: start');
 
-  // التحقق مما إذا كانت هذه أول مرة يُفتح فيها التطبيق
-  String? firstTimeFlag = prefs.getString('firstTimeFlag');
-  bool isFirstTime = firstTimeFlag == null || firstTimeFlag == 'isFirstTime';
+    // التحقق مما إذا كانت هذه أول مرة يُفتح فيها التطبيق
+    String? firstTimeFlag = prefs.getString('firstTimeFlag');
+    bool isFirstTime =
+        firstTimeFlag == null || firstTimeFlag == 'isFirstTime';
 
-  // تأخير ابتدائي بسيط (splash)
-  int delaySeconds = isFirstTime ? 3 : 3;
-  await Future.delayed(Duration(seconds: delaySeconds));
+    // تأخير ابتدائي بسيط (splash)
+    int delaySeconds = isFirstTime ? 3 : 3;
+    await Future.delayed(Duration(seconds: delaySeconds));
 
-  if (isFirstTime) {
-    await prefs.setString('firstTimeFlag', 'isNotFirstTime');
+    if (isFirstTime) {
+      await prefs.setString('firstTimeFlag', 'isNotFirstTime');
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      // قبل التنقّل: ننتظر نافذة قصيرة جداً لنرى إذا سيصل deep link
+      debugPrint(
+          'loadUserData: first open — checking for incoming deep link');
+      final bool safeToGo = await _waitForDeepLinkGrace(shared);
+      if (safeToGo) {
+        debugPrint(
+            'loadUserData: no deep link detected -> navigating to Home');
+        isGo.value = true;
+        Get.to(() => HomeDeciderView());
+        isGo.value = false;
+      } else {
+        debugPrint(
+            'loadUserData: deep link arrived -> staying on loading to let deep link flow');
+      }
+      return;
+    }
+
+    // ليس أول فتح: حاول قراءة بيانات المستخدم من SharedPreferences
+    String? userData = prefs.getString('user');
     await Future.delayed(const Duration(milliseconds: 500));
 
-    // قبل التنقّل: ننتظر نافذة قصيرة جداً لنرى إذا سيصل deep link
-    debugPrint('loadUserData: first open — checking for incoming deep link');
-    final bool safeToGo = await _waitForDeepLinkGrace(shared);
-    if (safeToGo) {
-      debugPrint('loadUserData: no deep link detected -> navigating to Home');
-      isGo.value = true;
-      Get.to(() => HomeDeciderView());
-      isGo.value = false;
-    } else {
-      debugPrint('loadUserData: deep link arrived -> staying on loading to let deep link flow');
-    }
-    return;
-  }
-
-  // ليس أول فتح: حاول قراءة بيانات المستخدم من SharedPreferences
-  String? userData = prefs.getString('user');
-  await Future.delayed(const Duration(milliseconds: 500));
-
-  if (userData != null) {
-    try {
-      currentUser = User.fromJson(jsonDecode(userData));
-      currentUserToFix.value = User.fromJson(jsonDecode(userData));
-
+    if (userData != null) {
       try {
-        await ensureSubscriptionsFromSearchHistory(currentUser?.id ?? 0);
+        // ✅ إعادة استخدام الـ parsing بشكل مرتب
+        final map = jsonDecode(userData) as Map<String, dynamic>;
+        final u = User.fromJson(map);
+        currentUser = u;
+        currentUserToFix.value = u;
+
+        try {
+          await ensureSubscriptionsFromSearchHistory(u.id ?? 0);
+        } catch (e) {
+          debugPrint('ensureSubscriptionsFromSearchHistory error: $e');
+        }
       } catch (e) {
-        debugPrint('ensureSubscriptionsFromSearchHistory error: $e');
+        debugPrint('loadUserData: failed parsing stored user: $e');
       }
-    } catch (e) {
-      debugPrint('loadUserData: failed parsing stored user: $e');
     }
-  }
 
-  // الآن: قبل أي انتقال نهائي إلى الرئيسية، انتظر نافذة صغيرة (grace) لترى إن وصل deep link
-  debugPrint('loadUserData: checking deep link / navigation flags before going Home. hasPending=${shared.hasPendingDeepLink.value}, isNavigating=${shared.isNavigatingToAd.value}');
+    // الآن: قبل أي انتقال نهائي إلى الرئيسية، انتظر نافذة صغيرة (grace) لترى إن وصل deep link
+    debugPrint(
+        'loadUserData: checking deep link / navigation flags before going Home. hasPending=${shared.hasPendingDeepLink.value}, isNavigating=${shared.isNavigatingToAd.value}');
 
-  // إذا واضح أن هناك عملية تنقل جارية أو رابط قيد المعالجة -> لا ننقُل.
-  if (shared.hasPendingDeepLink.value || shared.isNavigatingToAd.value) {
-    debugPrint('loadUserData: detected pending deep link or navigation already -> not navigating to Home');
-    // ننتظر انتهاء المعالجة كما كان منطقك سابقاً
-    const int maxWaitMs = 5000;
-    final Completer<bool> completer = Completer<bool>();
-    final sub = shared.hasPendingDeepLink.listen((val) {
-      if (!val && !completer.isCompleted) completer.complete(true); // انتهت المعالجة مبكراً
-    });
-    Future.delayed(Duration(milliseconds: maxWaitMs)).then((_) {
-      if (!completer.isCompleted) completer.complete(false);
-    });
-    final bool cleared = await completer.future;
-    await sub.cancel();
-    if (cleared) {
-      debugPrint('loadUserData: deep link cleared while waiting -> not navigating (SharedController already handled nav).');
+    // إذا واضح أن هناك عملية تنقل جارية أو رابط قيد المعالجة -> لا ننقُل.
+    if (shared.hasPendingDeepLink.value ||
+        shared.isNavigatingToAd.value) {
+      debugPrint(
+          'loadUserData: detected pending deep link or navigation already -> not navigating to Home');
+      // ننتظر انتهاء المعالجة كما كان منطقك سابقاً
+      const int maxWaitMs = 5000;
+      final Completer<bool> completer = Completer<bool>();
+      final sub = shared.hasPendingDeepLink.listen((val) {
+        if (!val && !completer.isCompleted) {
+          completer.complete(true); // انتهت المعالجة مبكراً
+        }
+      });
+      Future.delayed(Duration(milliseconds: maxWaitMs)).then((_) {
+        if (!completer.isCompleted) completer.complete(false);
+      });
+      final bool cleared = await completer.future;
+      await sub.cancel();
+      if (cleared) {
+        debugPrint(
+            'loadUserData: deep link cleared while waiting -> not navigating (SharedController already handled nav).');
+        return;
+      } else {
+        debugPrint(
+            'loadUserData: timeout waiting for deep link -> staying on Loading (avoid interrupt).');
+        return;
+      }
+    }
+
+    // لا توجد إشارات الآن — لكن أعطِ نافذة قصيرة (debounce) لتفادي سباقات التوقيت:
+    final bool safeToNavigate = await _waitForDeepLinkGrace(shared);
+    if (safeToNavigate) {
+      debugPrint('loadUserData: safe after grace -> navigating to Home');
+      isGo.value = true;
+      Get.offAll(() => HomeDeciderView());
+      isGo.value = false;
       return;
     } else {
-      debugPrint('loadUserData: timeout waiting for deep link -> staying on Loading (avoid interrupt).');
+      debugPrint(
+          'loadUserData: deep link detected during grace -> will not navigate to Home');
       return;
     }
   }
 
-  // لا توجد إشارات الآن — لكن أعطِ نافذة قصيرة (debounce) لتفادي سباقات التوقيت:
-  final bool safeToNavigate = await _waitForDeepLinkGrace(shared);
-  if (safeToNavigate) {
-    debugPrint('loadUserData: safe after grace -> navigating to Home');
-    isGo.value = true;
-    Get.offAll(() => HomeDeciderView());
-    isGo.value = false;
-    return;
-  } else {
-    debugPrint('loadUserData: deep link detected during grace -> will not navigate to Home');
-    return;
+  /// Helper: small grace period to detect an incoming deep link or navigation start.
+  /// Returns true if safe to navigate to Home (no deep link arrived), false if deep link arrived.
+  Future<bool> _waitForDeepLinkGrace(SharedController shared,
+      {int graceMs = 350}) async {
+    // If already pending -> not safe
+    if (shared.hasPendingDeepLink.value ||
+        shared.isNavigatingToAd.value) return false;
+
+    final Completer<bool> completer = Completer<bool>();
+    final sub1 = shared.hasPendingDeepLink.listen((val) {
+      if (val && !completer.isCompleted) completer.complete(false);
+    });
+    final sub2 = shared.isNavigatingToAd.listen((val) {
+      if (val && !completer.isCompleted) completer.complete(false);
+    });
+
+    Future.delayed(Duration(milliseconds: graceMs)).then((_) {
+      if (!completer.isCompleted) completer.complete(true);
+    });
+
+    final result = await completer.future;
+    await sub1.cancel();
+    await sub2.cancel();
+    return result;
   }
-}
-
-/// Helper: small grace period to detect an incoming deep link or navigation start.
-/// Returns true if safe to navigate to Home (no deep link arrived), false if deep link arrived.
-Future<bool> _waitForDeepLinkGrace(SharedController shared, {int graceMs = 350}) async {
-  // If already pending -> not safe
-  if (shared.hasPendingDeepLink.value || shared.isNavigatingToAd.value) return false;
-
-  final Completer<bool> completer = Completer<bool>();
-  final sub1 = shared.hasPendingDeepLink.listen((val) {
-    if (val && !completer.isCompleted) completer.complete(false);
-  });
-  final sub2 = shared.isNavigatingToAd.listen((val) {
-    if (val && !completer.isCompleted) completer.complete(false);
-  });
-
-  Future.delayed(Duration(milliseconds: graceMs)).then((_) {
-    if (!completer.isCompleted) completer.complete(true);
-  });
-
-  final result = await completer.future;
-  await sub1.cancel();
-  await sub2.cancel();
-  return result;
-}
-
-
 
   // rest of your controller (handleAfterRecordChange, refreshUserData, logout etc.)
   Future<void> handleAfterRecordChange({
@@ -408,7 +468,14 @@ Future<bool> _waitForDeepLinkGrace(SharedController shared, {int graceMs = 350})
     String? userData = prefs.getString('user');
 
     if (userData != null) {
-      currentUser = User.fromJson(jsonDecode(userData));
+      try {
+        final map = jsonDecode(userData) as Map<String, dynamic>;
+        final u = User.fromJson(map);
+        currentUser = u;
+        currentUserToFix.value = u;
+      } catch (e) {
+        debugPrint('refreshUserData: failed parsing stored user: $e');
+      }
     }
     update();
   }
@@ -435,7 +502,8 @@ Future<bool> _waitForDeepLinkGrace(SharedController shared, {int graceMs = 350})
         try {
           await FirebaseMessaging.instance.unsubscribeFromTopic(fcmTopic);
         } catch (e) {
-          debugPrint('logout: failed unsubscribe $fcmTopic: $e');
+          debugPrint(
+              'logout: failed unsubscribe $fcmTopic: $e');
         }
       }
       await _saveTopics(<String>{});
@@ -460,4 +528,3 @@ Future<bool> _waitForDeepLinkGrace(SharedController shared, {int graceMs = 350})
     Get.offAll(() => HomeDeciderView());
   }
 }
-

@@ -1,4 +1,3 @@
-import 'dart:html' as html;
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get/get.dart';
@@ -9,19 +8,18 @@ import 'package:tappuu_website/controllers/ThemeController.dart';
 import 'package:tappuu_website/core/constant/app_text_styles.dart';
 import 'package:tappuu_website/core/constant/appcolors.dart';
 import 'package:tappuu_website/core/localization/changelanguage.dart';
+import 'package:tappuu_website/mobile/HomeScreen/homeItems/SubCategoriesLevelTwo/subCategoriesScreenLevelTwo.dart';
 
-import '../../../../app_routes.dart';
+import '../../../../controllers/AdsManageSearchController.dart';
 import '../../../../controllers/BrowsingHistoryController.dart';
 import '../../../../controllers/LoadingController.dart';
 import '../../../../controllers/PopularHistoryController.dart';
-import '../../../../core/data/model/subcategory_level_one.dart';
+import '../../../viewAdsScreen/AdsScreen.dart';
 import '../../menubar.dart';
-import '../SubCategoriesLevelTwo/subCategoriesScreenLevelTwo.dart';
 
 class SubCategoriesScreen extends StatefulWidget {
   final int categoryId;
   final String categoryName;
-  final String categorslug;
   final int countOfAdsInCategory;
   final String? adsPeriod;
 
@@ -30,7 +28,6 @@ class SubCategoriesScreen extends StatefulWidget {
     required this.categoryId,
     required this.categoryName,
     required this.countOfAdsInCategory,
-    required this.categorslug,
     this.adsPeriod,
   });
 
@@ -53,7 +50,7 @@ class _SubCategoriesScreenState extends State<SubCategoriesScreen> {
     
     // إعادة تعيين البيانات السابقة إذا كان التصنيف مختلف
     if (controller.currentCategoryId.value != widget.categoryId) {
-      controller.clearCategoryData(widget.categoryId);
+      controller.clearSubCategories();
     }
     
     // جلب البيانات الجديدة
@@ -65,31 +62,14 @@ class _SubCategoriesScreenState extends State<SubCategoriesScreen> {
         force: true
       );
     });
-
-    _updateBrowserUrl();
-  }
-
-  void _updateBrowserUrl() {
-    String urlPath = '';
-
-    if (widget.categorslug.isNotEmpty) {
-      urlPath += '/${widget.categorslug}';
-    }
-
-    if (widget.adsPeriod != null && widget.adsPeriod!.isNotEmpty) {
-      final qp = '?ads_period=${widget.adsPeriod}';
-      html.window.history.replaceState({}, '', urlPath + qp);
-    } else {
-      html.window.history.replaceState({}, '', urlPath);
-    }
   }
 
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Get.find<ThemeController>().isDarkMode.value;
     final bgColor = AppColors.background(isDarkMode);
-
-    return Scaffold(
+    
+    return Scaffold( 
       key: _scaffoldKey,
       drawer: Menubar(),
       backgroundColor: bgColor,
@@ -100,65 +80,105 @@ class _SubCategoriesScreenState extends State<SubCategoriesScreen> {
 
   PreferredSizeWidget _buildAppBar(BuildContext context) {
     final isDarkMode = Get.find<ThemeController>().isDarkMode.value;
+    final String subtitle = _getAppBarTitle();
+    final bool showSubtitle = subtitle.trim().isNotEmpty;
+
     return AppBar(
       backgroundColor: AppColors.primary,
-      leading: IconButton(
-        icon: Icon(
-          Icons.arrow_back_ios_new_rounded,
-          size: 20.w,
-          color: AppColors.onSurfaceDark,
-        ),
-        onPressed: () {
-          // مسح بيانات التصنيف الحالي عند الرجوع
-          controller.clearCategoryData(widget.categoryId);
-          Get.back();
-        },
-      ),
-      actions: [
-        InkWell(
-          onTap: () {
-            _scaffoldKey.currentState?.openDrawer();
-          },
-          child: Icon(
-            Icons.menu,
-            size: 30.w,
-            color: Colors.white,
+      leadingWidth: 100,
+      leading: Row(
+        mainAxisAlignment: MainAxisAlignment.start,
+        children: [
+          IconButton(
+            icon: Icon(
+              Icons.arrow_back_ios_new_rounded,
+              size: 20.w,
+              color: AppColors.onSurfaceDark,
+            ),
+            onPressed: () {
+              // مسح البيانات المؤقتة عند الرجوع
+              controller.clearSubCategories();
+              Get.back();
+            },
           ),
-        ),
-        SizedBox(width: 8.w),
-      ],
+          InkWell(
+            onTap: () {
+              _scaffoldKey.currentState?.openDrawer();
+            },
+            child: Icon(
+              Icons.menu,
+              size: 30.w,
+              color: Colors.white,
+            ),
+          ),
+        ],
+      ),
       centerTitle: true,
-      title: Text(
-        widget.categoryName,
-        style: TextStyle(
-          fontSize: AppTextStyles.xlarge,
-          fontWeight: FontWeight.w700,
-          fontFamily: AppTextStyles.appFontFamily,
-          color: AppColors.onSurfaceDark,
-        ),
+      title: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Text(
+            widget.categoryName,
+            style: TextStyle(
+              fontSize: AppTextStyles.large,
+              fontWeight: FontWeight.w700,
+              fontFamily: AppTextStyles.appFontFamily,
+              color: AppColors.onSurfaceDark,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          if (showSubtitle) ...[
+            SizedBox(height: 2.h),
+            Text(
+              subtitle,
+              style: TextStyle(
+                fontSize: AppTextStyles.medium,
+                fontWeight: FontWeight.w600,
+                fontFamily: AppTextStyles.appFontFamily,
+                color: AppColors.onSurfaceDark.withOpacity(0.9),
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ],
       ),
       elevation: 0,
     );
   }
 
+  String _getAppBarTitle() {
+    if (widget.adsPeriod == '24h') {
+      return 'الإعلانات العاجلة - آخر 24 ساعة';
+    } else if (widget.adsPeriod == '48h') {
+      return 'الإعلانات العاجلة - آخر 48 ساعة';
+    }
+    return '';
+  }
+
+  int _getHours() {
+    if (widget.adsPeriod == '24h') {
+      return 24;
+    } else if (widget.adsPeriod == '48h') {
+      return 48;
+    }
+    return 0;
+  }
+
   Widget _buildBody(Color bgColor) {
     return Obx(() {
-      // حالة التحميل للمتصفح الحالي
-      final isLoading = controller.isSubCategoriesLoading(widget.categoryId);
-      
-      if (isLoading) {
+      if (controller.isLoadingSubcategoryLevelOne.value) {
         return _buildShimmerLoader(bgColor);
       }
 
-      // الحصول على القائمة من الماب
-      final List<SubcategoryLevelOne> list = controller.getSubCategoriesForCategory(widget.categoryId);
-
-      if (list.isEmpty) {
+      if (controller.subCategories.isEmpty) {
         return Center(
           child: Text(
             'لا توجد تصنيفات فرعية'.tr,
             style: TextStyle(
-              fontSize: AppTextStyles.medium,
+              fontSize: AppTextStyles.large,
               fontFamily: AppTextStyles.appFontFamily,
               color: Get.find<ThemeController>().isDarkMode.value
                   ? AppColors.textPrimary(true)
@@ -170,11 +190,11 @@ class _SubCategoriesScreenState extends State<SubCategoriesScreen> {
 
       return Column(
         children: [
-          _buildViewAllAdsLink(list),
+          _buildViewAllAdsLink(_getHours()),
           Expanded(
             child: ListView.separated(
               padding: EdgeInsets.symmetric(vertical: 8.h, horizontal: 16.w),
-              itemCount: list.length,
+              itemCount: controller.subCategories.length,
               separatorBuilder: (context, index) => Divider(
                 height: 1,
                 thickness: 1,
@@ -183,7 +203,7 @@ class _SubCategoriesScreenState extends State<SubCategoriesScreen> {
                     : Colors.grey[200],
               ),
               itemBuilder: (context, index) {
-                final subCategory = list[index];
+                final subCategory = controller.subCategories[index];
                 final translation = subCategory.translations.firstWhere(
                   (t) => t.language == Get.find<ChangeLanguageController>().currentLocale.value.languageCode,
                   orElse: () => subCategory.translations.first,
@@ -194,7 +214,6 @@ class _SubCategoriesScreenState extends State<SubCategoriesScreen> {
                   nameCate: widget.categoryName,
                   nameSub: translation.name,
                   adsCount: subCategory.adsCount,
-                  slugsSub: subCategory.slug,
                   imageUrl: subCategory.image,
                 );
               },
@@ -205,9 +224,10 @@ class _SubCategoriesScreenState extends State<SubCategoriesScreen> {
     });
   }
 
-  Widget _buildViewAllAdsLink(List<SubcategoryLevelOne> currentList) {
+  Widget _buildViewAllAdsLink(int? hours) {
     final isDarkMode = Get.find<ThemeController>().isDarkMode.value;
-    final actualCount = currentList.fold<int>(0, (sum, sub) => sum + (sub.adsCount ?? 0));
+    final AdsController adsController = Get.find<AdsController>();
+    final actualCount = controller.totalSubCategoriesAdsCount;
 
     return Column(
       children: [
@@ -215,19 +235,16 @@ class _SubCategoriesScreenState extends State<SubCategoriesScreen> {
           padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 0.h),
           child: InkWell(
             onTap: () {
-              final args = {
-                'categoryId': widget.categoryId,
-                'nameOfMain': widget.categoryName,
-                'categorySlug': widget.categorslug,
-                'countofAds': actualCount,
-                'titleOfpage': widget.categoryName,
-                if (widget.adsPeriod != null) 'adsPeriod': widget.adsPeriod,
-              };
-
-              Get.toNamed(
-                AppRoutes.adsScreenMobile,
-                arguments: args,
-              );
+              final int? selectedHours = hours;
+              final String? tf = adsController.toTimeframe(selectedHours);
+              Get.find<AdsController>().viewMode.value = 'vertical_simple';
+              Get.to(() => AdsScreen(
+                titleOfpage: widget.categoryName,
+                categoryId: widget.categoryId,
+                nameOfMain: widget.categoryName,
+                countofAds: actualCount,
+                currentTimeframe: tf,
+              ));
             },
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -256,18 +273,14 @@ class _SubCategoriesScreenState extends State<SubCategoriesScreen> {
                     ),
                     IconButton(
                       icon: Icon(Icons.arrow_forward_ios,
-                          size: 20.w,
-                          color: AppColors.buttonAndLinksColor),
+                          size: 20.w, color: AppColors.buttonAndLinksColor),
                       onPressed: () {
-                        final args = {
-                          'categoryId': widget.categoryId,
-                          'nameOfMain': widget.categoryName,
-                          'categorySlug': widget.categorslug,
-                          'countofAds': actualCount,
-                          'titleOfpage': widget.categoryName,
-                          if (widget.adsPeriod != null) 'adsPeriod': widget.adsPeriod,
-                        };
-                        Get.toNamed(AppRoutes.adsScreenMobile, arguments: args);
+                        Get.to(() => AdsScreen(
+                          titleOfpage: widget.categoryName,
+                          categoryId: widget.categoryId,
+                          nameOfMain: widget.categoryName,
+                          countofAds: actualCount,
+                        ));
                       },
                     ),
                   ],
@@ -290,7 +303,7 @@ class _SubCategoriesScreenState extends State<SubCategoriesScreen> {
     final isDarkMode = Get.find<ThemeController>().isDarkMode.value;
     final baseColor = isDarkMode ? Colors.grey[800]! : Colors.grey[300]!;
     final highlightColor = isDarkMode ? Colors.grey[700]! : Colors.grey[100]!;
-
+    
     return Shimmer.fromColors(
       baseColor: baseColor,
       highlightColor: highlightColor,
@@ -384,38 +397,29 @@ class _SubCategoriesScreenState extends State<SubCategoriesScreen> {
     required String nameCate,
     required String nameSub,
     required int adsCount,
-    required String slugsSub,
     required String? imageUrl,
   }) {
     final isDarkMode = Get.find<ThemeController>().isDarkMode.value;
-
+    
     return InkWell(
       onTap: () {
         BrowsingHistoryController _browsing = Get.put(BrowsingHistoryController());
+        print('//////////////// isIduser:${Get.find<LoadingController>().currentUser?.id}');
 
         Get.find<LoadingController>().currentUser != null
-            ? _browsing.addHistory(
-                categoryId: widget.categoryId,
-                subcat1Id: idSub,
-                userId: Get.find<LoadingController>().currentUser?.id ?? 0)
+            ? _browsing.addHistory(categoryId: widget.categoryId, subcat1Id: idSub, userId: Get.find<LoadingController>().currentUser?.id??0)
             : null;
-
-        Get.find<PopularHistoryController>().addOrIncrement(
-          categoryId: widget.categoryId,
-          subcat1Id: idSub,
-        );
+        Get.find<PopularHistoryController>().addOrIncrement(categoryId: widget.categoryId, subcat1Id: idSub);
 
         controller.idOfSubCate.value = idSub;
         controller.nameOfSubCate.value = nameSub;
-
+        
         Get.to(() => SubCategoriesScreenLeveLTwo(
           nameMainCate: nameCate,
           MainId: widget.categoryId,
           SubCateId: idSub,
           subCateName: nameSub,
           allSubOnecount: adsCount,
-          slugMainCate: widget.categorslug,
-          subCateSlug: slugsSub,
           adsPeriod: widget.adsPeriod,
         ));
       },
@@ -432,7 +436,7 @@ class _SubCategoriesScreenState extends State<SubCategoriesScreen> {
                 Text(
                   nameSub,
                   style: TextStyle(
-                    fontSize: AppTextStyles.medium,
+                    fontSize: AppTextStyles.large,
                     fontWeight: FontWeight.w500,
                     fontFamily: AppTextStyles.appFontFamily,
                     color: AppColors.textPrimary(isDarkMode),

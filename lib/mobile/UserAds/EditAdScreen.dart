@@ -864,7 +864,7 @@ class _EditAdScreenState extends State<EditAdScreen> {
             'الصور الحالية'.tr,
             style: TextStyle(
               fontWeight: FontWeight.bold,
-              fontSize: AppTextStyles.medium,
+              fontSize: AppTextStyles.large,
 
               color: AppColors.textPrimary(isDark),
             ),
@@ -925,7 +925,8 @@ class _EditAdScreenState extends State<EditAdScreen> {
       );
     });
   }
-Widget _buildNewImagesGrid() {
+
+ Widget _buildNewImagesGrid() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -988,6 +989,7 @@ Widget _buildNewImagesGrid() {
       ],
     );
   }
+
 
   Widget _buildEmptyImagesPlaceholder(bool isDark) {
     return DottedBorder(
@@ -1217,7 +1219,7 @@ Widget _buildNewImagesGrid() {
           'تحديث الإعلان'.tr,
           style: TextStyle(
             fontFamily: AppTextStyles.appFontFamily,
-            fontSize: AppTextStyles.medium,
+            fontSize: AppTextStyles.large,
 
             fontWeight: FontWeight.bold,
           ),

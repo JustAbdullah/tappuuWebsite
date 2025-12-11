@@ -71,7 +71,7 @@ class ContactUsScreen extends StatelessWidget {
               // مقدمة
               Text('يسعدنا تواصلكم معنا! فريق Stay in Me دائمًا متاح للإجابة على استفساراتكم ومساعدتكم في أي وقت.'.tr,
                 style: TextStyle(
-                  fontSize: AppTextStyles.medium,
+                  fontSize: AppTextStyles.large,
 
                   height: 1.8,
                   color: textColor,
@@ -203,7 +203,7 @@ class ContactUsScreen extends StatelessWidget {
               children: [
                 Text(title,
                   style: TextStyle(
-                    fontSize: AppTextStyles.medium,
+                    fontSize: AppTextStyles.large,
 
                     fontWeight: FontWeight.bold,
                     color: AppColors.primary,
@@ -237,7 +237,7 @@ class ContactUsScreen extends StatelessWidget {
         children: [
           Text(day,
             style: TextStyle(
-              fontSize: AppTextStyles.medium,
+              fontSize: AppTextStyles.large,
 
               fontWeight: FontWeight.w600,
               fontFamily: AppTextStyles.appFontFamily,
@@ -245,7 +245,7 @@ class ContactUsScreen extends StatelessWidget {
           ),
           Text(hours,
             style: TextStyle(
-              fontSize: AppTextStyles.medium,
+              fontSize: AppTextStyles.large,
 
               color: AppColors.grey600,
               fontFamily: AppTextStyles.appFontFamily,

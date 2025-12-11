@@ -2,16 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:tappuu_website/controllers/ThemeController.dart';
-import 'package:tappuu_website/controllers/areaController.dart';
 import 'package:tappuu_website/core/constant/appcolors.dart';
 import 'package:tappuu_website/core/constant/app_text_styles.dart';
 
 import '../../controllers/AdsManageController.dart';
 import '../../core/data/model/AdResponse.dart';
 import '../../customWidgets/custom_image_malt.dart';
-import '../viewAdsScreen/AdDetailsScreen.dart';
 import 'AdStatisticsScreen.dart';
-import 'EditAdScreen.dart';
 
 class UserAdItem extends StatelessWidget {
   final Ad ad;
@@ -23,9 +20,6 @@ class UserAdItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final AreaController areaController = Get.put(AreaController());
-    final city = ad.city;
-    final areaName = areaController.getAreaNameById(ad.areaId);
     final themeController = Get.find<ThemeController>();
     final isDarkMode = themeController.isDarkMode.value;
     final adsController = Get.find<ManageAdController>();
@@ -66,8 +60,10 @@ class UserAdItem extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           SizedBox(height: 15.h),
+                         
+                         //
 
-                          // العنوان
+
                           Text(
                             ad.title,
                             style: TextStyle(
@@ -76,15 +72,14 @@ class UserAdItem extends StatelessWidget {
 
                               fontWeight: FontWeight.w700,
                               color: AppColors.textPrimary(isDarkMode),
-                              height: 1.4,
+                              height: 1.4
                             ),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
-                          
+                        
                           SizedBox(height: 7.h),
-                          
-                          // السعر
+                          // السعر 
                           if (ad.price != null)
                             RichText(
                               text: TextSpan(
@@ -161,7 +156,7 @@ class UserAdItem extends StatelessWidget {
                             ),
                             
                             // تاريخ النشر
-                            Visibility(
+                             Visibility(
                               visible: ad.show_time == 1,
                               child: Positioned(
                                 top: 6.w,
@@ -183,6 +178,7 @@ class UserAdItem extends StatelessWidget {
                                 ),
                               ),
                             ),
+                            
                             // أزرار التعديل والحذف
                          
                           ],
@@ -263,7 +259,7 @@ class UserAdItem extends StatelessWidget {
           label.tr,
           style: TextStyle(
             fontFamily: AppTextStyles.appFontFamily,
-           fontSize: AppTextStyles.small,
+            fontSize: 11.sp,
             color: AppColors.textSecondary(isDarkMode),
           ),
         ),
@@ -274,9 +270,9 @@ class UserAdItem extends StatelessWidget {
   // دالة لتنسيق قيمة الإحصائية
   String _formatStatValue(int value) {
     if (value >= 1000000) {
-      return '${(value / 1000000).toStringAsFixed(1)}M';
+      return '${(value / 1000000).toStringAsFixed(4)}M';
     } else if (value >= 1000) {
-      return '${(value / 1000).toStringAsFixed(1)}K';
+      return '${(value / 1000).toStringAsFixed(4)}K';
     }
     return value.toString();
   }

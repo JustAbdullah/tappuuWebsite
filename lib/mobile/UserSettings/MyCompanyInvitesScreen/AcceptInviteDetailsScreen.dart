@@ -1,24 +1,17 @@
-// AcceptInviteDetailsScreen (Web) — نسخة كاملة محدّثة
-// - نفس نمط الموبايل لاختيار صورة العضو (أفاتار)
-// - رفع الصورة إلى /upload قبل الإرسال ثم تمرير avatarUrl إلى acceptInvite
-// - معاينة دائرية + زر تعديل/إزالة
-// - تعطيل زر الحفظ أثناء الرفع
-// - نفس تصميم الحقول السابقة
-
 import 'dart:convert';
-import 'dart:io'; // ملاحظة: في Flutter Web قد تحتاج لبديل (مثل image_picker_for_web/file_picker)
-// لكننا نحافظ على نفس النمط المستخدم لديكم كما في AdvertiserDataScreen
-import 'package:http/http.dart' as http;
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:http/http.dart' as http;
 
-import '../../../controllers/CompanyInvitesController.dart';
-import '../../../controllers/ThemeController.dart';
-import '../../../core/constant/app_text_styles.dart';
-import '../../../core/constant/appcolors.dart';
+import 'package:tappuu_website/core/constant/appcolors.dart';
+import 'package:tappuu_website/core/constant/app_text_styles.dart';
+
+import 'package:tappuu_website/controllers/ThemeController.dart';
+import 'package:tappuu_website/controllers/CompanyInvitesController.dart';
 
 class AcceptInviteDetailsScreen extends StatefulWidget {
   const AcceptInviteDetailsScreen({
@@ -48,7 +41,7 @@ class _AcceptInviteDetailsScreenState extends State<AcceptInviteDetailsScreen> {
   final _waPhoneCtrl = TextEditingController();
   final _waCallCtrl = TextEditingController();
 
-  // ====== أفاتار العضو (بنفس نمط الموبايل) ======
+  // === أفاتار العضو (اختياري) ===
   static const String _root = "https://stayinme.arabiagroup.net/lar_stayInMe/public/api";
   static const String _uploadApi = "$_root/upload";
 
@@ -83,7 +76,7 @@ class _AcceptInviteDetailsScreenState extends State<AcceptInviteDetailsScreen> {
     if (picked != null) {
       setState(() {
         _avatarFile = File(picked.path);
-        _uploadedAvatarUrl = ""; // إعادة ضبط عند تغيير الصورة
+        _uploadedAvatarUrl = ""; // إعادة ضبط في حال تغيير الصورة
       });
     }
   }
@@ -112,7 +105,8 @@ class _AcceptInviteDetailsScreenState extends State<AcceptInviteDetailsScreen> {
           _uploadedAvatarUrl = urls.isNotEmpty ? urls.first : "";
         });
       } else {
-        Get.snackbar('فشل رفع الصورة', '(${resp.statusCode}) $body', snackPosition: SnackPosition.BOTTOM);
+        Get.snackbar('فشل رفع الصورة', '(${resp.statusCode}) $body',
+            snackPosition: SnackPosition.BOTTOM);
       }
     } catch (e) {
       Get.snackbar('خطأ في الرفع', e.toString(), snackPosition: SnackPosition.BOTTOM);
@@ -157,7 +151,7 @@ class _AcceptInviteDetailsScreenState extends State<AcceptInviteDetailsScreen> {
             ),
             SizedBox(height: 16.h),
 
-            // ====== كتلة الأفاتار (بنفس روح AdvertiserDataScreen) ======
+            // ======= كتلة الأفاتار الجديدة =======
             Container(
               padding: EdgeInsets.all(14.w),
               decoration: BoxDecoration(
@@ -173,9 +167,11 @@ class _AcceptInviteDetailsScreenState extends State<AcceptInviteDetailsScreen> {
                       CircleAvatar(
                         radius: 36.r,
                         backgroundColor: AppColors.textSecondary(isDark).withOpacity(.15),
-                        backgroundImage: _avatarFile != null ? FileImage(_avatarFile!) : null,
+                        backgroundImage:
+                            _avatarFile != null ? FileImage(_avatarFile!) : null,
                         child: _avatarFile == null
-                            ? Icon(Icons.person_rounded, size: 36.r, color: AppColors.textSecondary(isDark))
+                            ? Icon(Icons.person_rounded,
+                                size: 36.r, color: AppColors.textSecondary(isDark))
                             : null,
                       ),
                       Positioned(
@@ -189,7 +185,8 @@ class _AcceptInviteDetailsScreenState extends State<AcceptInviteDetailsScreen> {
                             borderRadius: BorderRadius.circular(16.r),
                             child: Padding(
                               padding: EdgeInsets.all(6.r),
-                              child: Icon(Icons.edit_rounded, size: 16.r, color: AppColors.onPrimary),
+                              child: Icon(Icons.edit_rounded,
+                                  size: 16.r, color: AppColors.onPrimary),
                             ),
                           ),
                         ),
@@ -221,13 +218,19 @@ class _AcceptInviteDetailsScreenState extends State<AcceptInviteDetailsScreen> {
                           Row(
                             children: [
                               if (_uploadingAvatar)
-                                const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+                                const SizedBox(
+                                  height: 18, width: 18,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                ),
                               if (_uploadingAvatar) SizedBox(width: 8.w),
                               Expanded(
                                 child: Text(
                                   _avatarFile!.path.split('/').last,
                                   overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(fontSize: AppTextStyles.small, color: AppColors.textSecondary(isDark)),
+                                  style: TextStyle(
+                                    fontSize: AppTextStyles.small,
+                                    color: AppColors.textSecondary(isDark),
+                                  ),
                                 ),
                               ),
                               TextButton.icon(
@@ -246,7 +249,7 @@ class _AcceptInviteDetailsScreenState extends State<AcceptInviteDetailsScreen> {
             ),
             SizedBox(height: 16.h),
 
-            // ====== نموذج البيانات ======
+            // ======= نموذج البيانات =======
             Container(
               padding: EdgeInsets.all(14.w),
               decoration: BoxDecoration(
@@ -298,7 +301,8 @@ class _AcceptInviteDetailsScreenState extends State<AcceptInviteDetailsScreen> {
                     TextFormField(
                       controller: _waCallCtrl,
                       keyboardType: TextInputType.phone,
-                      decoration: _inputDecoration(isDark, 'رقم واتساب للاتصال (wa.me)', Icons.call_rounded),
+                      decoration:
+                          _inputDecoration(isDark, 'رقم واتساب للاتصال (wa.me)', Icons.call_rounded),
                       validator: _phoneValidator,
                     ),
                     SizedBox(height: 16.h),
@@ -311,7 +315,11 @@ class _AcceptInviteDetailsScreenState extends State<AcceptInviteDetailsScreen> {
                         child: ElevatedButton.icon(
                           onPressed: saving ? null : _onSubmit,
                           icon: saving
-                              ? SizedBox(width: 18.w, height: 18.w, child: const CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                              ? SizedBox(
+                                  width: 18.w,
+                                  height: 18.w,
+                                  child: const CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                )
                               : const Icon(Icons.check_rounded),
                           label: Text(
                             saving ? 'جارِ الحفظ...' : 'تأكيد القبول',
@@ -430,9 +438,15 @@ class _HeaderInfo extends StatelessWidget {
                 ),
                 children: [
                   const TextSpan(text: 'أنت على وشك قبول دعوة من شركة '),
-                  TextSpan(text: companyName, style: const TextStyle(fontWeight: FontWeight.w900)),
+                  TextSpan(
+                    text: companyName,
+                    style: const TextStyle(fontWeight: FontWeight.w900),
+                  ),
                   const TextSpan(text: ' كـ '),
-                  TextSpan(text: roleLabel, style: const TextStyle(fontWeight: FontWeight.w900)),
+                  TextSpan(
+                    text: roleLabel, // نص عربي «ناشر/عارض»
+                    style: const TextStyle(fontWeight: FontWeight.w900),
+                  ),
                 ],
               ),
             ),

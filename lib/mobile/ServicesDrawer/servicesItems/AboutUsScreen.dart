@@ -77,7 +77,7 @@ class AboutUsScreen extends StatelessWidget {
                 // وصف التطبيق
                 Text(aboutUs.description,
                   style: TextStyle(
-                    fontSize: AppTextStyles.medium,
+                    fontSize: AppTextStyles.large,
 
                     height: 1.8,
                     color: textColor,
@@ -130,7 +130,7 @@ class AboutUsScreen extends StatelessWidget {
               
                 Text('نحن فريق من المطورين والمصممين والمختصين في التسويق الرقمي، نعمل بجهد لتطوير التطبيق باستمرار وتقديم أفضل تجربة للمستخدمين.'.tr,
                   style: TextStyle(
-                    fontSize: AppTextStyles.medium,
+                    fontSize: AppTextStyles.large,
 
                     height: 1.8,
                     color: textColor,

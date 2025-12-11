@@ -11,13 +11,13 @@ import '../../core/constant/appcolors.dart';
 import '../../core/localization/changelanguage.dart';
 import '../AddAds/AddAdScreen.dart';
 import '../ServicesDrawer/ServicesDrawer.dart';
+import '../UserSettings/SettingsDrawer.dart';
 import '../UserSettings/itemsUserSettings/UserInfoPage.dart';
 import 'homeItems/LoginPopup.dart';
 import 'homeItems/SubCategories/subCategoriesScreen.dart';
 import 'home_screen.dart';
 
-class 
- Menubar extends StatelessWidget {
+class Menubar extends StatelessWidget {
   const Menubar({super.key});
 
   @override
@@ -144,7 +144,7 @@ class
                                   begin: const Offset(1, 0),
                                   end: Offset.zero,
                                 ).animate(animation),
-                                child: SettingsDrawer(),
+                                child: ServicesDrawer(),
                               );
                             },
                           );
@@ -202,7 +202,7 @@ class
                             orElse: () => category.translations.first,
                           );
 
-                            return _buildSmallCategoryItem(
+                          return _buildSmallCategoryItem(
                             id: category.id,
                             image: category.image,
                             name: translation.name,
@@ -213,7 +213,6 @@ class
                                 categoryId: category.id,
                                 categoryName: translation.name,
                                 countOfAdsInCategory: category.adsCount,
-                                categorslug: category.slug,
                               ));
                             },
                           );
@@ -312,8 +311,3 @@ class
     );
 
   }}
-
-
-
-
-

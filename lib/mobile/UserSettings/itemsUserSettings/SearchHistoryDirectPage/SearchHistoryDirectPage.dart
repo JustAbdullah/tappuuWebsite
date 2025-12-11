@@ -107,7 +107,7 @@ class _SearchHistoryDirectPageState extends State<SearchHistoryDirectPage> {
             'لا توجد سجلات بحث'.tr,
             style: TextStyle(
               fontFamily: AppTextStyles.appFontFamily,
-              fontSize: AppTextStyles.medium,
+              fontSize: AppTextStyles.large,
 
               color: AppColors.textPrimary(isDarkMode),
             ),
@@ -147,7 +147,7 @@ Widget _buildRecordCard(SearchHistory record, bool isDarkMode) {
             record.recordName,
             style: TextStyle(
               fontFamily: AppTextStyles.appFontFamily,
-              fontSize: AppTextStyles.medium,
+              fontSize: AppTextStyles.large,
 
               color: AppColors.textPrimary(isDarkMode),
             ),

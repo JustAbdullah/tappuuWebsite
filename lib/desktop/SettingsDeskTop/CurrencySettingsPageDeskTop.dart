@@ -22,20 +22,24 @@ class CurrencySettingsPageDeskTop extends StatelessWidget {
     
      
     final HomeController _homeController = Get.find<HomeController>();
+       final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
     return  Scaffold(     
-       endDrawer: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 300),
-          child: _homeController.isServicesOrSettings.value
-              ? SettingsDrawerDeskTop(key: const ValueKey(1))
-              : DesktopServicesDrawer(key: const ValueKey(2)),
-        ),
+       key: _scaffoldKey,
+    endDrawer: Obx(
+      () => AnimatedSwitcher(
+        duration: const Duration(milliseconds: 300),
+        child: _homeController.drawerType.value == DrawerType.settings
+            ? const SettingsDrawerDeskTop(key: ValueKey('settings'))
+            : const DesktopServicesDrawer(key: ValueKey('services')),
+      ),
+    ),
         backgroundColor: AppColors.background(themeController.isDarkMode.value),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
             TopAppBarDeskTop(),
-          SecondaryAppBarDeskTop(),
+          SecondaryAppBarDeskTop(scaffoldKey: _scaffoldKey,),
          SizedBox(height: 20.h,),
           Text(
             'اختر العملة المفضلة'.tr,

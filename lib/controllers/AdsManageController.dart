@@ -213,7 +213,7 @@ Future<void> fetchSubcategories(int Theid, String language) async {
     attributes.clear();
     isLoadingAttributes.value = true;
     try {
-      final uri = Uri.parse('$_baseUrl/categories/$categoryId/attributes?lang=$language');
+      final uri = Uri.parse('$_baseUrl/categories/$categoryId/attributes/all?lang=$language');
       final response = await http.get(uri);
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -244,57 +244,125 @@ Future<void> fetchSubcategories(int Theid, String language) async {
     }
   }
   
-  void removeImage(int index) {
-    images.removeAt(index);
-  }
-  
-  Future<void> updateImage(int index) async {
+ // إزالة صورة من القائمة
+void removeImage(int index) {
+  if (index < 0 || index >= images.length) return;
+  images.removeAt(index);
+  debugPrint('[ADS_IMAGES] Removed image at index $index, total = ${images.length}');
+}
+
+// تحديث صورة معيّنة في نفس المكان
+Future<void> updateImage(int index) async {
+  try {
+    if (index < 0 || index >= images.length) return;
+
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+
     if (pickedFile != null) {
       final bytes = await pickedFile.readAsBytes();
       images[index] = bytes;
+      debugPrint('[ADS_IMAGES] Updated image at index $index (bytes length = ${bytes.lengthInBytes})');
+    } else {
+      debugPrint('[ADS_IMAGES] updateImage: user cancelled picker');
     }
+  } catch (e, st) {
+    debugPrint('[ADS_IMAGES/UPDATE_ERROR] $e\n$st');
+    Get.snackbar("خطأ", "تعذر تحديث الصورة: $e",
+        snackPosition: SnackPosition.BOTTOM);
   }
-  // 4. تعديل دالة رفع الصور - التعديل هنا فقط
-  Future<void> uploadImagesToServer() async {
-    try {
-      loadingImages.value = true;
-      List<String> uploadedUrls = [];
+}
+// رفع كل صور الإعلان إلى السيرفر
+Future<void> uploadImagesToServer() async {
+  try {
+    loadingImages.value = true;
+    debugPrint('[ADS_IMAGES] Starting upload, count = ${images.length}');
 
-      if (images.isEmpty) {
-        loadingImages.value = false;
-        Get.snackbar("Error", "No images selected.");
+    if (images.isEmpty) {
+      loadingImages.value = false;
+      Get.snackbar(
+        "تنبيه",
+        "لم تقم باختيار أي صور للإعلان.",
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return;
+    }
+
+    // لو عندك _baseUrl = .../api
+    final uri = Uri.parse("$_baseUrl/upload");
+    debugPrint('[ADS_IMAGES] Upload URL => $uri');
+
+    final request = http.MultipartRequest('POST', uri);
+
+    // نخلي السيرفر يرجّع JSON
+    request.headers['Accept'] = 'application/json';
+
+    // ✅ تفعيل العلامة المائية كما في تطبيق الموبايل
+    request.fields['with_watermark'] = '1';
+
+    // نضيف كل صورة كـ images[]
+    for (final imageBytes in images) {
+      debugPrint(
+          '[ADS_IMAGES] Attaching file bytes length = ${imageBytes.lengthInBytes}');
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'images[]',
+          imageBytes,
+          filename:
+              'post_image_${DateTime.now().millisecondsSinceEpoch}.jpg',
+        ),
+      );
+    }
+
+    final streamedResponse = await request.send();
+    final responseBody = await streamedResponse.stream.bytesToString();
+
+    debugPrint('[ADS_IMAGES] Upload status = ${streamedResponse.statusCode}');
+    debugPrint('[ADS_IMAGES] Upload response body = $responseBody');
+
+    if (streamedResponse.statusCode == 201) {
+      final jsonData = json.decode(responseBody);
+
+      // نتأكد إنه فعلاً فيه image_urls
+      final List<String> uploadedUrls =
+          List<String>.from(jsonData['image_urls'] ?? const []);
+
+      if (uploadedUrls.isEmpty) {
+        debugPrint(
+            '[ADS_IMAGES] Server returned 201 but image_urls is empty!');
+        Get.snackbar(
+          "خطأ",
+          "الخادم لم يرجع روابط الصور بشكل صحيح.",
+          snackPosition: SnackPosition.BOTTOM,
+        );
         return;
       }
 
-      var request = http.MultipartRequest('POST', Uri.parse("$_baseUrl/upload"));
+      // نخزنها كنص واحد مفصول بفواصل (مطابق لكودك القديم)
+      uploadedImageUrls.value = uploadedUrls.join(',');
+      debugPrint('[ADS_IMAGES] Uploaded URLs => $uploadedImageUrls');
 
-      for (var imageBytes in images) {
-        request.files.add(http.MultipartFile.fromBytes(
-          'images[]',
-          imageBytes,
-          filename: 'post_image_${DateTime.now().millisecondsSinceEpoch}.jpg',
-        ));
-      }
-
-      var response = await request.send();
-      if (response.statusCode == 201) {
-        var responseData = await response.stream.bytesToString();
-        var jsonData = json.decode(responseData);
-        uploadedUrls = List<String>.from(jsonData['image_urls']);
-        uploadedImageUrls.value = uploadedUrls.join(',');
-      } else {
-        Get.snackbar("Error", "Failed to upload images: ${response.statusCode}");
-      }
-    } catch (e) {
-      print("Upload error: $e");
-      loadingImages.value = false;
-      Get.snackbar("Error", "Failed to upload images: ${e.toString()}");
-    } finally {
-      loadingImages.value = false;
+      // ❌ لا نعرض Snackbar نجاح — بناءً على طلبك
+    } else {
+      Get.snackbar(
+        "خطأ",
+        "فشل رفع الصور (${streamedResponse.statusCode})",
+        snackPosition: SnackPosition.BOTTOM,
+      );
     }
+  } catch (e, st) {
+    debugPrint("[ADS_IMAGES/UPLOAD_ERROR] $e\n$st");
+    Get.snackbar(
+      "Error",
+      "Failed to upload images: ${e.toString()}",
+      snackPosition: SnackPosition.BOTTOM,
+    );
+  } finally {
+    loadingImages.value = false;
   }
+}
+
+
   
   
   // إدارة الموقع الجغرافي
@@ -1185,8 +1253,145 @@ double? _extractPriceFromAdMap(Map<String, dynamic>? ad) {
   return null;
 }
 
-// --- الدالة المطلوبة: updateAd مع طباعة عند تغيير السعر ---
+// --- الدالة المطلوبة: updateAd مع إبقاء منطق مقارنة السعر فقط ---
+// ملاحظة:
+// إشعارات تغيير السعر (إيميل + Push) يتم إرسالها الآن بالكامل من السيرفر (Laravel)
+// لذلك تم تعليق كود إرسال الإشعار من تطبيق Flutter حتى لا يتكرر الإرسال من جهتين.
 Future<void> updateAd(int adId) async {
+  try {
+    isSubmitting.value = true;
+
+    // (أ) خذ السعر القديم من السيرفر قبل التحديث
+    final beforeAd = await _fetchAdRaw(adId);
+    final oldPrice = _extractPriceFromAdMap(beforeAd);
+    debugPrint('🔎 oldPrice for ad $adId = $oldPrice');
+
+    // 1) رفع الصور إذا تم تعديلها
+    if (images.isNotEmpty) {
+      await uploadImagesToServer();
+      if (uploadedImageUrls.value.isEmpty) {
+        throw Exception("فشل في رفع الصور");
+      }
+    }
+
+    // 2) تجميع بيانات الخصائص كما في submitAd()
+    List<Map<String, dynamic>> attributesData = [];
+    for (var attribute in attributes) {
+      if (attributeValues.containsKey(attribute.attributeId)) {
+        final value = attributeValues[attribute.attributeId];
+        if (attribute.type == 'options') {
+          attributesData.add({
+            "attribute_id": attribute.attributeId,
+            "attribute_type": attribute.type,
+            "attribute_option_id": value,
+          });
+        } else if (attribute.type == 'boolean') {
+          final bool b = value as bool;
+          attributesData.add({
+            "attribute_id": attribute.attributeId,
+            "attribute_type": attribute.type,
+            "value_ar": b ? "نعم" : "لا",
+            "value_en": b ? "Yes" : "No",
+          });
+        } else {
+          attributesData.add({
+            "attribute_id": attribute.attributeId,
+            "attribute_type": attribute.type,
+            "value_ar": value.toString(),
+            "value_en": value.toString(),
+          });
+        }
+      }
+    }
+
+    // 3) بناء جسم الطلب مع إرسال price كنص
+    final adData = <String, dynamic>{
+      "advertiser_profile_id": selectedProfile.value?.id,
+      "category_id": selectedMainCategory.value?.id,
+      "sub_category_level_one_id": selectedSubcategoryLevelOne.value?.id,
+      "sub_category_level_two_id": selectedSubcategoryLevelTwo.value?.id,
+      "city_id": selectedCity.value?.id,
+      "area_id": selectedArea.value?.id,
+      "title_ar": titleArController.text,
+      "title_en": titleEnController.text,
+      "description_ar": descriptionArController.text,
+      "description_en": descriptionEnController.text,
+      // ← هنا السعر كنص وليس رقم
+      "price": priceController.text.trim().isNotEmpty
+          ? priceController.text.trim()
+          : null,
+      "latitude": latitude.value,
+      "longitude": longitude.value,
+      if (uploadedImageUrls.value.isNotEmpty)
+        "images": uploadedImageUrls.value.split(','),
+      if (attributesData.isNotEmpty) "attributes": attributesData,
+    };
+
+    // 4) طباعة payload للـ debug
+    debugPrint("➡️ updateAd payload (adId=$adId): ${json.encode(adData)}");
+
+    // 5) الإرسال
+    final uri = Uri.parse('$_baseUrl/ads/$adId');
+    final response = await http.put(
+      uri,
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: json.encode(adData),
+    );
+
+    // 6) طباعة الاستجابة للـ debug
+    debugPrint("⬅️ updateAd status: ${response.statusCode}");
+    debugPrint("⬅️ updateAd body: ${response.body}");
+
+    if (response.statusCode == 200) {
+      // 7) بعد نجاح التحديث: جِب الإعلان المحدث للتأكد من السعر الجديد
+      final afterAd = await _fetchAdRaw(adId);
+      final newPrice = _extractPriceFromAdMap(afterAd);
+      final adTitle = _extractTitleFromAdMap(afterAd);
+
+      debugPrint('🔎 newPrice for ad $adId = $newPrice');
+
+      // 8) قارن الأسعار — فقط للطباعة والمتابعة (بدون إرسال إشعار من التطبيق)
+      final priceChanged =
+          (oldPrice != null || newPrice != null) && (oldPrice != newPrice);
+
+      // ✅ إشعارات تغيير السعر صارت تُرسل الآن من الخادم (Laravel) فقط.
+      // تم تعليق الكود التالي حتى لا يتم تكرار إرسال الإشعار من التطبيق:
+      /*
+      if (priceChanged) {
+        NotificationController _notificationController =
+            Get.put(NotificationController());
+        _notificationController.sendUpdatePriceNotification(
+          "اشعار تحديث سعر إعلان",
+          "تم تحديث سعر إعلان: $adTitle. السعر القديم: $oldPrice - السعر الجديد: $newPrice",
+          adId.toString(),
+        );
+      }
+      */
+
+      Get.snackbar("نجاح", "تم تحديث الإعلان بنجاح");
+    } else {
+      final err = json.decode(response.body) as Map<String, dynamic>;
+      String msg = err['message'] ?? "فشل في تحديث الإعلان";
+      if (err['errors'] != null && err['errors'] is Map) {
+        (err['errors'] as Map).forEach((k, v) {
+          if (v is List) msg += "\n• ${v.join(', ')}";
+        });
+      }
+      throw Exception(msg);
+    }
+  } catch (e, st) {
+    debugPrint('‼️ updateAd error: $e\n$st');
+    Get.snackbar("خطأ", e.toString());
+  } finally {
+    isSubmitting.value = false;
+  }
+}
+
+// --- الدالة المطلوبة: updateAd مع طباعة عند تغيير السعر ---
+/*Future<void> updateAd(int adId) async {
   try {
     isSubmitting.value = true;
 
@@ -1308,7 +1513,8 @@ Future<void> updateAd(int adId) async {
   }}
 
   ///
-  // قائمة إعلانات المستخدم
+  // */
+  //قائمة إعلانات المستخدم
 var userAdsList = <Ad>[].obs;
 RxBool isLoadingUserAds = false.obs;
 
@@ -1350,7 +1556,8 @@ Future<void> fetchUserAds({
     isLoadingUserAds.value = false;
   }
 }
-//////
+
+
 
 RxBool isDeletingAd = false.obs;
 /// حذف إعلان حسب معرّف

@@ -49,7 +49,7 @@ class ReportProblemScreen extends StatelessWidget {
               // مقدمة
               Text('نحن نعتذر عن أي إزعاج تواجهه. يرجى وصف المشكلة التي واجهتها بدقة لمساعدتنا على حلها.',
                 style: TextStyle(
-                  fontSize: AppTextStyles.medium,
+                  fontSize: AppTextStyles.large,
 
                   height: 1.8,
                   color: textColor,
@@ -128,7 +128,7 @@ class ReportProblemScreen extends StatelessWidget {
                         label: Text('واتــساب'.tr,
                           style: TextStyle(
                             color: AppColors.onPrimary,
-                            fontSize: AppTextStyles.medium,
+                            fontSize: AppTextStyles.large,
 
                             fontFamily: AppTextStyles.appFontFamily,
                           ),
@@ -198,7 +198,7 @@ class ReportProblemScreen extends StatelessWidget {
               children: [
                 Text(title,
                   style: TextStyle(
-                    fontSize: AppTextStyles.medium,
+                    fontSize: AppTextStyles.large,
 
                     fontWeight: FontWeight.bold,
                     color: AppColors.primary,

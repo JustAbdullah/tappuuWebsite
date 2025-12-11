@@ -1,9 +1,11 @@
 // DesktopConversationsListScreen.dart — واجهة قائمة المحادثات (ويب/حاسوب)
-// • قائمة موحّدة مرتبة "الأحدث أولاً"
-// • تحديث يدوي + سحب للتحديث
-// • عناصر غنية + شارة غير مقروء + مؤشر مقروئية (✓✓) لآخر رسالة مني
+// تصميم موحد مع تطبيق الهاتف:
+// • صورة الإعلان مربعة في اليمين
+// • اسم المعلن (فرد أو عضو داخل شركة) + نوعه (شركة/فردي)
+// • عنوان الإعلان بخط غامق عند وجود رسائل غير مقروءة
+// • تاريخ الإعلان في الأسفل
+// • شارة دائرة صغيرة لعدم المقروئية + مؤشر مقروئية (✓✓) لآخر رسالة مني
 // • واجهة منقسمة: القائمة يسار + تفاصيل يمين (Responsive)
-// • عند اختيار محادثة ثم أخرى: تنظيف رسائل القديمة لضمان التحديث الفوري
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -21,10 +23,12 @@ class DesktopConversationsListScreen extends StatefulWidget {
   const DesktopConversationsListScreen({super.key});
 
   @override
-  State<DesktopConversationsListScreen> createState() => _DesktopConversationsListScreenState();
+  State<DesktopConversationsListScreen> createState() =>
+      _DesktopConversationsListScreenState();
 }
 
-class _DesktopConversationsListScreenState extends State<DesktopConversationsListScreen> {
+class _DesktopConversationsListScreenState
+    extends State<DesktopConversationsListScreen> {
   final ChatController _chatController = Get.put(ChatController());
   final LoadingController _loadingController = Get.find<LoadingController>();
   final ThemeController _themeController = Get.find<ThemeController>();
@@ -40,6 +44,9 @@ class _DesktopConversationsListScreenState extends State<DesktopConversationsLis
     }
   }
 
+  // حجم صورة الإعلان (مربع)
+  static const double _thumbSize = 80.0;
+
   @override
   void initState() {
     super.initState();
@@ -49,9 +56,13 @@ class _DesktopConversationsListScreenState extends State<DesktopConversationsLis
   void _loadConversations() {
     final currentUser = _loadingController.currentUser;
     if (currentUser == null) return;
-    _chatController.fetchConversations(userId: currentUser.id ?? 0, type: 'all');
+    _chatController.fetchConversations(
+      userId: currentUser.id ?? 0,
+      type: 'all',
+    );
   }
 
+  // تنسيق ذكي للوقت (ما زال ممكن استخدامه إن احتجناه)
   String _formatTimeSmart(DateTime dt) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -62,7 +73,8 @@ class _DesktopConversationsListScreenState extends State<DesktopConversationsLis
       final hour = dt.hour;
       final minute = dt.minute.toString().padLeft(2, '0');
       final period = hour < 12 ? 'ص' : 'م';
-      final formattedHour = (hour == 0) ? 12 : (hour > 12 ? hour - 12 : hour);
+      final formattedHour =
+          (hour == 0) ? 12 : (hour > 12 ? hour - 12 : hour);
       return '${formattedHour.toString().padLeft(2, '0')}:$minute $period';
     } else if (diffDays == 1) {
       return 'أمس';
@@ -73,14 +85,125 @@ class _DesktopConversationsListScreenState extends State<DesktopConversationsLis
     }
   }
 
+  // تنسيق تاريخ بسيط dd/MM/yyyy لتاريخ الإعلان
+  String _formatAdDate(DateTime dt) {
+    final d = dt.day.toString().padLeft(2, '0');
+    final m = dt.month.toString().padLeft(2, '0');
+    final y = dt.year.toString();
+    return '$d/$m/$y';
+  }
+
   String _truncate(String? text, {int max = 34}) {
     final t = (text ?? '').trim();
     if (t.isEmpty || t.length <= max) return t;
     return '${t.substring(0, max - 3)}...';
   }
 
-  bool _isRecent(DateTime dt) => DateTime.now().difference(dt) <= const Duration(hours: 24);
+  bool _isRecent(DateTime dt) =>
+      DateTime.now().difference(dt) <= const Duration(hours: 24);
 
+  // ================== Helpers خاصة بتصميم الموبايل (منسوخة ومعدلة للويب) ==================
+
+  // محاولة جلب صورة للإعلان
+  String? _resolveAdImageUrl(dynamic ad) {
+    if (ad == null) return null;
+    try {
+      final imgs = (ad.images as List?)?.cast();
+      if (imgs != null && imgs.isNotEmpty) {
+        final first = imgs.first;
+        if (first is String && first.isNotEmpty) return first;
+        if (first is Map &&
+            (first['url'] is String) &&
+            first['url'].toString().isNotEmpty) {
+          return first['url'].toString();
+        }
+      }
+    } catch (_) {}
+    try {
+      final url = (ad as dynamic).imageUrl;
+      if (url is String && url.isNotEmpty) return url;
+    } catch (_) {}
+    return null;
+  }
+
+  // تاريخ الإعلان (createdAt) أو fallback لآخر رسالة
+  DateTime _resolveAdDate(Conversation c) {
+    try {
+      final ad = c.ad;
+      if (ad != null) {
+        final dynamic createdAt = (ad as dynamic).createdAt;
+        if (createdAt is DateTime) return createdAt;
+        if (createdAt is String) {
+          final parsed = DateTime.tryParse(createdAt);
+          if (parsed != null) return parsed;
+        }
+      }
+    } catch (_) {}
+    return c.lastMessageAt;
+  }
+
+  /// اسم المعلن (اسم البروفايل نفسه: فرد أو شركة) مع fallback على المستعلم (inquirer)
+  String _resolveAdvertiserMainName(Conversation c) {
+    final adv = c.advertiser;
+    if (adv != null) {
+      try {
+        final name = ((adv as dynamic).name ?? '').toString().trim();
+        if (name.isNotEmpty) return name;
+      } catch (_) {}
+    }
+
+    try {
+      final inqName = (c.inquirer.name ?? '').toString().trim();
+      if (inqName.isNotEmpty) return inqName;
+    } catch (_) {}
+
+    try {
+      final email = c.inquirer.email ?? '';
+      if (email.isNotEmpty) return email;
+    } catch (_) {}
+
+    return '';
+  }
+
+  /// نوع المعلن (شركة / فردي) إن توفر
+  String? _resolveAdvertiserTypeLabel(Conversation c) {
+    final adv = c.advertiser;
+    if (adv == null) return null;
+    try {
+      final t =
+          ((adv as dynamic).accountType ?? '').toString().toLowerCase().trim();
+      if (t == 'company') return 'شركة';
+      if (t == 'individual') return 'فردي';
+    } catch (_) {}
+    return null;
+  }
+
+  bool _isCompany(Conversation c) {
+    final adv = c.advertiser;
+    if (adv == null) return false;
+    try {
+      final t =
+          ((adv as dynamic).accountType ?? '').toString().toLowerCase().trim();
+      return t == 'company';
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// اسم الفرد داخل الشركة (CompanyMember.displayName) إن وجد
+  String _resolveCompanyMemberName(Conversation c) {
+    final ad = c.ad;
+    if (ad == null) return '';
+    try {
+      final cm = (ad as dynamic).companyMember;
+      final name = (cm?.displayName ?? '').toString().trim();
+      return name;
+    } catch (_) {
+      return '';
+    }
+  }
+
+  // مؤشر ✓✓ لآخر رسالة مني
   Widget _conversationReadReceipt(Conversation c, int? currentUserId) {
     final last = c.lastMessage;
     if (last == null) return const SizedBox.shrink();
@@ -117,11 +240,20 @@ class _DesktopConversationsListScreenState extends State<DesktopConversationsLis
             height: 60,
             decoration: BoxDecoration(
               color: AppColors.appBar(isDark),
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 6, offset: const Offset(0, 2))],
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.08),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
             child: Row(
               children: [
-                IconButton(icon: Icon(Icons.arrow_back, color: AppColors.onPrimary), onPressed: () => Get.back()),
+                IconButton(
+                  icon: Icon(Icons.arrow_back, color: AppColors.onPrimary),
+                  onPressed: () => Get.back(),
+                ),
                 Text(
                   'المحادثات'.tr,
                   style: TextStyle(
@@ -132,22 +264,37 @@ class _DesktopConversationsListScreenState extends State<DesktopConversationsLis
                   ),
                 ),
                 const Spacer(),
-                IconButton(icon: Icon(Icons.refresh, color: AppColors.onPrimary), onPressed: _loadConversations, tooltip: 'تحديث'),
+                IconButton(
+                  icon: Icon(Icons.refresh, color: AppColors.onPrimary),
+                  onPressed: _loadConversations,
+                  tooltip: 'تحديث',
+                ),
               ],
             ),
           ),
-
           Expanded(
             child: Obx(() {
               if (_chatController.isLoadingConversations.value) {
-                return Center(child: CircularProgressIndicator(color: primary));
+                return Center(
+                  child: CircularProgressIndicator(color: primary),
+                );
               }
 
-              final list = [..._chatController.conversationsList]..sort((a, b) => b.lastMessageAt.compareTo(a.lastMessageAt));
+              final list = [..._chatController.conversationsList]
+                ..sort(
+                  (a, b) => b.lastMessageAt.compareTo(a.lastMessageAt),
+                );
 
               if (list.isEmpty) {
                 return Center(
-                  child: Text('لا توجد محادثات'.tr, style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: 16, color: textSecondary)),
+                  child: Text(
+                    'لا توجد محادثات'.tr,
+                    style: TextStyle(
+                      fontFamily: AppTextStyles.appFontFamily,
+                      fontSize: 16,
+                      color: textSecondary,
+                    ),
+                  ),
                 );
               }
 
@@ -157,14 +304,25 @@ class _DesktopConversationsListScreenState extends State<DesktopConversationsLis
                   // قائمة المحادثات
                   Container(
                     width: 430,
-                    decoration: BoxDecoration(color: card, border: Border(right: BorderSide(color: divider, width: 1))),
+                    decoration: BoxDecoration(
+                      color: card,
+                      border: Border(
+                        right: BorderSide(color: divider, width: 1),
+                      ),
+                    ),
                     child: RefreshIndicator(
                       onRefresh: () async => _loadConversations(),
                       color: primary,
                       child: ListView.separated(
-                        padding: const EdgeInsets.only(top: 8, bottom: 12),
+                        padding:
+                            const EdgeInsets.only(top: 8, bottom: 12),
                         itemCount: list.length,
-                        separatorBuilder: (_, __) => Divider(height: 1, color: divider, indent: 80, endIndent: 16),
+                        separatorBuilder: (_, __) => Divider(
+                          height: 1,
+                          color: divider,
+                          indent: 80,
+                          endIndent: 16,
+                        ),
                         itemBuilder: (context, index) {
                           final conversation = list[index];
                           return _buildConversationTile(
@@ -187,10 +345,13 @@ class _DesktopConversationsListScreenState extends State<DesktopConversationsLis
                     child: isWide
                         ? (_selectedConversation != null
                             ? DesktopConversationScreenInMy(
-                                key: ValueKey('conv-${_selectedConversation!.advertiser.id}-${_selectedConversation!.ad?.id ?? 0}'),
+                                key: ValueKey(
+                                  'conv-${_selectedConversation!.advertiser.id}-${_selectedConversation!.ad?.id ?? 0}',
+                                ),
                                 advertiser: _selectedConversation!.advertiser,
                                 ad: _selectedConversation?.ad,
-                                idAdv: _selectedConversation!.advertiser.id,
+                                idAdv: _selectedConversation!
+                                    .advertiser.id,
                               )
                             : _emptyState(textSecondary))
                         : Container(color: bg),
@@ -209,9 +370,20 @@ class _DesktopConversationsListScreenState extends State<DesktopConversationsLis
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.chat_bubble_outline, size: 64, color: textSecondary.withOpacity(0.35)),
+          Icon(
+            Icons.chat_bubble_outline,
+            size: 64,
+            color: textSecondary.withOpacity(0.35),
+          ),
           const SizedBox(height: 12),
-          Text('اختر محادثة لعرضها', style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: 18, color: textSecondary)),
+          Text(
+            'اختر محادثة لعرضها',
+            style: TextStyle(
+              fontFamily: AppTextStyles.appFontFamily,
+              fontSize: 18,
+              color: textSecondary,
+            ),
+          ),
         ],
       ),
     );
@@ -228,13 +400,14 @@ class _DesktopConversationsListScreenState extends State<DesktopConversationsLis
     required bool isWide,
   }) {
     final currentUserId = _loadingController.currentUser?.id;
-    final lastMsg = conversation.lastMessage;
     final hasUnread = (conversation.unreadCount > 0);
 
     final isSelected = (_selectedConversation != null) &&
         (_selectedConversation?.inquirer == conversation.inquirer) &&
-        (_selectedConversation?.advertiser?.id == conversation.advertiser?.id) &&
-        ((_selectedConversation?.ad?.id ?? 0) == (conversation.ad?.id ?? 0));
+        (_selectedConversation?.advertiser?.id ==
+            conversation.advertiser?.id) &&
+        ((_selectedConversation?.ad?.id ?? 0) ==
+            (conversation.ad?.id ?? 0));
 
     final bg = isSelected
         ? primary.withOpacity(isDark ? 0.14 : 0.10)
@@ -244,119 +417,243 @@ class _DesktopConversationsListScreenState extends State<DesktopConversationsLis
                 ? primary.withOpacity(isDark ? 0.08 : 0.05)
                 : baseCard));
 
-    final lastSnippet = lastMsg == null
-        ? 'بدء محادثة جديدة'
-        : (lastMsg.isVoice ? '[صوت]' : (lastMsg.body ?? ''));
+    // صورة الإعلان
+    final adThumbUrl = _resolveAdImageUrl(conversation.ad);
+
+    // هل شركة؟
+    final isCompany = _isCompany(conversation);
+
+    // اسم المعلن (بروفايل رئيسي)
+    final rawAdvertiserName = _resolveAdvertiserMainName(conversation);
+
+    // اسم الفرد داخل الشركة إن وجد
+    final memberName = _resolveCompanyMemberName(conversation);
+
+    // نوع المعلن (شركة / فردي)
+    final advertiserType = _resolveAdvertiserTypeLabel(conversation);
+
+    // الاسم الذي سيُعرض في السطر الأول
+    String mainName = rawAdvertiserName;
+
+    // سطر ثانوي لاسم الشركة إذا كان شركة
+    String? companyNameSubline;
+
+    if (isCompany) {
+      if (memberName.isNotEmpty) {
+        // نعرض اسم الفرد داخل الشركة كسطر رئيسي
+        mainName = memberName;
+        // واسم الشركة تحت لو موجود
+        if (rawAdvertiserName.isNotEmpty) {
+          companyNameSubline = rawAdvertiserName;
+        }
+      } else {
+        mainName = rawAdvertiserName;
+      }
+    }
+
+    if (mainName.trim().isEmpty) {
+      // احتياط إضافي لو فشل كل شيء
+      mainName = rawAdvertiserName;
+    }
+
+    // عنوان الإعلان
+    final adTitle = conversation.ad?.title ?? '';
+
+    // تاريخ الإعلان
+    final adDate = _resolveAdDate(conversation);
 
     return InkWell(
       onTap: () {
-        // تنظيف الرسائل القديمة لضمان تحديث التفاصيل فورًا
         _chatController.messagesList.clear();
         if (isWide) {
           setState(() => _selectedConversation = conversation);
         } else {
-          Get.to(() => DesktopConversationScreenInMy(
-                key: ValueKey('conv-${conversation.advertiser.id}-${conversation.ad?.id ?? 0}'),
-                advertiser: conversation.advertiser,
-                ad: conversation.ad,
-                idAdv: conversation.advertiser.id,
-              ));
+          Get.to(
+            () => DesktopConversationScreenInMy(
+              key: ValueKey(
+                'conv-${conversation.advertiser.id}-${conversation.ad?.id ?? 0}',
+              ),
+              advertiser: conversation.advertiser,
+              ad: conversation.ad,
+              idAdv: conversation.advertiser.id,
+            ),
+          );
         }
       },
       child: Container(
         color: bg,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         child: Row(
+          // نفس منطق الموبايل: الصورة في اليمين، النص في اليسار
+          textDirection: TextDirection.rtl,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            _advertiserAvatar(conversation.advertiser?.logo),
-            const SizedBox(width: 16),
+            _buildAdThumbSquare(adThumbUrl),
+            const SizedBox(width: 12),
+            // النصوص
             Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Row(children: [
-                  Expanded(
-                    child: Text(
-                      conversation.advertiser?.name ?? '',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: 15, fontWeight: FontWeight.bold, color: textPrimary),
-                    ),
-                  ),
-                  _conversationReadReceipt(conversation, currentUserId),
-                  Text(_formatTimeSmart(conversation.lastMessageAt), style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: 12, color: textSecondary)),
-                ]),
-                const SizedBox(height: 4),
-
-                if (conversation.ad != null) ...[
-                  Text(
-                    conversation.ad!.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: 12, fontWeight: FontWeight.w600, color: textPrimary),
-                  ),
-                  const SizedBox(height: 4),
-                ],
-
-                Row(
-                  children: [
-                    Expanded(
-                      child: Row(
-                        children: [
-                          if (lastMsg?.isVoice == true) ...[
-                            Icon(Icons.mic, size: 16, color: textSecondary),
-                            const SizedBox(width: 6),
-                          ],
-                          Flexible(
-                            child: Text(
-                              _truncate(lastSnippet),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontFamily: AppTextStyles.appFontFamily,
-                                fontSize: 13,
-                                color: hasUnread ? textPrimary : textSecondary,
-                                fontWeight: hasUnread ? FontWeight.w700 : FontWeight.w400,
-                              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // السطر الأول: اسم المعلن (أو العضو داخل الشركة) + نوعه
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          mainName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontFamily: AppTextStyles.appFontFamily,
+                            fontSize: 15,
+                            fontWeight: hasUnread
+                                ? FontWeight.w700
+                                : FontWeight.w500,
+                            color: textPrimary,
+                          ),
+                        ),
+                      ),
+                      if (advertiserType != null &&
+                          advertiserType.isNotEmpty)
+                        Container(
+                          margin: const EdgeInsets.only(right: 6),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isCompany
+                                ? Colors.orange.withOpacity(0.12)
+                                : Colors.green.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            advertiserType,
+                            style: TextStyle(
+                              fontFamily: AppTextStyles.appFontFamily,
+                              fontSize: AppTextStyles.small,
+                              color:
+                                  isCompany ? Colors.orange : Colors.green,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
-                        ],
+                        ),
+                    ],
+                  ),
+                  // لو شركة وعندنا اسم شركة نعرضه كسطر ثانوي
+                  if (isCompany && companyNameSubline != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        companyNameSubline,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontFamily: AppTextStyles.appFontFamily,
+                          fontSize: AppTextStyles.small,
+                          color: textSecondary,
+                        ),
                       ),
                     ),
-                    if (hasUnread)
-                      Container(
-                        margin: const EdgeInsets.only(left: 8),
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(color: primary, borderRadius: BorderRadius.circular(12)),
-                        child: Text(conversation.unreadCount.toString(), style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-                      )
-                  ],
-                ),
-              ]),
+                  const SizedBox(height: 4),
+                  // عنوان الإعلان
+                  Text(
+                    _truncate(adTitle, max: 80),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontFamily: AppTextStyles.appFontFamily,
+                      fontSize: AppTextStyles.small,
+                      fontWeight: hasUnread
+                          ? FontWeight.w800
+                          : FontWeight.w400,
+                      color: hasUnread ? textPrimary : textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  // التاريخ + مؤشر المقروئية
+                  Row(
+                    children: [
+                      _conversationReadReceipt(
+                          conversation, currentUserId),
+                      Text(
+                        _formatAdDate(adDate),
+                        style: TextStyle(
+                          fontFamily: AppTextStyles.appFontFamily,
+                          fontSize: AppTextStyles.small,
+                          color: _receiptGrey
+                              .withOpacity(isDark ? 0.9 : 0.8),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
             const SizedBox(width: 8),
-            Icon(Icons.arrow_forward_ios, size: 18, color: textSecondary),
+            // دائرة unread + سهم، مثل الموبايل
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (hasUnread)
+                  Container(
+                    width: 9,
+                    height: 9,
+                    margin: const EdgeInsets.only(bottom: 6),
+                    decoration: BoxDecoration(
+                      color: primary,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                Icon(
+                  Icons.arrow_back_ios_new_rounded,
+                  size: 16,
+                  color: textSecondary,
+                ),
+              ],
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _advertiserAvatar(String? url) {
+  // صورة إعلان مربّعة كاملة في اليمين (نفس منطق الهاتف تقريباً)
+  Widget _buildAdThumbSquare(String? url) {
     return Container(
-      width: 56,
-      height: 56,
-      decoration: BoxDecoration(shape: BoxShape.circle, color: AppColors.greyLight),
-      child: ClipOval(
-        child: (url != null && url.isNotEmpty)
-            ? CachedNetworkImage(
-                imageUrl: url,
-                fit: BoxFit.cover,
-                placeholder: (context, _) => Container(
-                  color: Colors.grey[200],
-                  child: const Center(child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))),
-                ),
-                errorWidget: (context, _, __) => Icon(Icons.person, color: AppColors.greyDark, size: 24),
-              )
-            : Icon(Icons.person, size: 24, color: AppColors.greyDark),
+      width: _thumbSize,
+      height: _thumbSize,
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5F5F5),
+        borderRadius: BorderRadius.circular(0),
+      ),
+      clipBehavior: Clip.hardEdge,
+      child: (url != null && url.isNotEmpty)
+          ? CachedNetworkImage(
+              imageUrl: url,
+              fit: BoxFit.contain,
+              placeholder: (context, _) =>
+                  const _AdThumbPlaceholder(isLoading: true),
+              errorWidget: (context, _, __) =>
+                  const _AdThumbPlaceholder(),
+            )
+          : const _AdThumbPlaceholder(),
+    );
+  }
+}
+
+class _AdThumbPlaceholder extends StatelessWidget {
+  final bool isLoading;
+  const _AdThumbPlaceholder({this.isLoading = false});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Icon(
+        isLoading ? Icons.downloading_rounded : Icons.image_outlined,
+        size: 22,
+        color: Colors.grey.shade500,
       ),
     );
   }

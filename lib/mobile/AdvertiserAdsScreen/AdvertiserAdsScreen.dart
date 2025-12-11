@@ -185,7 +185,7 @@ class _AdvertiserAdsScreenState extends State<AdvertiserAdsScreen> {
                               widget.advertiser.name.toString(),
                               style: TextStyle(
                                 fontFamily: AppTextStyles.appFontFamily,
-                                fontSize: AppTextStyles.medium,
+                                fontSize: AppTextStyles.large,
 
                                 fontWeight: FontWeight.bold,
                                 color: textPrimary,
@@ -205,7 +205,7 @@ class _AdvertiserAdsScreenState extends State<AdvertiserAdsScreen> {
                             child: Text(
                               accountTypeInfo.text,
                               style: TextStyle(
-                               fontSize: AppTextStyles.small,
+                                fontSize: 10.sp,
                                 fontWeight: FontWeight.bold,
                                 color: Colors.white,
                               ),
@@ -337,7 +337,7 @@ class _AdvertiserAdsScreenState extends State<AdvertiserAdsScreen> {
                         style: TextStyle(
                           fontFamily: AppTextStyles.appFontFamily,
                           fontWeight: FontWeight.w600,
-                         fontSize: AppTextStyles.small,
+                          fontSize: 11.sp,
                           color: AppColors.buttonAndLinksColor,
                         ),
                       )),
@@ -637,7 +637,7 @@ class _AdvertiserAdsScreenState extends State<AdvertiserAdsScreen> {
                                                 '${city?.name??""}, ${ad.area?.name.toString()??""}',
                                             style: TextStyle(
                                               fontFamily: AppTextStyles.appFontFamily,
-                                             fontSize: AppTextStyles.small,
+                                              fontSize: 11.sp,
                                               color: AppColors.textSecondary(themeController.isDarkMode.value),
                                               overflow: TextOverflow.clip,
                                             ),
@@ -689,7 +689,7 @@ class _AdvertiserAdsScreenState extends State<AdvertiserAdsScreen> {
                                   _formatDate(ad.createdAt),
                                   style: TextStyle(
                                     fontFamily: AppTextStyles.appFontFamily,
-                                   fontSize: AppTextStyles.small,
+                                    fontSize: 11.sp,
                                     color: Colors.white,
                                   ),
                                 ),

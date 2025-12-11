@@ -1016,11 +1016,11 @@ class _AdsScreenState extends State<AdsScreen> with SingleTickerProviderStateMix
                                   SizedBox(width: 8.w),
 
                                   // ---- image search icon ----
-                                  IconButton(
+                                   /*IconButton(
                                     icon: Icon(Icons.image_search_outlined, color: AppColors.textPrimary(themeController.isDarkMode.value), size: 22.w),
                                     onPressed: () => _showImageSearchDialog(),
                                     tooltip: 'بحث بواسطة صورة'.tr,
-                                  ),
+                                  ),*/
                                   SizedBox(width: 6.w),
                                   // ----------------------------
                                   IconButton(

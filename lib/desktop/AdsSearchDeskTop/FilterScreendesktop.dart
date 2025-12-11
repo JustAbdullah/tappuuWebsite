@@ -1,4 +1,7 @@
+import 'dart:math' show max;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:geolocator/geolocator.dart';
@@ -15,19 +18,20 @@ import '../../core/data/model/CategoryAttributesResponse.dart';
 import '../../core/data/model/City.dart';
 import '../../core/localization/changelanguage.dart';
 
+enum PriceModeDesktop { range, minOnly }
+
 class FilterScreenDestktop extends StatefulWidget {
-  final int ?categoryId;
+  final int? categoryId;
   final String? currentTimeframe;
   final bool onlyFeatured;
-  final VoidCallback? onFiltersApplied; // إضافة callback
+  final VoidCallback? onFiltersApplied; // كولباك لتحديث الرابط وغيره
 
   const FilterScreenDestktop({
-    super.key, 
-    required this.categoryId, 
-    this.currentTimeframe,    
+    super.key,
+    required this.categoryId,
+    this.currentTimeframe,
     this.onlyFeatured = false,
-        this.onFiltersApplied, // إضافة callback
-
+    this.onFiltersApplied,
   });
 
   @override
@@ -36,23 +40,23 @@ class FilterScreenDestktop extends StatefulWidget {
 
 class _FilterScreenState extends State<FilterScreenDestktop> {
   static const LatLng DEFAULT_LOCATION = LatLng(33.5138, 36.2765); // وسط دمشق
+
   bool _isApplyingFilters = false;
   final AdsController _adsController = Get.find<AdsController>();
   final themeController = Get.find<ThemeController>();
   bool get isDarkMode => themeController.isDarkMode.value;
-  
+
   final _formKey = GlobalKey<FormState>();
   final AreaController _areaController = Get.put(AreaController());
-  
- final List<Map<String, String?>> timePeriods = [
-  {'value': '24h',    'label': 'آخر 24 ساعة'.tr},
-  {'value': '48h',    'label': 'آخر يومين'.tr},
-  {'value': 'week',   'label': 'آخر أسبوع'.tr},
-  {'value': 'month',  'label': 'آخر شهر'.tr},
-  {'value': 'year',   'label': 'آخر سنة'.tr},
-  {'value': 'all',    'label': 'كل الأوقات'.tr},
-];
 
+  final List<Map<String, String?>> timePeriods = [
+    {'value': '24h', 'label': 'آخر 24 ساعة'.tr},
+    {'value': '48h', 'label': 'آخر يومين'.tr},
+    {'value': 'week', 'label': 'آخر أسبوع'.tr},
+    {'value': 'month', 'label': 'آخر شهر'.tr},
+    {'value': 'year', 'label': 'آخر سنة'.tr},
+    {'value': 'all', 'label': 'كل الأوقات'.tr},
+  ];
 
   String? _selectedTimePeriod;
   final Map<int, dynamic> _attributeValues = {};
@@ -60,8 +64,6 @@ class _FilterScreenState extends State<FilterScreenDestktop> {
   Area? _tempSelectedArea;
   bool _locationLoading = false;
 
-  // خيارات المسافات للفلترة الجغرافية
-  
   final List<Map<String, dynamic>> radiusOptions = [
     {'value': 1.0, 'label': '1 كم'.tr},
     {'value': 5.0, 'label': '5 كم'.tr},
@@ -71,88 +73,85 @@ class _FilterScreenState extends State<FilterScreenDestktop> {
   ];
   double? _selectedDistance;
 
+  // السعر (مثل الموبايل)
+  PriceModeDesktop _priceMode = PriceModeDesktop.range;
+  final TextEditingController _priceMinController = TextEditingController();
+  final TextEditingController _priceMaxController = TextEditingController();
+
   @override
   void initState() {
     super.initState();
-    
-    // 1. خزّن الحالة المؤقتة
+
+    // نسخ الحالة الحالية مؤقتاً (عشان لو أقفل الفلترة أرجع زي ما كنت)
     _tempSelectedCity = _adsController.selectedCity.value;
     _tempSelectedArea = _adsController.selectedArea.value;
 
-    // 2. تعيين الموقع الافتراضي إذا لم يكن موجوداً
-    if (_adsController.latitude.value == null || _adsController.longitude.value == null) {
+    // تعيين موقع افتراضي لو مافيه
+    if (_adsController.latitude.value == null ||
+        _adsController.longitude.value == null) {
       _adsController.latitude.value = DEFAULT_LOCATION.latitude;
       _adsController.longitude.value = DEFAULT_LOCATION.longitude;
     }
 
-    // 3. جلب البيانات الأولية
     _loadInitialData();
   }
 
   Future<void> _loadInitialData() async {
-    // جلب التصنيفات الرئيسية أولًا
-    await _adsController.fetchMainCategories(Get.find<ChangeLanguageController>().currentLocale.value.languageCode);
-    
+    final lang =
+        Get.find<ChangeLanguageController>().currentLocale.value.languageCode;
+
+    // التصنيفات الرئيسية
+    await _adsController.fetchMainCategories(lang);
+
     if (widget.categoryId != null && widget.categoryId! > 0) {
-      // 3. عيّن currentCategoryId و selectedMainCategoryId
       _adsController.currentCategoryId.value = widget.categoryId!;
       _adsController.selectedMainCategoryId.value = widget.categoryId!;
 
-      // 4. جلب التصنيفات الفرعية لهذا المعرف
-      await _adsController.fetchSubCategories(widget.categoryId!, Get.find<ChangeLanguageController>().currentLocale.value.languageCode);
-      
-      // 5. جلب السمات الخاصة بالتصنيف الرئيسي
+      await _adsController.fetchSubCategories(widget.categoryId!, lang);
+
       await _adsController.fetchAttributes(
         categoryId: widget.categoryId!,
-        lang: Get.find<ChangeLanguageController>().currentLocale.value.languageCode
+        lang: lang,
       );
     }
-    
-    // جلب المدن
-    await _adsController.fetchCities(
-      'SY',
-      Get.find<ChangeLanguageController>().currentLocale.value.languageCode,
-    );
-    
-    // جلب الموقع الحالي إذا لم يكن محدداً
-    if (_adsController.latitude.value == DEFAULT_LOCATION.latitude && 
+
+    // المدن
+    await _adsController.fetchCities('SY', lang);
+
+    // لو لسه على الموقع الافتراضي، حاول تجيب موقع حقيقي
+    if (_adsController.latitude.value == DEFAULT_LOCATION.latitude &&
         _adsController.longitude.value == DEFAULT_LOCATION.longitude) {
       await _getCurrentLocation();
     }
   }
 
-  // جلب الموقع الحالي للمستخدم مع التحقق من الصلاحيات
   Future<void> _getCurrentLocation() async {
     setState(() => _locationLoading = true);
     try {
-      // التحقق من إذن الوصول للموقع
       LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied || 
+      if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
         permission = await Geolocator.requestPermission();
-        if (permission != LocationPermission.whileInUse && 
+        if (permission != LocationPermission.whileInUse &&
             permission != LocationPermission.always) {
-          print('تم رفض إذن الوصول للموقع');
+          debugPrint('تم رفض إذن الوصول للموقع');
           return;
         }
       }
-      
-      // التحقق من تفعيل خدمة الموقع
+
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
-        print('خدمة الموقع غير مفعلة');
+        debugPrint('خدمة الموقع غير مفعلة');
         return;
       }
-      
-      // جلب الموقع الحالي
+
       final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.best
-      );
+          desiredAccuracy: LocationAccuracy.best);
+
       _adsController.latitude.value = position.latitude;
       _adsController.longitude.value = position.longitude;
     } catch (e) {
-      print('خطأ في جلب الموقع: $e');
-      // الحفاظ على الموقع الافتراضي في حالة الخطأ
+      debugPrint('خطأ في جلب الموقع: $e');
       _adsController.latitude.value = DEFAULT_LOCATION.latitude;
       _adsController.longitude.value = DEFAULT_LOCATION.longitude;
     } finally {
@@ -162,28 +161,28 @@ class _FilterScreenState extends State<FilterScreenDestktop> {
 
   @override
   void dispose() {
+    // رجّع المدينة والمنطقة اللي كانت قبل فتح الفلترة
     _adsController.selectedCity.value = _tempSelectedCity;
     _adsController.selectedArea.value = _tempSelectedArea;
 
+    // تفريغ الحالة المحلية + الكنترولر
+    _attributeValues.clear();
+    _selectedTimePeriod = null;
+    _selectedDistance = null;
+    _adsController.resetFilterState();
+    _tempSelectedCity = null;
+    _tempSelectedArea = null;
 
-      // 1. تفريغ المتغيرات المحلية في الواجهة
-  _attributeValues.clear();
-  _selectedTimePeriod = null;
-  _selectedDistance = null;
-  
-  // 2. تفريغ متغيرات الكنترولر
-  _adsController.resetFilterState();
-  
-  // 3. إعادة تعيين المتغيرات المؤقتة
-  _tempSelectedCity = null;
-  _tempSelectedArea = null;
+    _priceMinController.dispose();
+    _priceMaxController.dispose();
+
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background(isDarkMode),
+      backgroundColor: Colors.transparent,
       body: Obx(() {
         if (_adsController.isLoadingAttributes.value) {
           return Center(
@@ -193,47 +192,40 @@ class _FilterScreenState extends State<FilterScreenDestktop> {
             ),
           );
         }
-        
+
         return Form(
           key: _formKey,
-          child: SingleChildScrollView(
-            padding: EdgeInsets.only(bottom: 100.h),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // شريط التصفية العلوي
-                _buildTopFilterBar(),
-                SizedBox(height: 16.h),
-                
-                // البحث بالكلمات
-                _buildKeywordSearch(isDarkMode),
-                SizedBox(height: 16.h),
-                
-                // التصنيفات
-                _buildCategorySection(isDarkMode),
-                SizedBox(height: 16.h),
-                
-                // الخصائص
-                _buildAttributesSection(),
-                SizedBox(height: 16.h),
-                
-                // الموقع الجغرافي
-                _buildLocationFilterSection(isDarkMode),
-                SizedBox(height: 16.h),
-                
-                // المدن والمناطق
-                _buildCityAreaSection(),
-                SizedBox(height: 16.h),
-                
-                // الفترة الزمنية
-                _buildTimePeriodSection(),
-              ],
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1100),
+              child: SingleChildScrollView(
+                padding: EdgeInsets.only(bottom: 110.h),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildTopFilterBar(),
+                    SizedBox(height: 16.h),
+                    _buildKeywordSearch(isDarkMode),
+                    SizedBox(height: 16.h),
+                    _buildCategorySection(isDarkMode),
+                    SizedBox(height: 16.h),
+                    _buildAttributesSection(),
+                    SizedBox(height: 16.h),
+                    _buildPriceSection(), // 🟢 فلترة السعر
+                    SizedBox(height: 16.h),
+                    _buildLocationFilterSection(isDarkMode),
+                    SizedBox(height: 16.h),
+                    _buildCityAreaSection(),
+                    SizedBox(height: 16.h),
+                    _buildTimePeriodSection(isDarkMode),
+                  ],
+                ),
+              ),
             ),
           ),
         );
       }),
-            bottomSheet: _buildActionButtons(),
-
+      bottomSheet: _buildActionButtons(),
     );
   }
 
@@ -246,41 +238,51 @@ class _FilterScreenState extends State<FilterScreenDestktop> {
         border: Border(
           bottom: BorderSide(
             color: AppColors.divider(isDarkMode),
-            width: 1,
+            width: 0.6,
           ),
         ),
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            'حذف النتائج النتائج'.tr,
-            style: TextStyle(
-              fontSize: AppTextStyles.medium,
-              fontWeight: FontWeight.bold,
-                 fontFamily: AppTextStyles.appFontFamily,
-              color: AppColors.textPrimary(isDarkMode),
+          Icon(
+            Icons.tune_rounded,
+            size: 20.w,
+            color: AppColors.primary,
+          ),
+          SizedBox(width: 8.w),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'خيارات الفلترة'.tr,
+                  style: TextStyle(
+                    fontSize: AppTextStyles.medium,
+                    fontWeight: FontWeight.bold,
+                    fontFamily: AppTextStyles.appFontFamily,
+                    color: AppColors.textPrimary(isDarkMode),
+                  ),
+                ),
+                SizedBox(height: 2.h),
+                Text(
+                  'خصص النتائج حسب المدينة، الخصائص، السعر، والوقت.'.tr,
+                  style: TextStyle(
+                    fontSize: AppTextStyles.small,
+                    fontFamily: AppTextStyles.appFontFamily,
+                    color: AppColors.textSecondary(isDarkMode),
+                  ),
+                ),
+              ],
             ),
           ),
-          Row(
-            children: [
-              // زر مسح الفلاتر
-              IconButton(
-                icon: Icon(Icons.filter_alt_off, size: 20.w),
-                onPressed: _resetFilters,
-                tooltip: 'مسح الفلاتر'.tr,
-                color: AppColors.primary,
-              ),
-             
-            ],
-          ),
+          // 🔴 زر إعادة التعيين في الأعلى تم حذفه لأنه بلا فائدة
         ],
       ),
     );
   }
 
-  // ==================== قسم البحث ====================
-  Widget _buildKeywordSearch(bool isDarkMode) { 
+  // ==================== قسم البحث بالكلمات ====================
+  Widget _buildKeywordSearch(bool isDarkMode) {
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: 16.w),
       child: Column(
@@ -291,33 +293,66 @@ class _FilterScreenState extends State<FilterScreenDestktop> {
             style: TextStyle(
               fontSize: AppTextStyles.medium,
               fontWeight: FontWeight.w600,
-                 fontFamily: AppTextStyles.appFontFamily,
+              fontFamily: AppTextStyles.appFontFamily,
               color: AppColors.textPrimary(isDarkMode),
             ),
           ),
-          SizedBox(height: 6.h),
+          SizedBox(height: 8.h),
           TextField(
             controller: _adsController.searchController,
             decoration: InputDecoration(
-              hintText: 'ابحث في الإعلانات...'.tr,
-              hintStyle: TextStyle(fontSize: 12.sp),
-              prefixIcon: Icon(Icons.search, 
-                            size: 18.w, 
-                            color: AppColors.textSecondary(isDarkMode)),
-              filled: true,
-              fillColor: AppColors.background(isDarkMode),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8.r),
-                borderSide: BorderSide.none,
+              labelText: 'ابحث في الإعلانات...'.tr,
+              labelStyle: TextStyle(
+                fontSize: AppTextStyles.small,
+                color: AppColors.textSecondary(isDarkMode),
               ),
-              contentPadding: EdgeInsets.symmetric(vertical: 12.h, horizontal: 14.w),
+              prefixIcon: Icon(
+                Icons.search_rounded,
+                size: 20.w,
+                color: AppColors.textSecondary(isDarkMode),
+              ),
+              suffixIcon: IconButton(
+                icon: Icon(
+                  Icons.close_rounded,
+                  size: 18.w,
+                  color: AppColors.textSecondary(isDarkMode),
+                ),
+                onPressed: () {
+                  _adsController.searchController.clear();
+                  _adsController.currentSearch.value = '';
+                  widget.onFiltersApplied?.call();
+                },
+              ),
+              filled: true,
+              fillColor: AppColors.surface(isDarkMode),
+              contentPadding:
+                  EdgeInsets.symmetric(vertical: 10.h, horizontal: 12.w),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10.r),
+                borderSide: BorderSide(
+                  color: AppColors.border(isDarkMode),
+                  width: 0.6,
+                ),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10.r),
+                borderSide: BorderSide(
+                  color: AppColors.border(isDarkMode),
+                  width: 0.6,
+                ),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10.r),
+                borderSide: BorderSide(
+                  color: AppColors.primary,
+                  width: 1.1,
+                ),
+              ),
             ),
             onChanged: (value) {
- _adsController.currentSearch.value = value;
-              if (widget.onFiltersApplied != null) {
-      widget.onFiltersApplied!();
-    }
-            }
+              _adsController.currentSearch.value = value;
+              widget.onFiltersApplied?.call();
+            },
           ),
         ],
       ),
@@ -325,362 +360,395 @@ class _FilterScreenState extends State<FilterScreenDestktop> {
   }
 
   // ==================== قسم التصنيفات ====================
- // ==================== قسم التصنيفات (بتصميم مطابق لقسم المدن) ====================
-// ==================== قسم التصنيفات ====================
-Widget _buildCategorySection(bool isDarkMode) {
-  return Obx(() {  // هنا Obx وحيد فقط
+  Widget _buildCategorySection(bool isDarkMode) {
+    return Obx(() {
+      return Padding(
+        padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'التصنيفات'.tr,
+              style: TextStyle(
+                fontFamily: AppTextStyles.appFontFamily,
+                fontSize: AppTextStyles.medium,
+                fontWeight: FontWeight.bold,
+                color: AppColors.primary,
+              ),
+            ),
+            SizedBox(height: 12.h),
+
+            // التصنيف الرئيسي
+            _buildStyledDropdown<int>(
+              hint: 'التصنيف الرئيسي'.tr,
+              items: _adsController.mainCategories
+                  .map(
+                    (c) => DropdownMenuItem<int>(
+                      value: c.id,
+                      child: Text(c.name ?? '—'),
+                    ),
+                  )
+                  .toList(),
+              value: _adsController.selectedMainCategoryId.value,
+              onChanged: (v) async {
+                _adsController.updateMainCategory(v);
+                widget.onFiltersApplied?.call();
+
+                if (v != null) {
+                  final lang =
+                      Get.find<ChangeLanguageController>()
+                          .currentLocale
+                          .value
+                          .languageCode;
+                  await _adsController.fetchAttributes(
+                    categoryId: v,
+                    lang: lang,
+                  );
+                }
+              },
+              enabled: true,
+              isDarkMode: isDarkMode,
+            ),
+            SizedBox(height: 12.h),
+
+            // التصنيف الفرعي
+            _buildStyledDropdown<int>(
+              hint: 'التصنيف الفرعي'.tr,
+              items: _adsController.subCategories
+                  .map(
+                    (c) => DropdownMenuItem<int>(
+                      value: c.id,
+                      child: Text(c.name ?? '—'),
+                    ),
+                  )
+                  .toList(),
+              value: _adsController.selectedSubCategoryId.value,
+              onChanged: (v) {
+                _adsController.updateSubCategory(v);
+                widget.onFiltersApplied?.call();
+              },
+              enabled: _adsController.selectedMainCategoryId.value != null,
+              isDarkMode: isDarkMode,
+            ),
+            SizedBox(height: 12.h),
+
+            // التصنيف الفرعي الثانوي
+            _buildStyledDropdown<int>(
+              hint: 'التصنيف الفرعي الثانوي'.tr,
+              items: _adsController.subTwoCategories
+                  .map(
+                    (c) => DropdownMenuItem<int>(
+                      value: c.id,
+                      child: Text(c.name ?? '—'),
+                    ),
+                  )
+                  .toList(),
+              value: _adsController.selectedSubTwoCategoryId.value,
+              onChanged: (v) {
+                _adsController.updateSubTwoCategory(v);
+                widget.onFiltersApplied?.call();
+              },
+              enabled: _adsController.selectedSubCategoryId.value != null,
+              isDarkMode: isDarkMode,
+            ),
+          ],
+        ),
+      );
+    });
+  }
+
+  Widget _buildStyledDropdown<T>({
+    required String hint,
+    required List<DropdownMenuItem<T>> items,
+    required T? value,
+    required ValueChanged<T?> onChanged,
+    required bool enabled,
+    required bool isDarkMode,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(10.r),
+        border: Border.all(
+          color: AppColors.border(isDarkMode),
+          width: 0.6,
+        ),
+      ),
+      child: DropdownButtonFormField<T>(
+        value: enabled && items.any((item) => item.value == value) ? value : null,
+        items: items,
+        onChanged: enabled ? onChanged : null,
+        decoration: InputDecoration(
+          labelText: hint,
+          prefixIcon: Icon(
+            Icons.category_outlined,
+            size: 18.w,
+            color: AppColors.textSecondary(isDarkMode),
+          ),
+          contentPadding:
+              EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
+          filled: true,
+          fillColor: AppColors.surface(isDarkMode),
+          border: InputBorder.none,
+        ),
+        style: TextStyle(
+          fontFamily: AppTextStyles.appFontFamily,
+          fontSize: AppTextStyles.medium,
+          color: AppColors.textPrimary(isDarkMode),
+        ),
+        dropdownColor: AppColors.card(isDarkMode),
+        hint: Text(
+          hint,
+          style: TextStyle(
+            fontFamily: AppTextStyles.appFontFamily,
+            fontSize: AppTextStyles.medium,
+            color: AppColors.textSecondary(isDarkMode),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ==================== فلترة الموقع الجغرافي ====================
+  Widget _buildLocationFilterSection(bool isDarkMode) {
+    final currentLocation = LatLng(
+      _adsController.latitude.value ?? DEFAULT_LOCATION.latitude,
+      _adsController.longitude.value ?? DEFAULT_LOCATION.longitude,
+    );
+
+    final mapController = MapController();
+
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
+      padding: EdgeInsets.symmetric(horizontal: 16.w),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'التصنيفات'.tr,
+            'الموقع الجغرافي'.tr,
             style: TextStyle(
-              fontFamily: AppTextStyles.appFontFamily,
               fontSize: AppTextStyles.medium,
               fontWeight: FontWeight.bold,
               color: AppColors.primary,
             ),
           ),
-          SizedBox(height: 12.h),
-
-          // التصنيف الرئيسي
-          _buildStyledDropdown<int>(
-            hint: 'التصنيف الرئيسي'.tr,
-            items: _adsController.mainCategories
-                .map((c) => DropdownMenuItem<int>(
-                      value: c.id,
-                      child: Text(c.name ?? '—'),
-                    ))
-                .toList(),
-            value: _adsController.selectedMainCategoryId.value,
-            onChanged: (v) {
-              _adsController.updateMainCategory(v);
-             
-      widget.onFiltersApplied!();
-    
-              if (v != null) _adsController.fetchAttributes(categoryId: v, lang: Get.find<ChangeLanguageController>().currentLocale.value.languageCode);
-            },
-            enabled: true,
-            isDarkMode: isDarkMode,
-          ),
-          SizedBox(height: 12.h),
-
-          // التصنيف الفرعي
-          _buildStyledDropdown<int>(
-            hint: 'التصنيف الفرعي'.tr,
-            items: _adsController.subCategories
-                .map((c) => DropdownMenuItem<int>(
-                      value: c.id,
-                      child: Text(c.name ?? '—'),
-                    ))
-                .toList(),
-            value: _adsController.selectedSubCategoryId.value,
-            onChanged: (v) {
-               _adsController.updateSubCategory(v);
-               if (widget.onFiltersApplied != null) {
-      widget.onFiltersApplied!();
-    }
-            },
-           
-            enabled: _adsController.selectedMainCategoryId.value != null,
-            isDarkMode: isDarkMode,
-          ),
-          SizedBox(height: 12.h),
-
-          // التصنيف الفرعي الثانوي
-          _buildStyledDropdown<int>(
-            hint: 'التصنيف الفرعي الثانوي'.tr,
-            items: _adsController.subTwoCategories
-                .map((c) => DropdownMenuItem<int>(
-                      value: c.id,
-                      child: Text(c.name ?? '—'),
-                    ))
-                .toList(),
-            value: _adsController.selectedSubTwoCategoryId.value,
-            onChanged: (v) {
-
-              _adsController.updateSubTwoCategory(v);
-               if (widget.onFiltersApplied != null) {
-      widget.onFiltersApplied!();
-    }
-            } ,
-            enabled: _adsController.selectedSubCategoryId.value != null,
-            isDarkMode: isDarkMode,
-          ),
-        ],
-      ),
-    );
-  });
-}
-
-/// ويدجت Dropdown عامة ولكن _دون_ Obx داخليّ
-Widget _buildStyledDropdown<T>({
-  required String hint,
-  required List<DropdownMenuItem<T>> items,
-  required T? value,
-  required ValueChanged<T?> onChanged,
-  required bool enabled,
-  required bool isDarkMode,
-}) {
-  return Container(
-    decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(8.r),
-      border: Border.all(color: AppColors.border(isDarkMode), width: 0.5),
-    ),
-    child: DropdownButtonFormField<T>(
-      value: enabled && items.any((item) => item.value == value) ? value : null,
-      items: items,
-      onChanged: enabled ? onChanged : null,
-      decoration: InputDecoration(
-        labelText: hint,
-        contentPadding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 12.h),
-        filled: true,
-        fillColor: AppColors.surface(isDarkMode),
-        border: InputBorder.none,
-      ),
-      style: TextStyle(
-        fontFamily: AppTextStyles.appFontFamily,
-       fontSize: AppTextStyles.medium,
-        color: AppColors.textPrimary(isDarkMode),
-      ),
-      dropdownColor: AppColors.card(isDarkMode),
-      hint: Text(
-        hint,
-        style: TextStyle(
-          fontFamily: AppTextStyles.appFontFamily,
-         fontSize: AppTextStyles.medium,
-          color: AppColors.textSecondary(isDarkMode),
-        ),
-      ),
-    ),
-  );
-}
-
-// ==================== فلترة الموقع الجغرافي (مُحسَّنة) ====================
-
-
-// ==================== فلترة الموقع الجغرافي - النسخة المحسنة ====================
-Widget _buildLocationFilterSection(bool isDarkMode) {
-  final currentLocation = LatLng(
-    _adsController.latitude.value ?? DEFAULT_LOCATION.latitude,
-    _adsController.longitude.value ?? DEFAULT_LOCATION.longitude,
-  );
-
-  // متحكم جديد للخريطة لتحديثها فورياً
-  final mapController = MapController();
-
-  return Padding(
-    padding: EdgeInsets.symmetric(horizontal: 16.w),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // عنوان القسم
-        Text(
-          'الموقع الجغرافي'.tr,
-          style: TextStyle(
-            fontSize: AppTextStyles.medium,
-            fontWeight: FontWeight.bold,
-            color: AppColors.primary,
-          ),
-        ),
-        SizedBox(height: 16.h),
-        
-        // خريطة تفاعلية
-        Container(
-          height: 200.h, // زيادة ارتفاع الخريطة
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12.r), // زوايا أكثر استدارة
-            border: Border.all(
-              color: AppColors.border(isDarkMode),
+          SizedBox(height: 10.h),
+          Container(
+            height: 200.h,
+            decoration: BoxDecoration(
+              color: AppColors.surface(isDarkMode),
+              borderRadius: BorderRadius.circular(12.r),
+              border: Border.all(color: AppColors.border(isDarkMode), width: 0.6),
             ),
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(12.r),
-            child: FlutterMap(
-              mapController: mapController, // إضافة متحكم للخريطة
-              options: MapOptions(
-                initialCenter: currentLocation,
-                initialZoom: 15,
-                 interactionOptions: const InteractionOptions(
-    flags: InteractiveFlag.none, // ✅ يمنع كل التفاعل: سحب، تكبير، تدوير...
-  ),
-              ),
-              children: [
-                TileLayer(
-                  urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                  subdomains: const ['a', 'b', 'c'],
-                  userAgentPackageName: 'com.stay_in_me_website',
-                ),
-                MarkerLayer(
-                  markers: [
-                    Marker(
-                      point: currentLocation,
-                      child: Icon(Icons.location_pin, 
-                        size: 48.w, 
-                        color: AppColors.primary,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12.r),
+              child: Stack(
+                children: [
+                  FlutterMap(
+                    mapController: mapController,
+                    options: MapOptions(
+                      initialCenter: currentLocation,
+                      initialZoom: 15,
+                      interactionOptions: const InteractionOptions(
+                        flags: InteractiveFlag.none,
                       ),
                     ),
-                  ],
-                ),
-              ],
+                    children: [
+                      TileLayer(
+                        urlTemplate:
+                            'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        subdomains: const ['a', 'b', 'c'],
+                        userAgentPackageName: 'com.stay_in_me_website',
+                      ),
+                      MarkerLayer(
+                        markers: [
+                          Marker(
+                            point: currentLocation,
+                            child: Icon(
+                              Icons.location_pin,
+                              size: 46.w,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  if (_locationLoading)
+                    Container(
+                      color: Colors.black26,
+                      child: Center(
+                        child: CircularProgressIndicator(
+                          color: AppColors.primary,
+                          strokeWidth: 2,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
-        ),
-        SizedBox(height: 20.h),
-        
-        // زر تحديث الموقع - أكثر وضوحاً
-        _buildRefreshLocationButton(
-          onPressed: () async {
-            // تحديث الموقع
+          SizedBox(height: 14.h),
+          _buildRefreshLocationButton(onPressed: () async {
             await _adsController.refreshLocation();
-            
             await _adsController.fetchCurrentLocation();
-            // تحديث الخريطة فورياً
+
             final newLocation = LatLng(
               _adsController.latitude.value ?? DEFAULT_LOCATION.latitude,
               _adsController.longitude.value ?? DEFAULT_LOCATION.longitude,
             );
-            
-            mapController.move(
-              newLocation, 
-              mapController.camera.zoom
-            );
-          }
-        ),
-        SizedBox(height: 16.h),
-        
-        // اختيار المسافة
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'المسافة من موقعك الحالي:'.tr,
-              style: TextStyle(
-               fontSize: AppTextStyles.medium,
-                color: AppColors.textSecondary(isDarkMode),
-             ) ),
-            SizedBox(height: 10.h),
-            _buildDistanceDropdown(isDarkMode),
-          ],
-        ),
-        SizedBox(height: 20.h),
-        
-        // زر تطبيق الفلتر
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton(
-            onPressed: _applyLocationFilter,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              padding: EdgeInsets.symmetric(vertical: 14.h),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10.r),
-              ),
+            mapController.move(newLocation, mapController.camera.zoom);
+          }),
+          SizedBox(height: 12.h),
+          Text(
+            'المسافة من موقعك الحالي:'.tr,
+            style: TextStyle(
+              fontSize: AppTextStyles.medium,
+              fontFamily: AppTextStyles.appFontFamily,
+              color: AppColors.textSecondary(isDarkMode),
             ),
-            child: Text(
-              'حصر الاعلانات'.tr,
-              style: TextStyle(
-                fontSize: AppTextStyles.medium,
-                fontWeight: FontWeight.bold,
+          ),
+          SizedBox(height: 8.h),
+          _buildDistanceDropdown(isDarkMode),
+          SizedBox(height: 12.h),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _applyLocationFilter,
+              icon: Icon(Icons.my_location_rounded, size: 18.w),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                padding: EdgeInsets.symmetric(vertical: 12.h),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10.r),
+                ),
+              ),
+              label: Text(
+                'حصر الإعلانات بالقرب مني'.tr,
+                style: TextStyle(
+                  fontSize: AppTextStyles.medium,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
           ),
-        ),
-      ],
-    ),
-  );
-}
-
-// زر تحديث الموقع - تصميم جديد
-Widget _buildRefreshLocationButton({required VoidCallback onPressed}) {
-  return SizedBox(
-    width: double.infinity,
-    child: ElevatedButton.icon(
-      onPressed: onPressed,
-      icon: Icon(Icons.refresh, size: 20.w),
-      label: Text(
-        'تحديث موقعك الحالي'.tr,
-        style: TextStyle(fontSize: 13.sp),
+        ],
       ),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: AppColors.buttonAndLinksColor,
-        foregroundColor: Colors.white,
-        padding: EdgeInsets.symmetric(vertical: 12.h),
-        shape: RoundedRectangleBorder(
+    );
+  }
+
+  Widget _buildRefreshLocationButton({required VoidCallback onPressed}) {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        onPressed: onPressed,
+        icon: Icon(Icons.refresh_rounded, size: 18.w),
+        label: Text(
+          'تحديث موقعك الحالي'.tr,
+          style: TextStyle(
+            fontSize: AppTextStyles.small,
+            fontFamily: AppTextStyles.appFontFamily,
+          ),
+        ),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.buttonAndLinksColor,
+          foregroundColor: Colors.white,
+          padding: EdgeInsets.symmetric(vertical: 10.h),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10.r),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDistanceDropdown(bool isDarkMode) {
+    return DropdownButtonFormField<double>(
+      value: _selectedDistance,
+      decoration: InputDecoration(
+        labelText: 'اختر المسافة'.tr,
+        labelStyle: TextStyle(
+          fontSize: AppTextStyles.small,
+          color: AppColors.textSecondary(isDarkMode),
+        ),
+        filled: true,
+        fillColor: AppColors.surface(isDarkMode),
+        contentPadding:
+            EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
+        border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10.r),
+          borderSide: BorderSide(
+            color: AppColors.border(isDarkMode),
+            width: 0.6,
+          ),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10.r),
+          borderSide: BorderSide(
+            color: AppColors.border(isDarkMode),
+            width: 0.6,
+          ),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10.r),
+          borderSide: BorderSide(
+            color: AppColors.primary,
+            width: 1.1,
+          ),
         ),
       ),
-    ),
-  );
-}
-Widget _buildDistanceDropdown(bool isDarkMode) {
-  return DropdownButtonFormField<double>(
-    value: _selectedDistance,
-    decoration: InputDecoration(
-      filled: true,
-      fillColor: AppColors.background(isDarkMode),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8.r),
-      ),
-    ),
-    // هنا نعرض العناصر من قائمة الخُريطة
-    items: radiusOptions.map((option) {
-      final double val = option['value'] as double;
-      final String label = option['label'] as String;
-      return DropdownMenuItem<double>(
-        value: val,
-        child: Text(label),
-      );
-    }).toList(),
-    onChanged: (value) {
-      if (value == null) return;
-      setState(() {
-        _selectedDistance = value;
-      });
-      // لو كنت تستخدم GetX:
-      _adsController.selectedRadius.value = value;
-    },
-    hint: Text(
-      'اختر المسافة'.tr,
-      style: TextStyle(
-       fontSize: AppTextStyles.medium,
-        color: AppColors.textSecondary(isDarkMode),
-      ),
-    ),
-  );
-}
-
-
+      items: radiusOptions.map((option) {
+        final double val = option['value'] as double;
+        final String label = option['label'] as String;
+        return DropdownMenuItem<double>(
+          value: val,
+          child: Text(label),
+        );
+      }).toList(),
+      onChanged: (value) {
+        if (value == null) return;
+        setState(() {
+          _selectedDistance = value;
+        });
+        _adsController.selectedRadius.value = value;
+      },
+    );
+  }
 
   void _applyLocationFilter() {
-    if (_selectedDistance != null && 
-        _adsController.latitude.value != null && 
+    if (_selectedDistance != null &&
+        _adsController.latitude.value != null &&
         _adsController.longitude.value != null) {
-     _adsController.fetchAds(
-      categoryId: _adsController.currentCategoryId.value,
-      subCategoryLevelOneId: _adsController.currentSubCategoryLevelOneId.value,
-      subCategoryLevelTwoId: _adsController.currentSubCategoryLevelTwoId.value,
-      search: _adsController.currentSearch.value.isNotEmpty
-          ? _adsController.currentSearch.value
-          : null,
-      sortBy: _adsController.currentSortBy.value,
-   attributes: _adsController. attrsPayload.value.isNotEmpty ? _adsController. attrsPayload.value : null,
-      lang: Get.find<ChangeLanguageController>()
-          .currentLocale
-          .value
-          .languageCode,
-      page: 1,
-      // أرسل timeframe فقط إذا لم تكن null
-     timeframe: _selectedTimePeriod == 'all' ? null : _selectedTimePeriod,
-  onlyFeatured: widget.onlyFeatured,
-    latitude: _adsController.latitude.value,
-      longitude: _adsController.longitude.value,
-      distanceKm: _adsController.selectedRadius.value,
-    );
+      final priceMin = _parsePrice(_priceMinController.text);
+      final priceMax = _priceMode == PriceModeDesktop.minOnly
+          ? null
+          : _parsePrice(_priceMaxController.text);
 
+      _adsController.fetchAds(
+        categoryId: _adsController.currentCategoryId.value,
+        subCategoryLevelOneId:
+            _adsController.currentSubCategoryLevelOneId.value,
+        subCategoryLevelTwoId:
+            _adsController.currentSubCategoryLevelTwoId.value,
+        search: _adsController.currentSearch.value.isNotEmpty
+            ? _adsController.currentSearch.value
+            : null,
+        sortBy: _adsController.currentSortBy.value,
+        attributes: _adsController.attrsPayload.value.isNotEmpty
+            ? _adsController.attrsPayload.value
+            : null,
+        lang: Get.find<ChangeLanguageController>()
+            .currentLocale
+            .value
+            .languageCode,
+        page: 1,
+        timeframe: _selectedTimePeriod == 'all' ? null : _selectedTimePeriod,
+        onlyFeatured: widget.onlyFeatured,
+        latitude: _adsController.latitude.value,
+        longitude: _adsController.longitude.value,
+        distanceKm: _adsController.selectedRadius.value,
+        priceMin: priceMin,
+        priceMax: priceMax,
+      );
     } else {
       Get.snackbar(
         'تحذير'.tr,
@@ -694,7 +762,7 @@ Widget _buildDistanceDropdown(bool isDarkMode) {
   // ==================== قسم الخصائص ====================
   Widget _buildAttributesSection() {
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 6.w),
+      padding: EdgeInsets.symmetric(horizontal: 16.w),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -710,10 +778,9 @@ Widget _buildDistanceDropdown(bool isDarkMode) {
               ),
             ),
           ),
-          
           ..._adsController.attributesList.map((attribute) {
             return Padding(
-              padding: EdgeInsets.only(bottom: 5.h),
+              padding: EdgeInsets.only(bottom: 6.h),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -723,7 +790,7 @@ Widget _buildDistanceDropdown(bool isDarkMode) {
                       attribute.label,
                       style: TextStyle(
                         fontFamily: AppTextStyles.appFontFamily,
-                       fontSize: AppTextStyles.medium,
+                        fontSize: AppTextStyles.medium,
                         fontWeight: FontWeight.bold,
                         color: AppColors.textPrimary(isDarkMode),
                       ),
@@ -731,9 +798,9 @@ Widget _buildDistanceDropdown(bool isDarkMode) {
                   ),
                   _buildAttributeInput(attribute),
                   Divider(
-                    height: 24.h,
+                    height: 20.h,
                     color: AppColors.divider(isDarkMode),
-                    thickness: 0.7,
+                    thickness: 0.6,
                   ),
                 ],
               ),
@@ -763,21 +830,30 @@ Widget _buildDistanceDropdown(bool isDarkMode) {
     return DropdownButtonFormField<int>(
       value: _attributeValues[attribute.attributeId] as int?,
       decoration: InputDecoration(
-        contentPadding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 12.h),
+        hintText: '${'اختر'.tr} ${attribute.label}',
+        contentPadding:
+            EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
         filled: true,
         fillColor: AppColors.surface(isDarkMode),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8.r),
+          borderRadius: BorderRadius.circular(10.r),
           borderSide: BorderSide(
             color: AppColors.border(isDarkMode),
-            width: 0.5,
+            width: 0.6,
           ),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8.r),
+          borderRadius: BorderRadius.circular(10.r),
           borderSide: BorderSide(
             color: AppColors.border(isDarkMode),
-            width: 0.5,
+            width: 0.6,
+          ),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10.r),
+          borderSide: BorderSide(
+            color: AppColors.primary,
+            width: 1.1,
           ),
         ),
       ),
@@ -788,7 +864,7 @@ Widget _buildDistanceDropdown(bool isDarkMode) {
             option.value,
             style: TextStyle(
               fontFamily: AppTextStyles.appFontFamily,
-             fontSize: AppTextStyles.medium,
+              fontSize: AppTextStyles.medium,
               color: AppColors.textPrimary(isDarkMode),
             ),
           ),
@@ -799,63 +875,62 @@ Widget _buildDistanceDropdown(bool isDarkMode) {
           _attributeValues[attribute.attributeId] = value;
         });
       },
-      hint: Text(
-        '${'اختر'.tr} ${attribute.label}',
-        style: TextStyle(
-          fontFamily: AppTextStyles.appFontFamily,
-         fontSize: AppTextStyles.medium,
-          color: AppColors.textSecondary(isDarkMode),
-        ),
-      ),
-      style: TextStyle(
-        fontFamily: AppTextStyles.appFontFamily,
-       fontSize: AppTextStyles.medium,
-        color: AppColors.textPrimary(isDarkMode),
-      ),
       dropdownColor: AppColors.card(isDarkMode),
     );
   }
 
   Widget _buildBooleanAttribute(CategoryAttribute attribute) {
     final currentValue = _attributeValues[attribute.attributeId] as bool?;
-    
+
     return Row(
-      mainAxisAlignment: MainAxisAlignment.start,
       children: [
-        _buildBooleanOption('نعم'.tr, currentValue == true, () {
-          setState(() {
-            _attributeValues[attribute.attributeId] = true;
-          });
-        }),
-        SizedBox(width: 16.w),
-        _buildBooleanOption('لا'.tr, currentValue == false, () {
-          setState(() {
-            _attributeValues[attribute.attributeId] = false;
-          });
-        }),
+        _buildBooleanOption(
+          'نعم'.tr,
+          currentValue == true,
+          () {
+            setState(() {
+              _attributeValues[attribute.attributeId] = true;
+            });
+          },
+        ),
+        SizedBox(width: 10.w),
+        _buildBooleanOption(
+          'لا'.tr,
+          currentValue == false,
+          () {
+            setState(() {
+              _attributeValues[attribute.attributeId] = false;
+            });
+          },
+        ),
       ],
     );
   }
 
-  Widget _buildBooleanOption(String label, bool isSelected, VoidCallback onTap) {
+  Widget _buildBooleanOption(
+      String label, bool isSelected, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 6.h),
         decoration: BoxDecoration(
           color: isSelected ? AppColors.primary : AppColors.surface(isDarkMode),
-          borderRadius: BorderRadius.circular(8.r),
+          borderRadius: BorderRadius.circular(20.r),
           border: Border.all(
-            color: AppColors.border(isDarkMode),
-            width: 0.5,
+            color: isSelected
+                ? AppColors.primary
+                : AppColors.border(isDarkMode),
+            width: 0.7,
           ),
         ),
         child: Text(
           label,
           style: TextStyle(
             fontFamily: AppTextStyles.appFontFamily,
-           fontSize: AppTextStyles.small,
-            color: isSelected ? Colors.white : AppColors.textPrimary(isDarkMode),
+            fontSize: AppTextStyles.small,
+            color:
+                isSelected ? Colors.white : AppColors.textPrimary(isDarkMode),
           ),
         ),
       ),
@@ -872,27 +947,35 @@ Widget _buildDistanceDropdown(bool isDarkMode) {
       },
       decoration: InputDecoration(
         hintText: '${'أدخل'.tr} ${attribute.label}',
-        contentPadding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 12.h),
+        contentPadding:
+            EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
         filled: true,
         fillColor: AppColors.surface(isDarkMode),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8.r),
+          borderRadius: BorderRadius.circular(10.r),
           borderSide: BorderSide(
             color: AppColors.border(isDarkMode),
-            width: 0.5,
+            width: 0.6,
           ),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8.r),
+          borderRadius: BorderRadius.circular(10.r),
           borderSide: BorderSide(
             color: AppColors.border(isDarkMode),
-            width: 0.5,
+            width: 0.6,
+          ),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10.r),
+          borderSide: BorderSide(
+            color: AppColors.primary,
+            width: 1.1,
           ),
         ),
       ),
       style: TextStyle(
         fontFamily: AppTextStyles.appFontFamily,
-       fontSize: AppTextStyles.small,
+        fontSize: AppTextStyles.small,
         color: AppColors.textPrimary(isDarkMode),
       ),
     );
@@ -909,41 +992,50 @@ Widget _buildDistanceDropdown(bool isDarkMode) {
           final arabic = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
           final latin = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
           final normalizedValue = value
-            .split('')
-            .map((char) {
-              final index = arabic.indexOf(char);
-              return index != -1 ? latin[index] : char;
-            })
-            .join('');
-          
-          _attributeValues[attribute.attributeId] = double.tryParse(normalizedValue);
+              .split('')
+              .map((char) {
+                final index = arabic.indexOf(char);
+                return index != -1 ? latin[index] : char;
+              })
+              .join('');
+
+          _attributeValues[attribute.attributeId] =
+              double.tryParse(normalizedValue);
         } else {
           _attributeValues[attribute.attributeId] = null;
         }
       },
       decoration: InputDecoration(
         hintText: '${'أدخل'.tr} ${attribute.label}',
-        contentPadding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 12.h),
+        contentPadding:
+            EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
         filled: true,
         fillColor: AppColors.surface(isDarkMode),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8.r),
+          borderRadius: BorderRadius.circular(10.r),
           borderSide: BorderSide(
             color: AppColors.border(isDarkMode),
-            width: 0.5,
+            width: 0.6,
           ),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8.r),
+          borderRadius: BorderRadius.circular(10.r),
           borderSide: BorderSide(
             color: AppColors.border(isDarkMode),
-            width: 0.5,
+            width: 0.6,
+          ),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10.r),
+          borderSide: BorderSide(
+            color: AppColors.primary,
+            width: 1.1,
           ),
         ),
       ),
       style: TextStyle(
         fontFamily: AppTextStyles.appFontFamily,
-       fontSize: AppTextStyles.small,
+        fontSize: AppTextStyles.small,
         color: AppColors.textPrimary(isDarkMode),
       ),
     );
@@ -962,15 +1054,13 @@ Widget _buildDistanceDropdown(bool isDarkMode) {
               'الموقع'.tr,
               style: TextStyle(
                 fontFamily: AppTextStyles.appFontFamily,
-               fontSize: AppTextStyles.small,
+                fontSize: AppTextStyles.small,
                 fontWeight: FontWeight.bold,
                 color: AppColors.primary,
               ),
             ),
           ),
-          
           _buildCityDropdown(),
-          
           if (_adsController.selectedCity.value != null)
             Padding(
               padding: EdgeInsets.only(top: 12.h),
@@ -984,17 +1074,23 @@ Widget _buildDistanceDropdown(bool isDarkMode) {
   Widget _buildCityDropdown() {
     return Container(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(8.r),
+        borderRadius: BorderRadius.circular(10.r),
         border: Border.all(
           color: AppColors.border(isDarkMode),
-          width: 0.5,
+          width: 0.6,
         ),
       ),
       child: DropdownButtonFormField<TheCity>(
         value: _adsController.selectedCity.value,
         decoration: InputDecoration(
           labelText: 'المدينة'.tr,
-          contentPadding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 12.h),
+          prefixIcon: Icon(
+            Icons.location_city_rounded,
+            size: 18.w,
+            color: AppColors.textSecondary(isDarkMode),
+          ),
+          contentPadding:
+              EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
           filled: true,
           fillColor: AppColors.surface(isDarkMode),
           border: InputBorder.none,
@@ -1006,23 +1102,22 @@ Widget _buildDistanceDropdown(bool isDarkMode) {
               city.translations.first.name,
               style: TextStyle(
                 fontFamily: AppTextStyles.appFontFamily,
-               fontSize: AppTextStyles.small,
+                fontSize: AppTextStyles.small,
                 color: AppColors.textPrimary(isDarkMode),
               ),
             ),
           );
         }).toList(),
         onChanged: (city) {
+          if (city == null) return;
           setState(() {
-            _adsController.selectCity(city!);
-             if (widget.onFiltersApplied != null) {
-      widget.onFiltersApplied!();
-    }
+            _adsController.selectCity(city);
+            widget.onFiltersApplied?.call();
           });
         },
         style: TextStyle(
           fontFamily: AppTextStyles.appFontFamily,
-         fontSize: AppTextStyles.small,
+          fontSize: AppTextStyles.small,
           color: AppColors.textPrimary(isDarkMode),
         ),
         dropdownColor: AppColors.card(isDarkMode),
@@ -1030,352 +1125,743 @@ Widget _buildDistanceDropdown(bool isDarkMode) {
     );
   }
 
-Widget _buildAreaDropdown() {
-  final isDarkMode =  Get.find<ThemeController>().isDarkMode.value;
+  Widget _buildAreaDropdown() {
+    final localDark = Get.find<ThemeController>().isDarkMode.value;
 
+    return Obx(() {
+      final selectedCity = _adsController.selectedCity.value;
 
-  return Obx(() {
-    final selectedCity = _adsController.selectedCity.value;
-
-    // لو المدينة غير محددة لسه
-    if (selectedCity == null) {
-      return Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8.r),
-          border: Border.all(
-            color: AppColors.border(isDarkMode),
-            width: 0.5,
+      if (selectedCity == null) {
+        return Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10.r),
+            border: Border.all(
+              color: AppColors.border(localDark),
+              width: 0.6,
+            ),
           ),
-        ),
-        child: DropdownButtonFormField<Area>(
-          value: null,
-          decoration: InputDecoration(
-            labelText: 'المنطقة'.tr,
-            contentPadding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 12.h),
-            filled: true,
-            fillColor: AppColors.surface(isDarkMode),
-            border: InputBorder.none,
-          ),
-          items: const [],
-          onChanged: null, // معطّل
-          hint: Text(
-            'اختر المدينة أولاً',
+          child: DropdownButtonFormField<Area>(
+            value: null,
+            decoration: InputDecoration(
+              labelText: 'المنطقة'.tr,
+              contentPadding:
+                  EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
+              filled: true,
+              fillColor: AppColors.surface(localDark),
+              border: InputBorder.none,
+            ),
+            items: const [],
+            onChanged: null,
+            hint: Text(
+              'اختر المدينة أولاً'.tr,
+              style: TextStyle(
+                fontFamily: AppTextStyles.appFontFamily,
+                fontSize: AppTextStyles.medium,
+                color: AppColors.textSecondary(localDark),
+              ),
+            ),
+            dropdownColor: AppColors.card(localDark),
             style: TextStyle(
               fontFamily: AppTextStyles.appFontFamily,
               fontSize: AppTextStyles.medium,
-              color: AppColors.textSecondary(isDarkMode),
+              color: AppColors.textPrimary(localDark),
             ),
-          ),
-          dropdownColor: AppColors.card(isDarkMode),
-          style: TextStyle(
-            fontFamily: AppTextStyles.appFontFamily,
-            fontSize: AppTextStyles.medium,
-            color: AppColors.textPrimary(isDarkMode),
-          ),
-        ),
-      );
-    }
-
-    // جلب المناطق من الكنترولر
-   return FutureBuilder<List<Area>>(
-  future: _areaController.getAreasOrFetch(selectedCity.id),
-  builder: (context, snapshot) {
-    final isLoading = snapshot.connectionState == ConnectionState.waiting;
-    final hasError = snapshot.hasError;
-    final list = snapshot.data ?? const <Area>[];
-
-    return DropdownButtonFormField<Area>(
-      key: ValueKey<int>(selectedCity.id),
-      value: list.any((a) => a.id == _adsController.selectedArea.value?.id)
-          ? _adsController.selectedArea.value
-          : null,
-      decoration: InputDecoration(
-        labelText: 'المنطقة'.tr,
-        contentPadding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 12.h),
-        filled: true,
-        fillColor: AppColors.surface(isDarkMode),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8.r),
-          borderSide: BorderSide(
-            color: AppColors.border(isDarkMode),
-            width: 0.5,
-          ),
-        ),
-      ),
-      items: list.map((area) {
-        return DropdownMenuItem<Area>(
-          value: area,
-          child: Text(
-            area.name, // فقط الاسم بدون أي معرفات
-            style: TextStyle(
-              fontFamily: AppTextStyles.appFontFamily,
-              fontSize: AppTextStyles.medium,
-              color: AppColors.textPrimary(isDarkMode),
-            ),
-            overflow: TextOverflow.ellipsis,
           ),
         );
-      }).toList(),
-      onChanged: (area) {
-        if (area != null) {
-          _adsController.selectArea(area);
-           if (widget.onFiltersApplied != null) {
-      widget.onFiltersApplied!();
-    }
-        }
-      },
-      hint: Text(
-        isLoading
-            ? 'جارٍ تحميل المناطق...'
-            : (hasError ? 'حدث خطأ أثناء الجلب' : 'اختر المنطقة'),
-        style: TextStyle(
-          fontFamily: AppTextStyles.appFontFamily,
-          fontSize: AppTextStyles.medium,
-          color: AppColors.textSecondary(isDarkMode),
-        ),
-      ),
-      dropdownColor: AppColors.card(isDarkMode),
-      style: TextStyle(
-        fontFamily: AppTextStyles.appFontFamily,
-        fontSize: AppTextStyles.medium,
-        color: AppColors.textPrimary(isDarkMode),
-      ),
-    );
-  },
-);
-});}
-  // ==================== قسم الفترة الزمنية ====================
-Widget _buildTimePeriodSection() {
-  return Padding(
-    padding: EdgeInsets.symmetric(horizontal: 16.w),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'الفترة الزمنية'.tr,
-          style: TextStyle(
-            fontFamily: AppTextStyles.appFontFamily,
-           fontSize: AppTextStyles.small,
-            fontWeight: FontWeight.bold,
-            color: AppColors.primary,
-          ),
-        ),
-        SizedBox(height: 8.h),
-        Wrap(
-          spacing: 8.w,
-          runSpacing: 8.h,
-          children: timePeriods.map((period) {
-            final isSelected = _selectedTimePeriod == period['value'];
-            return GestureDetector(
-              onTap: () {
-                setState(() {
-                  _selectedTimePeriod = period['value'];
-                });
-              },
-              child: Container(
-                padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
-                decoration: BoxDecoration(
-                  color: isSelected 
-                    ? AppColors.primary 
-                    : AppColors.surface(isDarkMode),
-                  borderRadius: BorderRadius.circular(8.r),
-                  border: Border.all(
-                    color: AppColors.border(isDarkMode),
-                    width: 0.5,
-                  ),
+      }
+
+      return FutureBuilder<List<Area>>(
+        future: _areaController.getAreasOrFetch(selectedCity.id),
+        builder: (context, snapshot) {
+          final isLoading = snapshot.connectionState == ConnectionState.waiting;
+          final hasError = snapshot.hasError;
+          final list = snapshot.data ?? const <Area>[];
+
+          return DropdownButtonFormField<Area>(
+            key: ValueKey<int>(selectedCity.id),
+            value: list.any((a) => a.id == _adsController.selectedArea.value?.id)
+                ? _adsController.selectedArea.value
+                : null,
+            decoration: InputDecoration(
+              labelText: 'المنطقة'.tr,
+              contentPadding:
+                  EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
+              filled: true,
+              fillColor: AppColors.surface(localDark),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10.r),
+                borderSide: BorderSide(
+                  color: AppColors.border(localDark),
+                  width: 0.6,
                 ),
+              ),
+            ),
+            items: list.map((area) {
+              return DropdownMenuItem<Area>(
+                value: area,
                 child: Text(
-                  period['label']!,
+                  area.name,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontFamily: AppTextStyles.appFontFamily,
-                   fontSize: AppTextStyles.small,
-                    color: isSelected 
-                      ? Colors.white 
-                      : AppColors.textPrimary(isDarkMode),
+                    fontSize: AppTextStyles.medium,
+                    color: AppColors.textPrimary(localDark),
+                  ),
+                ),
+              );
+            }).toList(),
+            onChanged: (area) {
+              if (area != null) {
+                _adsController.selectArea(area);
+                widget.onFiltersApplied?.call();
+              }
+            },
+            hint: Text(
+              isLoading
+                  ? 'جارٍ تحميل المناطق...'.tr
+                  : (hasError
+                      ? 'حدث خطأ أثناء الجلب'.tr
+                      : 'اختر المنطقة'.tr),
+              style: TextStyle(
+                fontFamily: AppTextStyles.appFontFamily,
+                fontSize: AppTextStyles.medium,
+                color: AppColors.textSecondary(localDark),
+              ),
+            ),
+            dropdownColor: AppColors.card(localDark),
+            style: TextStyle(
+              fontFamily: AppTextStyles.appFontFamily,
+              fontSize: AppTextStyles.medium,
+              color: AppColors.textPrimary(localDark),
+            ),
+          );
+        },
+      );
+    });
+  }
+
+  // ==================== قسم الفترة الزمنية ====================
+  Widget _buildTimePeriodSection(bool isDarkMode) {
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 4.h),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'الفترة الزمنية'.tr,
+            style: TextStyle(
+              fontFamily: AppTextStyles.appFontFamily,
+              fontSize: AppTextStyles.small,
+              fontWeight: FontWeight.bold,
+              color: AppColors.primary,
+            ),
+          ),
+          SizedBox(height: 8.h),
+          Wrap(
+            spacing: 6.w,
+            runSpacing: 6.h,
+            children: timePeriods.map((period) {
+              final value = period['value']!;
+              final label = period['label']!;
+              final isSelected = _selectedTimePeriod == value;
+
+              return ChoiceChip(
+                label: Text(
+                  label,
+                  style: TextStyle(
+                    fontFamily: AppTextStyles.appFontFamily,
+                    fontSize: AppTextStyles.small,
+                    color: isSelected
+                        ? Colors.white
+                        : AppColors.textPrimary(isDarkMode),
+                  ),
+                ),
+                selected: isSelected,
+                onSelected: (selected) {
+                  setState(() {
+                    _selectedTimePeriod = selected ? value : null;
+                  });
+                },
+                selectedColor: AppColors.primary,
+                backgroundColor: AppColors.surface(isDarkMode),
+                side: BorderSide(
+                  color: isSelected
+                      ? AppColors.primary
+                      : AppColors.border(isDarkMode),
+                  width: 0.7,
+                ),
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ==================== قسم السعر ====================
+  Widget _buildPriceSection() {
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 4.h),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'السعر'.tr,
+            style: TextStyle(
+              fontFamily: AppTextStyles.appFontFamily,
+              fontSize: AppTextStyles.medium,
+              fontWeight: FontWeight.bold,
+              color: AppColors.primary,
+            ),
+          ),
+          SizedBox(height: 8.h),
+          Wrap(
+            spacing: 8.w,
+            children: [
+              _buildPriceModeChip(
+                label: 'نطاق (من–إلى)'.tr,
+                selected: _priceMode == PriceModeDesktop.range,
+                onTap: () {
+                  setState(() {
+                    _priceMode = PriceModeDesktop.range;
+                  });
+                },
+              ),
+              _buildPriceModeChip(
+                label: 'أعلى من'.tr,
+                selected: _priceMode == PriceModeDesktop.minOnly,
+                onTap: () {
+                  setState(() {
+                    _priceMode = PriceModeDesktop.minOnly;
+                    _priceMaxController.clear();
+                  });
+                },
+              ),
+            ],
+          ),
+          SizedBox(height: 10.h),
+          Row(
+            children: [
+              Expanded(
+                child: TextFormField(
+                  controller: _priceMinController,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(
+                      RegExp(r'[0-9٠-٩,،,]'),
+                    ),
+                  ],
+                  onChanged: (v) => _formatControllerText(_priceMinController),
+                  decoration: InputDecoration(
+                    labelText: 'السعر من'.tr,
+                    prefixIcon: const Icon(Icons.arrow_upward, size: 18),
+                    filled: true,
+                    fillColor: AppColors.surface(isDarkMode),
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 12.w,
+                      vertical: 10.h,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10.r),
+                      borderSide: BorderSide(
+                        color: AppColors.border(isDarkMode),
+                        width: 0.6,
+                      ),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10.r),
+                      borderSide: BorderSide(
+                        color: AppColors.border(isDarkMode),
+                        width: 0.6,
+                      ),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10.r),
+                      borderSide: BorderSide(
+                        color: AppColors.primary,
+                        width: 1.1,
+                      ),
+                    ),
                   ),
                 ),
               ),
-            );
-          }).toList(),
-        ),
-      ],
-    ),
-  );
-}
-
-void _applyFilters() async {
-  if (!_formKey.currentState!.validate()) return;
-  setState(() => _isApplyingFilters = true);
-
-  final attrsPayload = _buildAttributesPayload();
-  _adsController.attrsPayload.value = _buildAttributesPayload();
-  final selectedCityId = _adsController.selectedCity.value?.id;
-  final selectedAreaId = _adsController.selectedArea.value?.id;
-
-  try {
-    await _adsController.fetchAds(
-      categoryId: _adsController.currentCategoryId.value,
-      subCategoryLevelOneId: _adsController.currentSubCategoryLevelOneId.value,
-      subCategoryLevelTwoId: _adsController.currentSubCategoryLevelTwoId.value,
-      search: _adsController.currentSearch.value.isNotEmpty
-          ? _adsController.currentSearch.value
-          : null,
-      sortBy: _adsController.currentSortBy.value,
-      cityId: selectedCityId,
-      areaId: selectedAreaId,
-      attributes: attrsPayload.isNotEmpty ? attrsPayload : null,
-      lang: Get.find<ChangeLanguageController>()
-          .currentLocale
-          .value
-          .languageCode,
-      page: 1,
-      // أرسل timeframe فقط إذا لم تكن null
-     timeframe: _selectedTimePeriod == 'all' ? null : _selectedTimePeriod,
-  onlyFeatured: widget.onlyFeatured,
+              SizedBox(width: 12.w),
+              Expanded(
+                child: TextFormField(
+                  controller: _priceMaxController,
+                  enabled: _priceMode == PriceModeDesktop.range,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(
+                      RegExp(r'[0-9٠-٩,،,]'),
+                    ),
+                  ],
+                  onChanged: (v) => _formatControllerText(_priceMaxController),
+                  decoration: InputDecoration(
+                    labelText: 'السعر إلى'.tr,
+                    prefixIcon: const Icon(Icons.arrow_downward, size: 18),
+                    suffixIcon: _priceMode == PriceModeDesktop.minOnly
+                        ? const Icon(Icons.lock_outline, size: 18)
+                        : (_priceMaxController.text.isEmpty
+                            ? null
+                            : IconButton(
+                                icon: const Icon(Icons.clear, size: 18),
+                                onPressed: () {
+                                  setState(() {
+                                    _priceMaxController.clear();
+                                  });
+                                },
+                              )),
+                    filled: true,
+                    fillColor: AppColors.surface(isDarkMode),
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 12.w,
+                      vertical: 10.h,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10.r),
+                      borderSide: BorderSide(
+                        color: AppColors.border(isDarkMode),
+                        width: 0.6,
+                      ),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10.r),
+                      borderSide: BorderSide(
+                        color: AppColors.border(isDarkMode),
+                        width: 0.6,
+                      ),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10.r),
+                      borderSide: BorderSide(
+                        color: AppColors.primary,
+                        width: 1.1,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 6.h),
+          Row(
+            children: [
+              Icon(
+                Icons.info_outline,
+                size: 16,
+                color: AppColors.textSecondary(isDarkMode),
+              ),
+              SizedBox(width: 6.w),
+              Expanded(
+                child: Text(
+                  _priceSummary(),
+                  style: TextStyle(
+                    fontFamily: AppTextStyles.appFontFamily,
+                    fontSize: AppTextStyles.small,
+                    color: AppColors.textSecondary(isDarkMode),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
-
-    final count = _adsController.adsList.length;
-    Future.delayed(Duration(milliseconds: 300), () {
-      final msg = count == 0
-          ? 'لا توجد إعلانات مطابقة'
-          : 'تم العثور على $count إعلان';
-      Get.snackbar('نتيجة الفلترة', msg,
-          snackPosition: SnackPosition.BOTTOM);
-    });
-  } catch (e) {
-    Get.snackbar('خطأ', 'فشل الاتصال: $e',
-        snackPosition: SnackPosition.BOTTOM);
-  } finally {
-    setState(() => _isApplyingFilters = false);
   }
-}
 
+  Widget _buildPriceModeChip({
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 8.h),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.primary : AppColors.surface(isDarkMode),
+          borderRadius: BorderRadius.circular(10.r),
+          border: Border.all(
+            color: AppColors.border(isDarkMode),
+            width: 0.6,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (selected) ...[
+              const Icon(Icons.check, size: 16, color: Colors.white),
+              SizedBox(width: 6.w),
+            ],
+            Text(
+              label,
+              style: TextStyle(
+                fontFamily: AppTextStyles.appFontFamily,
+                fontSize: AppTextStyles.medium,
+                color:
+                    selected ? Colors.white : AppColors.textPrimary(isDarkMode),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ==================== منطق السعر ====================
+
+  String _normalizeDigits(String input) {
+    const arabic = [
+      '٠',
+      '١',
+      '٢',
+      '٣',
+      '٤',
+      '٥',
+      '٦',
+      '٧',
+      '٨',
+      '٩',
+      '٬',
+      '،',
+      ','
+    ];
+    const latin = [
+      '0',
+      '1',
+      '2',
+      '3',
+      '4',
+      '5',
+      '6',
+      '7',
+      '8',
+      '9',
+      '',
+      '',
+      ''
+    ];
+    final buf = StringBuffer();
+    for (final ch in input.trim().split('')) {
+      final i = arabic.indexOf(ch);
+      buf.write(i == -1 ? ch : latin[i]);
+    }
+    return buf.toString();
+  }
+
+  double? _parsePrice(String s) {
+    final t = _normalizeDigits(s).replaceAll(',', '').trim();
+    if (t.isEmpty) return null;
+    final v = double.tryParse(t);
+    return v == null ? null : max(0, v);
+  }
+
+  String _formatWithGrouping(num value) {
+    final s = value.toStringAsFixed(0);
+    final buf = StringBuffer();
+    for (int i = 0; i < s.length; i++) {
+      final idxFromEnd = s.length - i;
+      buf.write(s[i]);
+      if (idxFromEnd > 1 && idxFromEnd % 3 == 1) {
+        buf.write(',');
+      }
+    }
+    return buf.toString();
+  }
+
+  String _priceSummary() {
+    final min = _parsePrice(_priceMinController.text);
+    final max = _parsePrice(_priceMaxController.text);
+
+    if (_priceMode == PriceModeDesktop.minOnly) {
+      if (min == null) {
+        return 'اكتب الحد الأدنى لعرض إعلانات أعلى من هذه القيمة.'.tr;
+      }
+      return 'سيتم عرض الإعلانات بسعر أعلى من ${_formatWithGrouping(min)}.'.tr;
+    }
+
+    // نطاق
+    if (min == null && max == null) {
+      return 'اترك السعر فارغًا لتجاهله.'.tr;
+    }
+    if (min != null && max == null) {
+      return 'سيتم عرض الإعلانات من ${_formatWithGrouping(min)} وحتى أي سعر أعلى.'.tr;
+    }
+    if (min == null && max != null) {
+      return 'سيتم عرض الإعلانات حتى ${_formatWithGrouping(max)}.'.tr;
+    }
+    if (min != null && max != null) {
+      if (min > max) {
+        return 'تنبيه: "من" أكبر من "إلى" — صحّح القيم.'.tr;
+      }
+      return 'سيتم عرض الإعلانات ضمن ${_formatWithGrouping(min)} – ${_formatWithGrouping(max)}.'.tr;
+    }
+    return '';
+  }
+
+  void _formatControllerText(TextEditingController ctrl) {
+    final parsed = _parsePrice(ctrl.text);
+    final newText = parsed == null ? '' : _formatWithGrouping(parsed);
+    ctrl
+      ..text = newText
+      ..selection = TextSelection.fromPosition(
+        TextPosition(offset: newText.length),
+      );
+    setState(() {}); // لتحديث الملخص / الأيقونات
+  }
+
+  // ==================== تطبيق الفلاتر ====================
+  void _applyFilters() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    final priceMin = _parsePrice(_priceMinController.text);
+    final priceMax = _priceMode == PriceModeDesktop.minOnly
+        ? null
+        : _parsePrice(_priceMaxController.text);
+
+    if (_priceMode == PriceModeDesktop.range &&
+        priceMin != null &&
+        priceMax != null &&
+        priceMin > priceMax) {
+      Get.snackbar(
+        'تنبيه'.tr,
+        'قيمة "من" يجب أن تكون أقل من أو تساوي "إلى"'.tr,
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return;
+    }
+
+    setState(() => _isApplyingFilters = true);
+
+    final attrsPayload = _buildAttributesPayload();
+    _adsController.attrsPayload.value = attrsPayload;
+
+    final selectedCityId = _adsController.selectedCity.value?.id;
+    final selectedAreaId = _adsController.selectedArea.value?.id;
+
+    try {
+      await _adsController.fetchAds(
+        categoryId: _adsController.currentCategoryId.value,
+        subCategoryLevelOneId:
+            _adsController.currentSubCategoryLevelOneId.value,
+        subCategoryLevelTwoId:
+            _adsController.currentSubCategoryLevelTwoId.value,
+        search: _adsController.currentSearch.value.isNotEmpty
+            ? _adsController.currentSearch.value
+            : null,
+        sortBy: _adsController.currentSortBy.value,
+        cityId: selectedCityId,
+        areaId: selectedAreaId,
+        attributes: attrsPayload.isNotEmpty ? attrsPayload : null,
+        lang: Get.find<ChangeLanguageController>()
+            .currentLocale
+            .value
+            .languageCode,
+        page: 1,
+        timeframe: _selectedTimePeriod == 'all' ? null : _selectedTimePeriod,
+        onlyFeatured: widget.onlyFeatured,
+        priceMin: priceMin,
+        priceMax: priceMax,
+      );
+
+      final count = _adsController.adsList.length;
+      Future.delayed(const Duration(milliseconds: 250), () {
+        final msg = count == 0
+            ? 'لا توجد إعلانات مطابقة'.tr
+            : 'تم العثور على $count إعلان'.tr;
+        Get.snackbar(
+          'نتيجة الفلترة'.tr,
+          msg,
+          snackPosition: SnackPosition.BOTTOM,
+        );
+      });
+    } catch (e) {
+      Get.snackbar(
+        'خطأ'.tr,
+        'فشل الاتصال: $e',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    } finally {
+      setState(() => _isApplyingFilters = false);
+    }
+  }
 
   List<Map<String, dynamic>> _buildAttributesPayload() {
     return _attributeValues.entries.map((entry) {
       final attributeId = entry.key;
-      final value       = entry.value;
+      final value = entry.value;
 
-      // ابحث عن الـ attribute object من الـ attributesList
       final attribute = _adsController.attributesList.firstWhere(
         (attr) => attr.attributeId == attributeId,
         orElse: () => throw Exception('Attribute not found: $attributeId'),
       );
 
       return {
-        'attribute_id':   attributeId,
-        'attribute_type': attribute.type,       // ← النوع المطلوب
-        'value':          value,
+        'attribute_id': attributeId,
+        'attribute_type': attribute.type,
+        'value': value,
       };
     }).toList();
   }
 
   void _resetFilters() {
     _formKey.currentState?.reset();
+
     setState(() {
-      _adsController.currentSearch.value = "";
+      _adsController.currentSearch.value = '';
       _adsController.searchController.clear();
       _adsController.isSearching.value = false;
+
       _adsController.selectedCity.value = _tempSelectedCity;
       _adsController.selectedArea.value = _tempSelectedArea;
+
       _selectedTimePeriod = null;
       _attributeValues.clear();
       _selectedDistance = null;
       _adsController.currentAttributes.clear();
 
-       _adsController.selectedCity.value = _tempSelectedCity;
-    _adsController.selectedArea.value = _tempSelectedArea;
+      _priceMode = PriceModeDesktop.range;
+      _priceMinController.clear();
+      _priceMaxController.clear();
 
+      _adsController.resetFilterState();
 
-      // 1. تفريغ المتغيرات المحلية في الواجهة
-  _attributeValues.clear();
-  _selectedTimePeriod = null;
-  _selectedDistance = null;
-  
-  // 2. تفريغ متغيرات الكنترولر
-  _adsController.resetFilterState();
-  
-  // 3. إعادة تعيين المتغيرات المؤقتة
-  _tempSelectedCity = null;
-  _tempSelectedArea = null;
-      
-      // إعادة ضبط التصنيفات إلى القيم الأولية
+      // رجّع التصنيف الرئيسي إلى التصنيف الأصلي للشاشة
       _adsController.selectedMainCategoryId?.value = widget.categoryId;
       _adsController.selectedSubCategoryId?.value = null;
       _adsController.selectedSubTwoCategoryId?.value = null;
-      
-      // إعادة جلب السمات للتصنيف الرئيسي الأصلي
+
       if (widget.categoryId != null) {
+        final lang = Get.find<ChangeLanguageController>()
+            .currentLocale
+            .value
+            .languageCode;
         _adsController.fetchAttributes(
-          categoryId: widget.categoryId??1,
-          lang: Get.find<ChangeLanguageController>().currentLocale.value.languageCode
+          categoryId: widget.categoryId ?? 1,
+          lang: lang,
         );
       }
-      
-      // إعادة تعيين الموقع إلى القيمة الافتراضية
-      if (_adsController.latitude.value == null || 
+
+      if (_adsController.latitude.value == null ||
           _adsController.longitude.value == null) {
         _adsController.latitude.value = DEFAULT_LOCATION.latitude;
         _adsController.longitude.value = DEFAULT_LOCATION.longitude;
       }
-       _adsController.fetchAds(
-      categoryId: _adsController.currentCategoryId.value,
-      subCategoryLevelOneId: _adsController.currentSubCategoryLevelOneId.value,
-      subCategoryLevelTwoId: _adsController.currentSubCategoryLevelTwoId.value,
-      search: _adsController.currentSearch.value.isNotEmpty
-          ? _adsController.currentSearch.value
-          : null,
-      sortBy: _adsController.currentSortBy.value,
-   attributes: _adsController. attrsPayload.value.isNotEmpty ? _adsController. attrsPayload.value : null,
-      lang: Get.find<ChangeLanguageController>()
-          .currentLocale
-          .value
-          .languageCode,
-      page: 1,
-      // أرسل timeframe فقط إذا لم تكن null
-     timeframe: _selectedTimePeriod == 'all' ? null : _selectedTimePeriod,
-  onlyFeatured: widget.onlyFeatured,
-    latitude: _adsController.latitude.value,
-      longitude: _adsController.longitude.value,
-      distanceKm: _adsController.selectedRadius.value,
-    );
+
+      _adsController.fetchAds(
+        categoryId: _adsController.currentCategoryId.value,
+        subCategoryLevelOneId:
+            _adsController.currentSubCategoryLevelOneId.value,
+        subCategoryLevelTwoId:
+            _adsController.currentSubCategoryLevelTwoId.value,
+        search: _adsController.currentSearch.value.isNotEmpty
+            ? _adsController.currentSearch.value
+            : null,
+        sortBy: _adsController.currentSortBy.value,
+        attributes: _adsController.attrsPayload.value.isNotEmpty
+            ? _adsController.attrsPayload.value
+            : null,
+        lang: Get.find<ChangeLanguageController>()
+            .currentLocale
+            .value
+            .languageCode,
+        page: 1,
+        timeframe: _selectedTimePeriod == 'all' ? null : _selectedTimePeriod,
+        onlyFeatured: widget.onlyFeatured,
+        latitude: _adsController.latitude.value,
+        longitude: _adsController.longitude.value,
+        distanceKm: _adsController.selectedRadius.value,
+      );
     });
-    
-    // تطبيق الفلاتر بعد الإعادة
+
     _applyFilters();
   }
 
-
+  // ==================== أزرار الأسفل ====================
   Widget _buildActionButtons() {
-    return ElevatedButton(
-        onPressed: _isApplyingFilters ? null : _applyFilters,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.primary,
-          foregroundColor: Colors.white,
-          padding: EdgeInsets.symmetric(vertical: 12.h,horizontal: 50.w),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8.r),
+    final localDark = themeController.isDarkMode.value;
+
+    return Container(
+      padding: EdgeInsets.fromLTRB(16.w, 8.h, 16.w, 12.h),
+      decoration: BoxDecoration(
+        color: AppColors.card(localDark),
+        border: Border(
+          top: BorderSide(
+            color: AppColors.divider(localDark),
+            width: 0.6,
           ),
         ),
-        child: _isApplyingFilters
-            ? SizedBox(
-                width: 20.w,
-                height: 20.h,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.0,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 6,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        top: false,
+        child: Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: _isApplyingFilters ? null : _resetFilters,
+                style: OutlinedButton.styleFrom(
+                  padding: EdgeInsets.symmetric(vertical: 10.h),
+                  side: BorderSide(
+                    color: AppColors.border(localDark),
+                    width: 0.9,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10.r),
+                  ),
                 ),
-              )
-            : Text(
-                'تطبيق الفلترة'.tr,
-                style: TextStyle(
-                  fontFamily: AppTextStyles.appFontFamily,
-                  fontSize: AppTextStyles.medium,
-                  fontWeight: FontWeight.bold,
+                child: Text(
+                  'مسح الفلاتر'.tr,
+                  style: TextStyle(
+                    fontFamily: AppTextStyles.appFontFamily,
+                    fontSize: AppTextStyles.medium,
+                  ),
                 ),
               ),
-      
-    
-  );
+            ),
+            SizedBox(width: 12.w),
+            Expanded(
+              child: ElevatedButton(
+                onPressed: _isApplyingFilters ? null : _applyFilters,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  padding: EdgeInsets.symmetric(vertical: 10.h),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10.r),
+                  ),
+                ),
+                child: _isApplyingFilters
+                    ? SizedBox(
+                        width: 20.w,
+                        height: 20.h,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.0,
+                          valueColor:
+                              const AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    : Text(
+                        'تطبيق الفلترة'.tr,
+                        style: TextStyle(
+                          fontFamily: AppTextStyles.appFontFamily,
+                          fontSize: AppTextStyles.medium,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

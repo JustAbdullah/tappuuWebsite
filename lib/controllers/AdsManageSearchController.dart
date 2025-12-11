@@ -20,6 +20,43 @@ import '../core/localization/changelanguage.dart';
 import 'dart:html' as html;
 
 class AdsController extends GetxController {
+
+  /// نستخدمها لكي نضمن أن سكاشن الهوم تنطلب مرة واحدة عند نجاح التحميل فقط
+final RxBool homeInitialized = false.obs;
+final RxBool homeLoading = false.obs;
+
+Future<void> ensureHomeInitialized() async {
+  // لا تكرر لو جاري تحميل
+  if (homeLoading.value) return;
+
+  // لو سبق وتحملت بنجاح، خلاص
+  if (homeInitialized.value) return;
+
+  homeLoading.value = true;
+
+  try {
+    // ✅ نخلي الطلبات "تسلسلية" بدل Future.wait (لتخفيف ضغط 429)
+    await loadFeaturedAds();                 // الإعلانات المميزة
+    await fetchLatestAds();                  // أحدث الإعلانات
+    await fetchAdsByCategory(categoryId: 1); // عقارات للبيع
+    await fetchAdsByCategory(categoryId: 2); // عقارات للإيجار
+    await fetchAdsByCategory(categoryId: 3); // مركبات للبيع
+    await fetchAdsByCategory(categoryId: 4); // مركبات للإيجار
+
+    // فقط لو كل شيء عدّى بدون استثناء نوصل هنا
+    homeInitialized.value = true;
+  } catch (e, st) {
+    debugPrint('❌ ensureHomeInitialized error: $e');
+    debugPrint('$st');
+    // مهم: لا نغيّر homeInitialized هنا
+    // بحيث لو صار Error (مثلاً 429) نقدر نحاول مرة ثانية لاحقاً
+  } finally {
+    homeLoading.value = false;
+  }
+}
+
+
+
    RxBool showMap = false.obs;
 
   // ==================== متغيرات 'طريقة العرض'.tr ====================
@@ -177,6 +214,28 @@ class AdsController extends GetxController {
     }
 
     print("isEnd");
+  }
+
+  var categoriesList = <Category>[].obs;
+  var isLoadingCategories = false.obs;
+  var selectedMainCategory = Rxn<Category>();
+  // جلب التصنيفات الرئيسية
+  Future<void> fetchCategories(String language) async {
+    isLoadingCategories.value = true;
+    try {
+      final response = await http.get(Uri.parse('$_baseUrl/categories/$language'));
+      if (response.statusCode == 200) {
+        var data = json.decode(response.body);
+        var fetchedCategories = (data['data'] as List)
+            .map((category) => Category.fromJson(category))
+            .toList();
+        categoriesList.value = fetchedCategories;
+      }
+    } catch (e) {
+      print("Error fetching categories: $e");
+    } finally {
+      isLoadingCategories.value = false;
+    }
   }
 
   // ==================== جلب التصنيفات الفرعية ====================
@@ -437,43 +496,59 @@ class AdsController extends GetxController {
 */
 
 
-////kنسخة التطبيق,,,
 
 
 // ==================== جلب الإعلانات (الوظيفة الأساسية) ====================
 Future<void> fetchAds({
+  // التصنيفات
   int? categoryId,
   int? subCategoryLevelOneId,
   int? subCategoryLevelTwoId,
+
+  // البحث والفرز
   String? search,
-  String? sortBy,
+  String? sortBy,        // 'price_asc','price_desc','newest',...
   String order = 'desc',
+
+  // الجغرافيا
   double? latitude,
   double? longitude,
   double? distanceKm,
+
+  // السمات
   List<Map<String, dynamic>>? attributes,
+
+  // المدينة/المنطقة
   int? cityId,
   int? areaId,
+
+  // الفلاتر الجديدة
   String? timeframe,
   bool onlyFeatured = false,
+
+  // ✅ السعر
+  double? priceMin,
+  double? priceMax,
+
+  // عام
   required String lang,
   int page = 1,
   int perPage = 15,
 }) async {
-  // 1) حفظ الحالة
+  // 1) حفظ حالة أساسية
   currentCategoryId.value            = categoryId ?? 0;
   currentSubCategoryLevelOneId.value = subCategoryLevelOneId;
   currentSubCategoryLevelTwoId.value = subCategoryLevelTwoId;
   currentSearch.value                = search?.trim() ?? '';
   currentSortBy.value                = sortBy;
   currentOrder.value                 = order;
+
   currentAttributes.value            = attributes ?? [];
   currentTimeframe.value             = timeframe;
   this.onlyFeatured.value            = onlyFeatured;
   currentLang                        = lang;
 
   isLoadingAds.value = true;
-
   try {
     final bool useFilterEndpoint =
          categoryId != null
@@ -488,13 +563,16 @@ Future<void> fetchAds({
       || cityId != null
       || areaId != null
       || onlyFeatured
-      || (timeframe != null && timeframe != 'all');
+      || (timeframe != null && timeframe != 'all')
+      || priceMin != null
+      || priceMax != null;
 
-    http.Response response;
+    late http.Response response;
+
     if (useFilterEndpoint) {
       final uri = Uri.parse('$_baseUrl/ads/filter');
       final body = <String, dynamic>{
-        if (categoryId != null)            'category_id':             categoryId,
+        if (categoryId != null)            'category_id':               categoryId,
         if (subCategoryLevelOneId != null) 'sub_category_level_one_id': subCategoryLevelOneId,
         if (subCategoryLevelTwoId != null) 'sub_category_level_two_id': subCategoryLevelTwoId,
         if (search?.isNotEmpty ?? false)   'search':                    search!.trim(),
@@ -510,12 +588,16 @@ Future<void> fetchAds({
         if (timeframe != null && timeframe != 'all')
                                            'timeframe':                 timeframe,
         if (onlyFeatured)                  'only_featured':             true,
+        // ✅ السعر
+        if (priceMin != null)              'price_min':                 priceMin,
+        if (priceMax != null)              'price_max':                 priceMax,
         'lang':                            lang,
         'page':                            page,
         'per_page':                        perPage,
       };
 
       print('📤 [POST REQUEST] URL: $uri');
+      print('📤 [POST BODY] ${json.encode(body)}');
 
       response = await http.post(
         uri,
@@ -524,116 +606,52 @@ Future<void> fetchAds({
       );
     } else {
       final params = <String, String>{
-        'lang':      lang,
-        'page':      page.toString(),
-        'per_page':  perPage.toString(),
-        'order':     order,
+        'lang':     lang,
+        'page':     page.toString(),
+        'per_page': perPage.toString(),
+        'order':    order,
       };
       final uri = Uri.parse('$_baseUrl/ads').replace(queryParameters: params);
       print('📤 [GET REQUEST] URL: $uri');
       response = await http.get(uri);
     }
 
-    print('📥 [RESPONSE] Status: ${response.statusCode}');
-
     if (response.statusCode == 200) {
-      final dynamic decoded = json.decode(response.body);
+      final jsonData = json.decode(response.body) as Map<String, dynamic>;
+      final rawList = (jsonData['data'] as List<dynamic>);
+      var ads = AdResponse.fromJson({'data': rawList}).data;
 
-      // نحاول إيجاد الـ list داخل الرد بأمان
-      List<dynamic> rawList = [];
-      try {
-        if (decoded is List) {
-          rawList = decoded;
-        } else if (decoded is Map<String, dynamic>) {
-          if (decoded['data'] is List) {
-            rawList = decoded['data'] as List<dynamic>;
-          } else if (decoded['ads'] is List) {
-            rawList = decoded['ads'] as List<dynamic>;
-          } else if (decoded.containsKey('data') && decoded['data'] == null) {
-            rawList = [];
-          } else {
-            // fallback: حاول إيجاد أول قيمة من النوع List داخل الـ map
-            final found = decoded.values.firstWhere(
-              (v) => v is List<dynamic>,
-              orElse: () => <dynamic>[],
-            );
-            rawList = (found is List) ? found as List<dynamic> : <dynamic>[];
-          }
-        } else {
-          rawList = <dynamic>[];
-        }
-      } catch (e) {
-        print('⚠️ parse rawList error: $e');
-        rawList = <dynamic>[];
-      }
-
-      // الآن نَحول كل عنصر إلى Ad بأمان (نتجنّب استعمال AdResponse إذا كان يعيد late errors)
-    List<Ad> ads = [];
-try {
-  ads = rawList
-      .whereType<Map<String, dynamic>>() // ناخذ المابات فقط
-      .map<Ad>((e) => Ad.fromJson(e))
-      .toList();
-} catch (e, st) {
-  print('⚠️ Error parsing Ads items: $e\n$st');
-  ads = [];
-}
-
-
-      // احفظ count/total اذا موجودة (اختياري)
-      try {
-        if (decoded is Map<String, dynamic>) {
-          if (decoded.containsKey('total')) {
-            totalAdsCount.value = int.tryParse(decoded['total'].toString()) ?? totalAdsCount.value;
-          } else if (decoded['meta'] is Map && decoded['meta']['total'] != null) {
-            totalAdsCount.value = int.tryParse(decoded['meta']['total'].toString()) ?? totalAdsCount.value;
-          }
-          // pages
-          if (decoded.containsKey('last_page')) {
-            totalPages.value = int.tryParse(decoded['last_page'].toString()) ?? totalPages.value;
-          } else if (decoded['meta'] is Map && decoded['meta']['last_page'] != null) {
-            totalPages.value = int.tryParse(decoded['meta']['last_page'].toString()) ?? totalPages.value;
-          }
-        }
-      } catch (_) {}
-
-      // ترتيب بحسب المسافة لو موجودة الاحداثيات
+      // ترتيب حسب قرب الموقع إن أُرسل
       if (latitude != null && longitude != null) {
-        try {
-          double _deg2rad(double deg) => deg * pi / 180;
-          double haversine(double lat1, double lng1, double lat2, double lng2) {
-            const R = 6371;
-            final dLat = _deg2rad(lat2 - lat1);
-            final dLon = _deg2rad(lng2 - lng1);
-            final a = sin(dLat/2)*sin(dLat/2)
-                    + cos(_deg2rad(lat1))*cos(_deg2rad(lat2))
-                    * sin(dLon/2)*sin(dLon/2);
-            final c = 2*atan2(sqrt(a), sqrt(1 - a));
-            return R*c;
-          }
-
-          ads.sort((a, b) {
-            final aLat = a.latitude ?? latitude;
-            final aLng = a.longitude ?? longitude;
-            final bLat = b.latitude ?? latitude;
-            final bLng = b.longitude ?? longitude;
-            return haversine(latitude, longitude, aLat!, aLng!).compareTo(
-                   haversine(latitude, longitude, bLat!, bLng!));
-          });
-        } catch (e) {
-          print('⚠️ error sorting by distance: $e');
+        double _deg2rad(double deg) => deg * pi / 180;
+        double haversine(double lat1, double lng1, double lat2, double lng2) {
+          const R = 6371;
+          final dLat = _deg2rad(lat2 - lat1);
+          final dLon = _deg2rad(lng2 - lng1);
+          final a = sin(dLat/2)*sin(dLat/2)
+                  + cos(_deg2rad(lat1))*cos(_deg2rad(lat2))
+                  * sin(dLon/2)*sin(dLon/2);
+          final c = 2*atan2(sqrt(a), sqrt(1 - a));
+          return R*c;
         }
+
+        ads.sort((a, b) {
+          final da = haversine(latitude, longitude, a.latitude!, a.longitude!);
+          final db = haversine(latitude, longitude, b.latitude!, b.longitude!);
+          return da.compareTo(db);
+        });
       }
 
-      // أخيرًا عيّن القوائم
       adsList.value         = ads;
       filteredAdsList.value = ads;
+      allAdsList.value      = ads;
     } else {
       print('❌ [ERROR] HTTP ${response.statusCode}');
       Get.snackbar("خطأ", "تعذّر جلب الإعلانات (${response.statusCode})");
     }
   } catch (e, st) {
-    print('‼️ [EXCEPTION] $e\n$st');
+    print('‼️ [EXCEPTION] $e');
+    print(st);
     Get.snackbar("خطأ", "حدث خطأ أثناء جلب الإعلانات");
   } finally {
     isLoadingAds.value = false;
@@ -875,42 +893,61 @@ try {
   var categoryAdsMap = <int, List<Ad>>{}.obs;
   var isLoadingCategoryMap = <int, bool>{}.obs;
 
-  Future<void> fetchAdsByCategory({
-    required int categoryId,
-    int count = 7,
-  }) async {
-    if (categoryAdsMap.containsKey(categoryId)) return;
-    
-    isLoadingCategoryMap[categoryId] = true;
-    try {
-      final uri = Uri.parse('$_baseUrl/ads/filter');
-      final body = {
-        'category_id': categoryId,
-        'sort_by': 'newest',
-        'order': 'desc',
-        'per_page': count,
-        'lang': Get.find<ChangeLanguageController>().currentLocale.value.languageCode,
-      };
+ Future<void> fetchAdsByCategory({
+  required int categoryId,
+  int count = 7,
+}) async {
+  // لو فيه تحميل شغال لهذا التصنيف لا تكرر
+  if (isLoadingCategoryMap[categoryId] == true) return;
 
-      final response = await http.post(
-        uri,
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode(body),
-      ).timeout(const Duration(seconds: 120));
+  // لو عندك بيانات قديمة ومبسوط عليها وما تبغى تعيد التحميل:
+  if (categoryAdsMap.containsKey(categoryId)) return;
 
-      if (response.statusCode == 200) {
-        final jsonData = json.decode(response.body);
-        final rawList = (jsonData['data'] as List<dynamic>);
-        categoryAdsMap[categoryId] = AdResponse.fromJson({'data': rawList}).data;
-      }
-    } on TimeoutException {
-      print('⏱️ تم تجاوز وقت تحميل التصنيف $categoryId');
-    } catch (e) {
-      print('حدث خطأ أثناء جلب إعلانات التصنيف $categoryId: $e');
-    } finally {
-      isLoadingCategoryMap[categoryId] = false;
+  isLoadingCategoryMap[categoryId] = true;
+  try {
+    final uri = Uri.parse('$_baseUrl/ads/filter');
+    final body = {
+      'category_id': categoryId,
+      'sort_by': 'newest',
+      'order': 'desc',
+      'per_page': count,
+      'lang': Get.find<ChangeLanguageController>()
+          .currentLocale
+          .value
+          .languageCode,
+    };
+
+    final response = await http
+        .post(
+          uri,
+          headers: {'Content-Type': 'application/json'},
+          body: json.encode(body),
+        )
+        .timeout(const Duration(seconds: 120));
+
+    if (response.statusCode == 200) {
+      final jsonData = json.decode(response.body);
+      final rawList = jsonData['data'] as List<dynamic>;
+      // ✅ نحدّث الماب فقط عند نجاح الريسبونس
+      categoryAdsMap[categoryId] =
+          AdResponse.fromJson({'data': rawList}).data;
+    } else if (response.statusCode == 429) {
+      debugPrint(
+          '⚠️ fetchAdsByCategory($categoryId) -> 429 Too Many Requests (بنخلي الداتا الحالية كما هي)');
+    } else {
+      debugPrint(
+          '❌ fetchAdsByCategory($categoryId) error ${response.statusCode}: ${response.body}');
     }
+  } on TimeoutException {
+    debugPrint('⏱️ تم تجاوز وقت تحميل التصنيف $categoryId');
+  } catch (e, st) {
+    debugPrint('❌ حدث خطأ أثناء جلب إعلانات التصنيف $categoryId: $e');
+    debugPrint('$st');
+  } finally {
+    isLoadingCategoryMap[categoryId] = false;
   }
+}
+
 
   // ==================== إدارة الترقيم ====================
   var totalAdsCount = 0.obs;
@@ -937,38 +974,61 @@ try {
   var adsListLatest = <Ad>[].obs;
   RxBool isLoadingAdsLatest = false.obs;
 
-  Future<void> fetchLatestAds({int count = 7}) async {
-    if (adsListLatest.isNotEmpty) return;
-    
-    isLoadingAdsLatest.value = true;
-    try {
-      final uri = Uri.parse('$_baseUrl/ads/filter');
-      final body = {
-        'sort_by': 'newest',
-        'order': 'desc',
-        'per_page': count,
-        'lang': Get.find<ChangeLanguageController>().currentLocale.value.languageCode,
-      };
+ Future<void> fetchLatestAds({int count = 7}) async {
+  // لو فيه تحميل شغال لا تكرر
+  if (isLoadingAdsLatest.value) return;
 
-      final response = await http.post(
-        uri,
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode(body),
-      ).timeout(const Duration(seconds: 120));
+  // لو عندك داتا قديمة وتبغى تمنع إعادة التحميل تلقائياً:
+  if (adsListLatest.isNotEmpty) return;
 
-      if (response.statusCode == 200) {
-        final jsonData = json.decode(response.body);
-        final rawList = (jsonData['data'] as List<dynamic>);
-        adsListLatest.value = AdResponse.fromJson({'data': rawList}).data;
-      }
-    } on TimeoutException {
-      Get.snackbar("تحذير", "تم تجاوز وقت تحميل الإعلانات");
-    } catch (e) {
-      Get.snackbar("خطأ", "حدث خطأ أثناء جلب أحدث الإعلانات");
-    } finally {
-      isLoadingAdsLatest.value = false;
+  isLoadingAdsLatest.value = true;
+  try {
+    final uri = Uri.parse('$_baseUrl/ads/filter');
+    final body = {
+      'sort_by': 'newest',
+      'order': 'desc',
+      'per_page': count,
+      'lang': Get.find<ChangeLanguageController>()
+          .currentLocale
+          .value
+          .languageCode,
+    };
+
+    final response = await http
+        .post(
+          uri,
+          headers: {'Content-Type': 'application/json'},
+          body: json.encode(body),
+        )
+        .timeout(const Duration(seconds: 120));
+
+    if (response.statusCode == 200) {
+      final jsonData = json.decode(response.body);
+      final rawList = jsonData['data'] as List<dynamic>;
+      // ✅ نحدث فقط عند نجاح الريسبونس
+      adsListLatest.value =
+          AdResponse.fromJson({'data': rawList}).data;
+    } else if (response.statusCode == 429) {
+      debugPrint('⚠️ fetchLatestAds -> 429 Too Many Requests (بنخلي الداتا الحالية كما هي)');
+      // تقدر تضيف Snackbar لو حاب
+      // Get.snackbar("تنبيه", "تم تجاوز حد الطلبات، حاول بعد لحظات");
+    } else {
+      debugPrint(
+          '❌ fetchLatestAds error ${response.statusCode}: ${response.body}');
+      // Get.snackbar("خطأ", "حدث خطأ أثناء جلب أحدث الإعلانات");
     }
+  } on TimeoutException {
+    debugPrint('⏱️ fetchLatestAds timeout');
+    // Get.snackbar("تحذير", "تم تجاوز وقت تحميل الإعلانات");
+  } catch (e, st) {
+    debugPrint('❌ fetchLatestAds exception: $e');
+    debugPrint('$st');
+    // Get.snackbar("خطأ", "حدث خطأ أثناء جلب أحدث الإعلانات");
+  } finally {
+    isLoadingAdsLatest.value = false;
   }
+}
+
 
   // ==================== تحميل التصنيفات بشكل متوازي ====================
   Future<void> _fetchInitialCategoriesParallel() async {
@@ -1035,36 +1095,54 @@ String? toTimeframe(int? hours) {
 }
 
   /// دالة تحميل الإعلانات المميزة (POST /ads/filter)
-  Future<void> loadFeaturedAds() async {
-    isLoadingFeatured.value = true;
-    try {
-      final uri = Uri.parse('$_baseUrl/ads/filter');
-      final body = {
-        'only_featured': true,
-        'per_page':      7,
-        'lang':          Get.find<ChangeLanguageController>()
-                            .currentLocale
-                            .value
-                            .languageCode,
-        'timeframe':     'all',
-      };
+  /// دالة تحميل الإعلانات المميزة (POST /ads/filter)
+Future<void> loadFeaturedAds() async {
+  // لو فيه تحميل شغال لا تكرر
+  if (isLoadingFeatured.value) return;
 
-      final response = await http.post(
-        uri,
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode(body),
+  isLoadingFeatured.value = true;
+  try {
+    final uri = Uri.parse('$_baseUrl/ads/filter');
+    final body = {
+      'only_featured': true,
+      'per_page': 7,
+      'lang': Get.find<ChangeLanguageController>()
+          .currentLocale
+          .value
+          .languageCode,
+      'timeframe': 'all',
+    };
+
+    final response = await http
+        .post(
+          uri,
+          headers: {'Content-Type': 'application/json'},
+          body: json.encode(body),
+        )
+        .timeout(const Duration(seconds: 60));
+
+    if (response.statusCode == 200) {
+      final jsonData = json.decode(response.body);
+      final rawList = jsonData['data'] as List<dynamic>;
+      // ✅ نحدث القائمة فقط عند نجاح الريسبونس
+      featuredAds.assignAll(
+        AdResponse.fromJson({'data': rawList}).data,
       );
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body)['data'] as List;
-        featuredAds.assignAll(AdResponse.fromJson({'data': data}).data);
-      }
-    } catch (e) {
-      print('‼️ Featured exception: $e');
-    } finally {
-      isLoadingFeatured.value = false;
+    } else if (response.statusCode == 429) {
+      debugPrint('⚠️ loadFeaturedAds -> 429 Too Many Requests (بنخلي الداتا الحالية كما هي)');
+    } else {
+      debugPrint('❌ loadFeaturedAds error ${response.statusCode}: ${response.body}');
     }
+  } on TimeoutException {
+    debugPrint('⏱️ loadFeaturedAds timeout');
+  } catch (e, st) {
+    debugPrint('‼️ Featured exception: $e');
+    debugPrint('$st');
+  } finally {
+    isLoadingFeatured.value = false;
   }
+}
+
 
 
   final RxList<Map<String, dynamic>> attrsPayload = <Map<String, dynamic>>[].obs;

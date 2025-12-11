@@ -8,45 +8,44 @@ class ThemeController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-  _loadTheme();
+    _loadTheme();
   }
 
-  // تبديل الوضع
-  /* void toggleTheme() async {
-    isDarkMode.value = !isDarkMode.value;
-    Get.changeThemeMode(isDarkMode.value ? ThemeMode.dark : ThemeMode.light);
-    _saveTheme(isDarkMode.value);
-  }*/
-// دالة لتفعيل المود العادي (فاتح)
-
-  void  toggleTheme(){
-     isDarkMode.value? enableLightMode():enableDarkMode();
-       Get.forceAppUpdate(); // أهم جزء في الحل
-
+  /// تبديل الوضع بين الفاتح والمظلم
+  void toggleTheme() {
+    if (isDarkMode.value) {
+      enableLightMode();
+    } else {
+      enableDarkMode();
+    }
   }
+
+  /// تفعيل المود الفاتح
   void enableLightMode() async {
     isDarkMode.value = false;
-    Get.changeThemeMode(ThemeMode.light); // تغيير الثيم إلى الوضع الفاتح
-    _saveTheme(isDarkMode.value); // حفظ الحالة في الذاكرة
+    Get.changeThemeMode(ThemeMode.light); // تغيير الثيم إلى الفاتح
+    _saveTheme(isDarkMode.value);        // حفظ الحالة
   }
 
-  // دالة لتفعيل المود المظلم (داكن)
+  /// تفعيل المود المظلم
   void enableDarkMode() async {
     isDarkMode.value = true;
-    Get.changeThemeMode(ThemeMode.dark); // تغيير الثيم إلى الوضع المظلم
-    _saveTheme(isDarkMode.value); // حفظ الحالة في الذاكرة
+    Get.changeThemeMode(ThemeMode.dark); // تغيير الثيم إلى المظلم
+    _saveTheme(isDarkMode.value);        // حفظ الحالة
   }
 
-  // حفظ الوضع المختار في التخزين المحلي
+  /// حفظ الوضع المختار في التخزين المحلي
   void _saveTheme(bool isDark) async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    prefs.setBool('isDarkMode', isDark);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('isDarkMode', isDark);
   }
 
-  // تحميل الوضع المحفوظ
+  /// تحميل الوضع المحفوظ عند تشغيل التطبيق
   void _loadTheme() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
+    final prefs = await SharedPreferences.getInstance();
     isDarkMode.value = prefs.getBool('isDarkMode') ?? false;
-    Get.changeThemeMode(isDarkMode.value ? ThemeMode.dark : ThemeMode.light);
+    Get.changeThemeMode(
+      isDarkMode.value ? ThemeMode.dark : ThemeMode.light,
+    );
   }
 }

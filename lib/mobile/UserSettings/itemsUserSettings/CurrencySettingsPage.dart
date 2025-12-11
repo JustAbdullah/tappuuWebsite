@@ -118,7 +118,7 @@ class CurrencySettingsPage extends StatelessWidget {
         title,
         style: TextStyle(
           fontFamily: AppTextStyles.appFontFamily,
-          fontSize: AppTextStyles.medium,
+          fontSize: AppTextStyles.large,
 
           fontWeight: FontWeight.w600,
           color: AppColors.textPrimary(isDarkMode),
@@ -172,7 +172,7 @@ class CurrencySettingsPage extends StatelessWidget {
                   'ملاحظة'.tr,
                   style: TextStyle(
                     fontFamily: AppTextStyles.appFontFamily,
-                    fontSize: AppTextStyles.medium,
+                    fontSize: AppTextStyles.large,
 
                     fontWeight: FontWeight.bold,
                     color: AppColors.textPrimary(isDarkMode),

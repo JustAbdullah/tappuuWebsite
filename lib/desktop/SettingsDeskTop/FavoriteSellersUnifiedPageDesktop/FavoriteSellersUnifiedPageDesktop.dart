@@ -10,7 +10,6 @@ import '../../../controllers/home_controller.dart';
 import '../../../core/constant/app_text_styles.dart';
 import '../../../core/constant/appcolors.dart';
 import '../../../core/data/model/FavoriteSeller.dart';
-import '../../../mobile/AdvertiserAdsScreen/AdvertiserAdsScreen.dart';
 import '../../ServicesDrawerWeb/ServicesDrawerWeb.dart';
 import '../../secondary_app_bar_desktop.dart';
 import '../../top_app_bar_desktop.dart';
@@ -63,19 +62,25 @@ class _FavoriteSellersUnifiedPageDesktopState extends State<FavoriteSellersUnifi
   @override
   Widget build(BuildContext context) {
     final isDark = themeController.isDarkMode.value;
+           final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
     final HomeController _homeController = Get.find<HomeController>();
 
     return  Scaffold(     
-       endDrawer:  _homeController.isServicesOrSettings.value
-              ? SettingsDrawerDeskTop(key: const ValueKey(1))
-              : DesktopServicesDrawer(key: const ValueKey(2)),
-        
+      key: _scaffoldKey,
+    endDrawer: Obx(
+      () => AnimatedSwitcher(
+        duration: const Duration(milliseconds: 300),
+        child: _homeController.drawerType.value == DrawerType.settings
+            ? const SettingsDrawerDeskTop(key: ValueKey('settings'))
+            : const DesktopServicesDrawer(key: ValueKey('services')),
+      ),
+    ),
         backgroundColor: AppColors.background(isDark),
       body: Column(
         children: [           
            TopAppBarDeskTop(),
-              SecondaryAppBarDeskTop(),
+              SecondaryAppBarDeskTop(scaffoldKey: _scaffoldKey,),
              SizedBox(height: 20.h,), Expanded(
                child: Container(
                        padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 16.h),

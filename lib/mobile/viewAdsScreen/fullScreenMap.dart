@@ -184,7 +184,7 @@ class _FullScreenMapState extends State<FullScreenMap> {
                     'حدد نطاق البحث:'.tr,
                     style: TextStyle(
                       fontFamily: AppTextStyles.appFontFamily,
-                      fontSize: AppTextStyles.medium,
+                      fontSize: AppTextStyles.large,
 
                       fontWeight: FontWeight.bold,
                       color: AppColors.textPrimary(isDarkMode),

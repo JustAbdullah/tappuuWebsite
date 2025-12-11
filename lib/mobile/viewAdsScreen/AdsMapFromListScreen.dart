@@ -583,7 +583,7 @@ class _AdsMapFromListScreenState extends State<AdsMapFromListScreen> {
       appBar: AppBar(
         backgroundColor: AppColors.primary,
         leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => Get.back()),
-        title: Text('الخريطة'.tr, style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: AppTextStyles.medium,
+        title: Text('الخريطة'.tr, style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: AppTextStyles.large,
  fontWeight: FontWeight.bold)),
         actions: [
           IconButton(

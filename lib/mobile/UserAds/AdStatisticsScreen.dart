@@ -199,7 +199,7 @@ class _AdStatisticsScreenState extends State<AdStatisticsScreen> {
         child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
           Icon(icon, color: Colors.black87, size: 18.sp),
           SizedBox(width: 8.w),
-          Text(label, style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: AppTextStyles.medium, fontWeight: FontWeight.w800, color: Colors.black87)),
+          Text(label, style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: 14.sp, fontWeight: FontWeight.w800, color: Colors.black87)),
         ]),
       ),
     );
@@ -315,7 +315,7 @@ class _AdStatisticsScreenState extends State<AdStatisticsScreen> {
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(widget.ad.title,
-                  style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: AppTextStyles.medium, fontWeight: FontWeight.w700),
+                  style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: AppTextStyles.large, fontWeight: FontWeight.w700),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis),
               SizedBox(height: 8.h),
@@ -439,7 +439,7 @@ class _AdStatisticsScreenState extends State<AdStatisticsScreen> {
         Row(children: [
           Container(padding: EdgeInsets.all(6.w), decoration: BoxDecoration(color: hasActive ? Colors.amber.withOpacity(0.12) : AppColors.grey.withOpacity(0.08), shape: BoxShape.circle), child: Icon(hasActive ? Icons.star : Icons.star_outline, color: hasActive ? Colors.amber : AppColors.grey)),
           SizedBox(width: 10.w),
-          Text(hasActive ? 'باقات نشطة' : (hasAny ? 'باقات مسجلة' : 'لا توجد باقات'), style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: AppTextStyles.medium, fontWeight: FontWeight.bold)),
+          Text(hasActive ? 'باقات نشطة' : (hasAny ? 'باقات مسجلة' : 'لا توجد باقات'), style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: AppTextStyles.large, fontWeight: FontWeight.bold)),
         ]),
         SizedBox(height: 8.h),
         Text('هنا تظهر الباقات المسجلة للإعلان، الحالة وتاريخ الانتهاء.'.tr, style: TextStyle(fontFamily: AppTextStyles.appFontFamily, color: AppColors.textSecondary(isDarkMode))),
@@ -485,7 +485,7 @@ class _AdStatisticsScreenState extends State<AdStatisticsScreen> {
                         SizedBox(width: 8.w),
                         Expanded(
                           child: Text(packageName.toString(),
-                              style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: AppTextStyles.medium, fontWeight: FontWeight.w700),
+                              style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: AppTextStyles.large, fontWeight: FontWeight.w700),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis),
                         ),
@@ -548,6 +548,8 @@ class _AdStatisticsScreenState extends State<AdStatisticsScreen> {
   }
 
   Widget _buildActionsCard(bool isDarkMode) {
+        ManageAdController _manage = Get.find<ManageAdController>();
+
     return Container(
       width: double.infinity,
       padding: EdgeInsets.all(12.w),
@@ -572,11 +574,15 @@ class _AdStatisticsScreenState extends State<AdStatisticsScreen> {
                   content: Text('هل أنت متأكد من حذف هذا الإعلان؟'.tr, style: TextStyle(fontFamily: AppTextStyles.appFontFamily)),
                   actions: [
                     TextButton(onPressed: () => Get.back(result: false), child: Text('إلغاء'.tr)),
-                    ElevatedButton(onPressed: () => Get.back(result: true), child: Text('حذف'.tr)),
+                    ElevatedButton(onPressed: () {
+                       Get.back(result: true);
+
+                    },
+                     child: Text('حذف'.tr)),
                   ],
                 ));
                 if (confirmed == true) {
-                  // TODO: تنفيذ حذف الإعلان
+              Get.find<ManageAdController>().deleteAd( widget.ad.id);
                   Get.back();
                 }
               },
@@ -756,7 +762,7 @@ class _PremiumPackagesScreenState extends State<PremiumPackagesScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text('المجموع بعد الاختيار', style: TextStyle(fontWeight: FontWeight.bold)),
-                    Text('${_fmt.format(predictedTotal)} ل.س', style: TextStyle(fontWeight: FontWeight.bold, fontSize: AppTextStyles.medium)),
+                    Text('${_fmt.format(predictedTotal)} ل.س', style: TextStyle(fontWeight: FontWeight.bold, fontSize: AppTextStyles.large)),
                   ],
                 ),
                 SizedBox(height: 12),
@@ -834,7 +840,7 @@ class _PremiumPackagesScreenState extends State<PremiumPackagesScreen> {
                   children: [
                     Icon(Icons.star, color: AppColors.primary),
                     SizedBox(width: 12),
-                    Expanded(child: Text('اختر الباقات المناسبة لإبراز إعلانك', style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: AppTextStyles.medium, fontWeight: FontWeight.w700, color: AppColors.primary))),
+                    Expanded(child: Text('اختر الباقات المناسبة لإبراز إعلانك', style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: AppTextStyles.large, fontWeight: FontWeight.w700, color: AppColors.primary))),
                   ],
                 ),
               ),
@@ -920,7 +926,7 @@ class _PremiumPackagesScreenState extends State<PremiumPackagesScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('${selectedPackageIds.length} ${'باقات مختارة'.tr}', style: TextStyle(fontWeight: FontWeight.bold, fontSize: AppTextStyles.medium)),
+                              Text('${selectedPackageIds.length} ${'باقات مختارة'.tr}', style: TextStyle(fontWeight: FontWeight.bold, fontSize: AppTextStyles.large)),
                               SizedBox(height: 6),
                               Text(_buildSelectedSummary(), style: TextStyle(fontSize: AppTextStyles.small, color: AppColors.textSecondary(isDark)), maxLines: 2, overflow: TextOverflow.ellipsis),
                             ],
@@ -932,7 +938,7 @@ class _PremiumPackagesScreenState extends State<PremiumPackagesScreen> {
                         child: ElevatedButton(
                           onPressed: _onProceedToPayment,
                           style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, padding: EdgeInsets.symmetric(horizontal: 22, vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                          child: Text('الدفع الآن'.tr, style: TextStyle(fontWeight: FontWeight.bold, fontSize: AppTextStyles.medium)),
+                          child: Text('الدفع الآن'.tr, style: TextStyle(fontWeight: FontWeight.bold, fontSize: AppTextStyles.large)),
                         ),
                       ),
                     ],
@@ -994,7 +1000,7 @@ class HorizontalPackageCard extends StatelessWidget {
           padding: EdgeInsets.all(12),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
-              Expanded(child: Text(pkg.name ?? '', style: TextStyle(fontSize: AppTextStyles.medium, fontWeight: FontWeight.w800, fontFamily: AppTextStyles.appFontFamily, color: AppColors.textPrimary(isDark)), maxLines: 2, overflow: TextOverflow.ellipsis)),
+              Expanded(child: Text(pkg.name ?? '', style: TextStyle(fontSize: AppTextStyles.large, fontWeight: FontWeight.w800, fontFamily: AppTextStyles.appFontFamily, color: AppColors.textPrimary(isDark)), maxLines: 2, overflow: TextOverflow.ellipsis)),
               SizedBox(width: 6),
               InkWell(onTap: onSelect, child: Icon(Icons.info_outline, size: 20, color: AppColors.textSecondary(isDark))),
             ]),
@@ -1024,6 +1030,7 @@ class HorizontalPackageCard extends StatelessWidget {
     );
   }
 }
+
 
 /// ============================
 /// PaymentScreen (لإعلان موجود — يستدعي purchasePremium)

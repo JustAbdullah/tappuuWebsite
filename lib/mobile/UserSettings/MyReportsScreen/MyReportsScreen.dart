@@ -158,7 +158,7 @@ class _MyReportsScreenState extends State<MyReportsScreen> {
                 Text('إدارة البلاغات'.tr,
                     style: TextStyle(
                       fontFamily: AppTextStyles.appFontFamily,
-                      fontSize: AppTextStyles.medium,
+                      fontSize: AppTextStyles.large,
 
                       fontWeight: FontWeight.w700,
                       color: AppColors.primary,
@@ -188,7 +188,7 @@ class _MyReportsScreenState extends State<MyReportsScreen> {
         children: [
           Icon(Icons.report_problem_outlined, size: 64.w, color: AppColors.primary.withOpacity(0.9)),
           SizedBox(height: 12.h),
-          Text('لا توجد بلاغات'.tr, style: TextStyle(fontSize: AppTextStyles.medium,
+          Text('لا توجد بلاغات'.tr, style: TextStyle(fontSize: AppTextStyles.large,
  fontWeight: FontWeight.w600, color: AppColors.textPrimary(isDark))),
           SizedBox(height: 8.h),
           Text('لم تقم بتقديم أي بلاغات حتى الآن'.tr,
@@ -237,7 +237,7 @@ class ReportCard extends StatelessWidget {
           Text(
             report.ad?.title ?? 'إعلان بدون عنوان',
             style: TextStyle(
-              fontSize: AppTextStyles.medium,
+              fontSize: AppTextStyles.large,
 
               fontWeight: FontWeight.w800,
               fontFamily: AppTextStyles.appFontFamily,
