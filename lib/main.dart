@@ -1,7 +1,10 @@
 // lib/main.dart
 import 'dart:async';
 import 'dart:html' as html;
-import 'dart:js_util' as js_util;
+
+// ✅ بدل dart:js_util
+import 'dart:js_interop';
+import 'dart:js_interop_unsafe';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
@@ -84,7 +87,7 @@ void registerPersistentControllers() {
   // EditableTextController يُسجَّل من AppServices.init في الخلفية
 }
 
-/// -------- BrowserHistorySync كما هو تقريبًا --------
+/// -------- BrowserHistorySync --------
 class BrowserHistorySync extends NavigatorObserver {
   final List<String> _stack = [];
   bool _syncingFromBrowser = false;
@@ -114,6 +117,7 @@ class BrowserHistorySync extends NavigatorObserver {
   @override
   void didPush(Route route, Route? previousRoute) {
     super.didPush(route, previousRoute);
+
     if (_syncingFromBrowser) {
       _syncingFromBrowser = false;
       return;
@@ -125,6 +129,7 @@ class BrowserHistorySync extends NavigatorObserver {
 
     final name = _extractRouteName(route);
     _stack.add(name);
+
     try {
       final url = _routeToUrl(name);
       html.window.history.pushState(
@@ -153,6 +158,7 @@ class BrowserHistorySync extends NavigatorObserver {
   void didReplaceRoute(String newRoute) {
     if (_stack.isNotEmpty) _stack.removeLast();
     _stack.add(newRoute);
+
     try {
       final url = _routeToUrl(newRoute);
       html.window.history.replaceState(
@@ -180,6 +186,7 @@ class BrowserHistorySync extends NavigatorObserver {
   Future<bool> handleBrowserBack() async {
     if (_isHandlingPopState) return true;
     _isHandlingPopState = true;
+
     try {
       if (_stack.length > 1) {
         _syncingFromBrowser = true;
@@ -203,6 +210,7 @@ class BrowserHistorySync extends NavigatorObserver {
   void handleOffAllNavigation(String newRoute) {
     _stack.clear();
     _stack.add(newRoute);
+
     try {
       final url = _routeToUrl(newRoute);
       html.window.history.pushState(
@@ -233,14 +241,13 @@ String _normalizePath(String rawPath) {
 
   // ✅ إذا الرابط يبدأ بـ /web/ نشيل /web
   if (rawPath.startsWith('/web/')) {
-    return rawPath.substring(4); // يحوّل /web/ads/... إلى /ads/...
+    return rawPath.substring(4); // /web/ads/... -> /ads/...
   }
 
   return rawPath;
 }
 
-/// AppServices + SharedPreferences + editable-texts
-/// ملاحظة: ما عاد نستخدمه كشيء "حرج للإقلاع" – ينفذ في الخلفية
+/// AppServices + SharedPreferences + editable-texts (background)
 Future<void> _initializeEssentialServices() async {
   try {
     final appServices = await Future.any<AppServices?>([
@@ -261,7 +268,7 @@ Future<void> _initializeEssentialServices() async {
   }
 }
 
-/// الخدمات الثقيلة بعد أول Frame (شعار، شاشة انتظار، حجم الخطوط، الخطوط…)
+/// الخدمات الثقيلة بعد أول Frame
 void _initializeHeavyServices() {
   WidgetsBinding.instance.addPostFrameCallback((_) async {
     debugPrint('🚀 Starting heavy services initialization...');
@@ -277,7 +284,6 @@ void _initializeHeavyServices() {
 
     final List<Future<void> Function()> heavyServices = [];
 
-    // فقط لو AppServices موجود
     if (appServices != null) {
       heavyServices.addAll([
         () async {
@@ -305,7 +311,6 @@ void _initializeHeavyServices() {
       ]);
     }
 
-    // حجم الخطوط + الخطوط
     heavyServices.addAll([
       () async {
         try {
@@ -337,7 +342,6 @@ void _initializeHeavyServices() {
 }
 
 void _setupSystemUiAndOrientation() {
-  // على الويب تقريباً no-op لكن تترك للتوافق
   unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
@@ -345,6 +349,7 @@ void _setupSystemUiAndOrientation() {
       statusBarColor: Colors.transparent,
     ),
   );
+
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
@@ -405,12 +410,12 @@ Future<void> _initColorControllerAndFetchPrimary() async {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // كتم debugPrint في نسخة release لتخفيف الضوضاء والأثر
+  // كتم debugPrint في نسخة release
   if (kReleaseMode) {
     debugPrint = (String? message, {int? wrapWidth}) {};
   }
 
-  // WebView للويب (reCAPTCHA وغيره)
+  // WebView للويب
   if (kIsWeb) {
     WebViewPlatform.instance = WebWebViewPlatform();
     debugPrint('✅ WebViewPlatform initialized for Web');
@@ -426,15 +431,15 @@ Future<void> main() async {
   }
   registerPersistentControllers();
 
-  // شغّل التطبيق بأسرع ما يمكن (بدون انتظار أي شبكات)
+  // شغّل التطبيق بسرعة
   runApp(const MyApp());
 
-  // بعد تشغيل التطبيق نبدأ الخلفية:
+  // بعد تشغيل التطبيق
   if (kIsWeb) {
     _setupBrowserHooks();
   }
 
-  // AppServices, Firebase, ColorController, heavy services كلها في الخلفية
+  // background
   unawaited(_initializeEssentialServices());
   unawaited(_initializeFirebaseServices());
   unawaited(_initColorControllerAndFetchPrimary());
@@ -486,6 +491,7 @@ Future<void> _confirmOrCancelExit() async {
 
 class MyApp extends StatefulWidget {
   const MyApp({Key? key}) : super(key: key);
+
   @override
   State<MyApp> createState() => _MyAppState();
 }
@@ -509,17 +515,24 @@ class _MyAppState extends State<MyApp> {
     try {
       // 1) بيانات الإعلان من window.__AD_DATA__ (seo-inject.php)
       try {
-        final dynamic adData = js_util.getProperty(html.window, '__AD_DATA__');
-        if (adData != null) {
-          final dynamic id = js_util.getProperty(adData, 'id');
-          final dynamic slug = js_util.getProperty(adData, 'slug');
+        final JSAny? adDataAny = globalContext['__AD_DATA__'];
+
+        Object? adData;
+        try {
+          adData = adDataAny == null ? null : adDataAny.dartify();
+        } catch (_) {
+          adData = null;
+        }
+
+        if (adData is Map) {
+          final id = adData['id'];
+          final slug = adData['slug'];
 
           String raw = '';
           if (id != null) {
             raw = id.toString();
             if (slug != null && slug.toString().trim().isNotEmpty) {
-              final cleanedSlug = slug.toString();
-              raw = '$raw-$cleanedSlug';
+              raw = '$raw-${slug.toString()}';
             }
           } else if (slug != null) {
             raw = slug.toString();
@@ -538,12 +551,12 @@ class _MyAppState extends State<MyApp> {
       // 2) الروابط العميقة /ads/... و /ad/...
       final rawPath = html.window.location.pathname ?? '/';
       final path = _normalizePath(rawPath);
-      final queryParams = html.window.location.search;
 
+      final queryParams = html.window.location.search ?? '';
       debugPrint('🔗 Handling deep link: $path$queryParams');
 
       if (path.startsWith('/ads/')) {
-        _handleAdsScreenDeepLink(path, queryParams ?? '');
+        _handleAdsScreenDeepLink(path, queryParams);
       } else if (path.startsWith('/ad/')) {
         _handleAdDetailsDeepLink(path);
       }
@@ -574,8 +587,12 @@ class _MyAppState extends State<MyApp> {
         arguments['subTwoCategorySlug'] = effectiveSegments[2];
       }
 
-      if (queryParams.isNotEmpty) {
-        final params = Uri.splitQueryString(queryParams);
+      final qp = queryParams.startsWith('?')
+          ? queryParams.substring(1)
+          : queryParams;
+
+      if (qp.isNotEmpty) {
+        final params = Uri.splitQueryString(qp);
 
         if (params.containsKey('timeframe')) {
           arguments['currentTimeframe'] = params['timeframe'];
@@ -638,7 +655,6 @@ class _MyAppState extends State<MyApp> {
             initialRoute: AppRoutes.initial,
             getPages: AppRoutes.pages,
             initialBinding: BindingsBuilder(() {
-              // AdsController لو احتجته فورًا
               if (!Get.isRegistered<AdsController>()) {
                 Get.put(AdsController(), permanent: false);
               }

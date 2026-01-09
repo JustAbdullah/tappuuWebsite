@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -10,7 +13,15 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
+
+// تجاهل التحذير لأن هذا مشروع ويب
+// ignore: avoid_web_libraries_in_flutter
 import 'dart:html' as html;
+import 'dart:ui_web' as ui;
+import 'dart:ui' as ui;
+
+import 'package:flutter/foundation.dart' show kIsWeb;
+
 import '../../app_routes.dart';
 import '../../controllers/AdsManageSearchController.dart';
 import '../../controllers/CurrencyController.dart';
@@ -32,12 +43,6 @@ import '../SettingsDeskTop/SettingsDrawerDeskTop.dart';
 import '../secondary_app_bar_desktop.dart';
 import '../top_app_bar_desktop.dart';
 import 'DesktopConversationScreen.dart';
-// تجاهل التحذير لأن هذا مشروع ويب
-// ignore: avoid_web_libraries_in_flutter
-import 'dart:html' as html;
-import 'dart:ui' as ui show platformViewRegistry;
-import 'package:flutter/foundation.dart' show kIsWeb;
-
 
 class AdDetailsDesktop extends StatefulWidget {
   final Ad? ad;
@@ -47,1133 +52,443 @@ class AdDetailsDesktop extends StatefulWidget {
   @override
   State<AdDetailsDesktop> createState() => _AdDetailsDesktopState();
 }
+
 class _AdDetailsDesktopState extends State<AdDetailsDesktop> {
   Ad? _ad;
+
   final AdsController _adsController = Get.find<AdsController>();
+
+  final LoadingController _loadingController =
+      Get.isRegistered<LoadingController>()
+          ? Get.find<LoadingController>()
+          : Get.put(LoadingController());
+
+  final AreaController _areaController =
+      Get.isRegistered<AreaController>()
+          ? Get.find<AreaController>()
+          : Get.put(AreaController());
+
+  // ✅ لا تسوي Get.put داخل build
+  late final CurrencyController _currencyController;
+
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
   int _selectedBottomTab = 0;
   bool _isFavorite = false;
-  final LoadingController _loadingController = Get.put(LoadingController());
-  FavoriteSellerController favoriteSellerController = Get.put(FavoriteSellerController());
-  final FavoritesController _favoritesController = Get.put(FavoritesController());
-  final FavoriteGroupsController _favoriteGroupsController = Get.put(FavoriteGroupsController());
+
   bool _isSeoDataLoading = false;
-  AreaController _areaController = Get.put(AreaController());
+
+  // ✅ Lazy controllers (ما ننشئهم إلا عند الضغط على زر المفضلة / المتابعة)
+  FavoritesController? _favoritesControllerLazy;
+  FavoriteGroupsController? _favoriteGroupsControllerLazy;
+  FavoriteSellerController? _favoriteSellerControllerLazy;
+
+  FavoritesController _ensureFavoritesController() {
+    if (_favoritesControllerLazy != null) return _favoritesControllerLazy!;
+    if (Get.isRegistered<FavoritesController>()) {
+      _favoritesControllerLazy = Get.find<FavoritesController>();
+    } else {
+      _favoritesControllerLazy = Get.put(FavoritesController());
+    }
+    return _favoritesControllerLazy!;
+  }
+
+  FavoriteGroupsController _ensureFavoriteGroupsController() {
+    if (_favoriteGroupsControllerLazy != null) {
+      return _favoriteGroupsControllerLazy!;
+    }
+    if (Get.isRegistered<FavoriteGroupsController>()) {
+      _favoriteGroupsControllerLazy = Get.find<FavoriteGroupsController>();
+    } else {
+      _favoriteGroupsControllerLazy = Get.put(FavoriteGroupsController());
+    }
+    return _favoriteGroupsControllerLazy!;
+  }
+
+  FavoriteSellerController _ensureFavoriteSellerController() {
+    if (_favoriteSellerControllerLazy != null) {
+      return _favoriteSellerControllerLazy!;
+    }
+    if (Get.isRegistered<FavoriteSellerController>()) {
+      _favoriteSellerControllerLazy = Get.find<FavoriteSellerController>();
+    } else {
+      _favoriteSellerControllerLazy = Get.put(FavoriteSellerController());
+    }
+    return _favoriteSellerControllerLazy!;
+  }
 
   @override
   void initState() {
     super.initState();
-    // نحاول الحصول على الإعلان من الوسيطات إذا لم يتم توفيره في constructor
+
+    _currencyController = Get.isRegistered<CurrencyController>()
+        ? Get.find<CurrencyController>()
+        : Get.put(CurrencyController());
+
     _ad = widget.ad ?? Get.arguments?['ad'];
     if (_ad == null) {
-      // إذا لم يكن الإعلان متوفرًا، نعود للشاشة السابقة
       Get.back();
       Get.snackbar('خطأ', 'لم يتم العثور على تفاصيل الإعلان');
       return;
     }
 
-    
     _updateBrowserUrl();
-    _loadSeoData(); // تحميل بيانات SEO
+    _loadSeoData();
+
+    // ❌ مهم: لا تستدعي أي فحص للمفضلة هنا
+    // لأن هذا بالضبط اللي يطلع Snackbar بدون ضغط المستخدم.
   }
 
-  // دالة جديدة لتحميل بيانات SEO
   Future<void> _loadSeoData() async {
-    setState(() {
-      _isSeoDataLoading = true;
-    });
-    
+    setState(() => _isSeoDataLoading = true);
+
     try {
       final seoData = await _adsController.fetchSeoData(_ad!.id);
       if (seoData.isNotEmpty && seoData['metaTitle'] != null) {
         _adsController.updateDocumentHead(seoData);
       } else {
-        // إذا كانت بيانات SEO فارغة أو غير متوفرة
         _adsController.handleMissingSeoData();
       }
     } catch (e) {
       debugPrint('Error loading SEO data: $e');
       _adsController.handleMissingSeoData();
     } finally {
-      setState(() {
-        _isSeoDataLoading = false;
-      });
+      if (mounted) {
+        setState(() => _isSeoDataLoading = false);
+      }
     }
   }
 
-  // دالة لتحديث رابط المتصفح
   void _updateBrowserUrl() {
     if (_ad == null) return;
-    
+
     final newUrl = '/ad/${_ad!.id}-${_ad!.slug}';
     final currentPath = html.window.location.pathname;
-    
-    // فقط قم بالتحديث إذا كان الرابط الحالي مختلف
+
     if (currentPath != newUrl) {
       html.window.history.replaceState({}, '', newUrl);
     }
   }
 
-
-
-  // دالة للحصول على رابط المشاركة
   String get shareableUrl {
     if (_ad == null) return '';
     final baseUrl = html.window.location.origin;
     return '$baseUrl/ad/${_ad!.id}-${_ad!.slug}';
   }
 
-  // أضف زر المشاركة في الواجهة
   Widget _buildShareButton(bool isDarkMode) {
     return IconButton(
       icon: Icon(Icons.share, size: 22.w),
       onPressed: () {
-        // نسخ الرابط إلى الحافظة
         Clipboard.setData(ClipboardData(text: shareableUrl));
         Get.snackbar('تم النسخ', 'تم نسخ رابط الإعلان إلى الحافظة');
       },
       tooltip: 'مشاركة الرابط',
     );
   }
-//////////المفضلة////
-// ---------- مساعدات محسّنة ----------
-double? _parsePriceDynamic(dynamic price) {
-  if (price == null) return null;
-  if (price is double) return price;
-  if (price is int) return price.toDouble();
-  if (price is String) {
-    final cleaned = price.replaceAll(RegExp(r'[^0-9]'), '');
-    if (cleaned.isEmpty) return null;
-    try {
-      return double.parse(cleaned);
-    } catch (e) {
-      return null;
+
+  // ---------- مساعدات محسّنة ----------
+  double? _parsePriceDynamic(dynamic price) {
+    if (price == null) return null;
+    if (price is double) return price;
+    if (price is int) return price.toDouble();
+    if (price is String) {
+      final cleaned = price.replaceAll(RegExp(r'[^0-9]'), '');
+      if (cleaned.isEmpty) return null;
+      try {
+        return double.parse(cleaned);
+      } catch (_) {
+        return null;
+      }
     }
-  }
-  return null;
-}
-
-// ---------- الدوال المعدّلة بالكامل (انسخ ولصق داخل State) ----------
-
-void _checkFavoriteStatus() {
-  _favoritesController.checkIsHaveAccountFavorite(widget.ad!.id);
-  setState(() {});
-}
-
-void _toggleFavorite() async {
-  final userId = _loadingController.currentUser?.id;
-  if (userId == null) {
-    Get.snackbar('تنبيه'.tr, 'يجب تسجيل الدخول لإضافة إلى المفضلة'.tr,
-        snackPosition: SnackPosition.BOTTOM);
-    return;
+    return null;
   }
 
-  if (_isFavorite) {
-    // محاولة إزالة من المفضلة (optimistic UI)
-    setState(() {
-      _isFavorite = false;
-    });
+  String _sanitizePhone(String? phone) {
+    final p = (phone ?? '').trim();
+    if (p.isEmpty) return '';
+    // خفيفة: نشيل المسافات والرموز الغريبة
+    return p.replaceAll(RegExp(r'[^0-9+]'), '');
+  }
 
-    try {
-      await _favoritesController.removeFavorite(
-        userId: userId,
-        adId: widget.ad!.id,
+  // ---------- المفضلة (بدون أي Snackbar عند فتح الصفحة) ----------
+  void _toggleFavorite() async {
+    final userId = _loadingController.currentUser?.id;
+
+    // ✅ Snackbar فقط عند الضغط
+    if (userId == null) {
+      Get.snackbar(
+        'تنبيه'.tr,
+        'يجب تسجيل الدخول لإضافة إلى المفضلة'.tr,
+        snackPosition: SnackPosition.BOTTOM,
       );
-      final loading = Get.find<LoadingController>();
-      await loading.unsubscribeFromTopicPublic('AdId_${widget.ad!.id}');
-      Get.rawSnackbar(title: 'نجاح', message: 'تمت الإزالة من المفضلة', duration: Duration(seconds: 2));
-    } catch (e) {
-      setState(() {
-        _isFavorite = true;
-      });
-      Get.rawSnackbar(title: 'خطأ', message: 'فشل إزالة الإعلان من المفضلة', duration: Duration(seconds: 2));
-      debugPrint('removeFavorite error: $e');
+      return;
     }
-  } else {
-    // افتح اختيار المجموعة — الإضافة الفعلية تُجرى لاحقاً بعد تأكيد إعدادات الإشعارات
-    _showFavoriteGroups();
+
+    final favCtrl = _ensureFavoritesController();
+
+    if (_isFavorite) {
+      setState(() => _isFavorite = false);
+
+      try {
+        await favCtrl.removeFavorite(userId: userId, adId: _ad!.id);
+        await _loadingController.unsubscribeFromTopicPublic('AdId_${_ad!.id}');
+        Get.rawSnackbar(
+          title: 'نجاح',
+          message: 'تمت الإزالة من المفضلة',
+          duration: const Duration(seconds: 2),
+        );
+      } catch (e) {
+        setState(() => _isFavorite = true);
+        Get.rawSnackbar(
+          title: 'خطأ',
+          message: 'فشل إزالة الإعلان من المفضلة',
+          duration: const Duration(seconds: 2),
+        );
+        debugPrint('removeFavorite error: $e');
+      }
+    } else {
+      _showFavoriteGroups();
+    }
   }
-}
 
-void _showFavoriteGroups() async {
-  final userId = _loadingController.currentUser?.id;
-  if (userId == null) return;
+  void _showFavoriteGroups() async {
+    final userId = _loadingController.currentUser?.id;
+    if (userId == null) return;
 
-  await _favoriteGroupsController.fetchGroups(userId: userId);
+    final groupsCtrl = _ensureFavoriteGroupsController();
+    await groupsCtrl.fetchGroups(userId: userId);
 
-  final isDarkMode = Get.find<ThemeController>().isDarkMode.value;
-  final cardColor = AppColors.surface(isDarkMode);
-  final dividerColor = AppColors.divider(isDarkMode);
+    final isDarkMode = Get.find<ThemeController>().isDarkMode.value;
+    final cardColor = AppColors.surface(isDarkMode);
+    final dividerColor = AppColors.divider(isDarkMode);
 
-  // استخدم builder context داخل Get.dialog، ونستخدم Navigator.pop(context) داخلياً لإغلاق دون تعارض
-  Get.dialog(
-    Builder(builder: (ctx) {
-      return Center(
-        child: Container(
-          width: MediaQuery.of(ctx).size.width * 0.30,
-          padding: EdgeInsets.all(20.w),
-          margin: EdgeInsets.all(20.w),
-          decoration: BoxDecoration(
-            color: cardColor,
-            borderRadius: BorderRadius.circular(16.r),
-          ),
-          child: Material(
-            color: Colors.transparent,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // زر الإغلاق باستخدام السياق المحلي
-                Align(
-                  alignment: Alignment.topRight,
-                  child: IconButton(
-                    icon: Icon(Icons.close, size: 24.w),
-                    onPressed: () => Navigator.of(ctx).pop(),
-                  ),
-                ),
-
-                Padding(
-                  padding: EdgeInsets.only(top: 8.h, bottom: 16.h),
-                  child: Center(
-                    child: Text('احفظ في قائمة المفضلة',
-                        style: TextStyle(
-                            fontSize: AppTextStyles.medium,
-                            fontWeight: FontWeight.bold,
-                            fontFamily: AppTextStyles.appFontFamily)),
-                  ),
-                ),
-
-                Divider(height: 1.h, thickness: 0.8, color: dividerColor),
-                SizedBox(height: 16.h),
-
-                Obx(() {
-                  if (_favoriteGroupsController.isLoading.value) {
-                    return Center(child: CircularProgressIndicator());
-                  }
-
-                  if (_favoriteGroupsController.groups.isEmpty) {
-                    return Padding(
-                      padding: EdgeInsets.symmetric(vertical: 16.h),
-                      child: Text('لا توجد مجموعات مفضلة', style: TextStyle(fontFamily: AppTextStyles.appFontFamily)),
-                    );
-                  }
-
-                  return Container(
-                    constraints: BoxConstraints(maxHeight: 200.h),
-                    child: ListView.builder(
-                      shrinkWrap: true,
-                      itemCount: _favoriteGroupsController.groups.length,
-                      itemBuilder: (context, index) {
-                        final group = _favoriteGroupsController.groups[index];
-                        return ListTile(
-                          contentPadding: EdgeInsets.symmetric(horizontal: 8.w),
-                          title: Center(
-                            child: Text(group.name,
-                                style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: 16.sp)),
-                          ),
-                          onTap: () {
-                            // close current dialog via local context, then show notification dialog
-                            Navigator.of(ctx).pop();
-                            final double? currentPrice = _parsePriceDynamic(widget.ad!.price);
-                            _showPriceNotificationDialog(userId, group.id, currentPrice: currentPrice);
-                          },
-                        );
-                      },
-                    ),
-                  );
-                }),
-
-                SizedBox(height: 24.h),
-
-                InkWell(
-                  onTap: () {
-                    Navigator.of(ctx).pop();
-                    _createNewGroup(userId,ctx);
-                  },
-                  child: Text('إنشاء قائمة جديدة',
-                      style: TextStyle(
-                          fontFamily: AppTextStyles.appFontFamily,
-                          fontSize: AppTextStyles.medium,
-                          color: AppColors.buttonAndLinksColor,
-                          fontWeight: FontWeight.bold)),
-                ),
-              ],
+    Get.dialog(
+      Builder(builder: (ctx) {
+        return Center(
+          child: Container(
+            width: MediaQuery.of(ctx).size.width * 0.30,
+            padding: EdgeInsets.all(20.w),
+            margin: EdgeInsets.all(20.w),
+            decoration: BoxDecoration(
+              color: cardColor,
+              borderRadius: BorderRadius.circular(16.r),
             ),
-          ),
-        ),
-      );
-    }),
-    barrierDismissible: true,
-  );
-}
-/// عرض دياج إنشاء مجموعة جديدة (نفس تصميم الدياج الحديث)
-Future<void> _createNewGroup(int userId, BuildContext ctx) async {
-  final nameController = TextEditingController();
-  final isDark = Get.find<ThemeController>().isDarkMode.value;
-  final cardColor = AppColors.card(isDark);
-  final textColor = AppColors.textPrimary(isDark);
-
-  await Get.dialog(
-    Dialog(
-      backgroundColor: cardColor,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
-      insetPadding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 24.h), // مسافة من الحواف
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(ctx).size.width * 0.3, // 👈 30% من عرض الشاشة
-        ),
-        child: Padding(
-          padding: EdgeInsets.all(16.w),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'إنشاء مجموعة جديدة'.tr,
-                style: TextStyle(
-                  fontFamily: AppTextStyles.appFontFamily,
-                  fontSize: AppTextStyles.xlarge,
-                  fontWeight: FontWeight.bold,
-                  color: textColor,
-                ),
-              ),
-              SizedBox(height: 16.h),
-              TextField(
-                controller: nameController,
-                decoration: InputDecoration(
-                  labelText: 'اسم المجموعة'.tr,
-                  labelStyle: TextStyle(
-                    fontFamily: AppTextStyles.appFontFamily,
-                    color: AppColors.textSecondary(isDark),
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8.r),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8.r),
-                    borderSide: BorderSide(color: AppColors.primary),
-                  ),
-                ),
-              ),
-              SizedBox(height: 24.h),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
+            child: Material(
+              color: Colors.transparent,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  TextButton(
-                    onPressed: () => Get.back(),
-                    child: Text(
-                      'إلغاء'.tr,
-                      style: TextStyle(
-                        fontFamily: AppTextStyles.appFontFamily,
-                        color: AppColors.textSecondary(isDark),
+                  Align(
+                    alignment: Alignment.topRight,
+                    child: IconButton(
+                      icon: Icon(Icons.close, size: 24.w),
+                      onPressed: () => Navigator.of(ctx).pop(),
+                    ),
+                  ),
+                  Padding(
+                    padding: EdgeInsets.only(top: 8.h, bottom: 16.h),
+                    child: Center(
+                      child: Text(
+                        'احفظ في قائمة المفضلة',
+                        style: TextStyle(
+                          fontSize: AppTextStyles.medium,
+                          fontWeight: FontWeight.bold,
+                          fontFamily: AppTextStyles.appFontFamily,
+                        ),
                       ),
                     ),
                   ),
-                  ElevatedButton(
-                    onPressed: () async {
-                      final name = nameController.text.trim();
-                      if (name.isEmpty) {
-                        Get.snackbar('', 'من فضلك أدخل اسم المجموعة'.tr,
-                          snackPosition: SnackPosition.BOTTOM,
-                          duration: Duration(seconds: 2));
-                        return;
-                      }
+                  Divider(height: 1.h, thickness: 0.8, color: dividerColor),
+                  SizedBox(height: 16.h),
+                  Obx(() {
+                    if (groupsCtrl.isLoading.value) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
 
-                      Get.back();
+                    if (groupsCtrl.groups.isEmpty) {
+                      return Padding(
+                        padding: EdgeInsets.symmetric(vertical: 16.h),
+                        child: Text(
+                          'لا توجد مجموعات مفضلة',
+                          style: TextStyle(
+                              fontFamily: AppTextStyles.appFontFamily),
+                        ),
+                      );
+                    }
 
-                      try {
-                        final newGroup = await _favoriteGroupsController.createGroup(
-                          userId: userId,
-                          name: name,
-                        );
-
-                        if (newGroup != null) {
-                          Get.snackbar('نجاح'.tr, 'تم إنشاء مجموعة جديدة'.tr,
-                            snackPosition: SnackPosition.BOTTOM,
-                            duration: Duration(seconds: 2));
-
-                          await _favoriteGroupsController.fetchGroups(userId: userId);
-                          _showFavoriteGroups();
-                        } else {
-                          Get.snackbar('خطأ'.tr, 'فشل إنشاء المجموعة'.tr,
-                            snackPosition: SnackPosition.BOTTOM,
-                            duration: Duration(seconds: 2));
-                        }
-                      } catch (e, st) {
-                        debugPrint('createGroup error: $e\n$st');
-                        Get.snackbar('خطأ'.tr, 'حدث خطأ أثناء الإنشاء'.tr,
-                          snackPosition: SnackPosition.BOTTOM,
-                          duration: Duration(seconds: 2));
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8.r),
+                    return Container(
+                      constraints: BoxConstraints(maxHeight: 200.h),
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: groupsCtrl.groups.length,
+                        itemBuilder: (context, index) {
+                          final group = groupsCtrl.groups[index];
+                          return ListTile(
+                            contentPadding:
+                                EdgeInsets.symmetric(horizontal: 8.w),
+                            title: Center(
+                              child: Text(
+                                group.name,
+                                style: TextStyle(
+                                  fontFamily: AppTextStyles.appFontFamily,
+                                  fontSize: 16.sp,
+                                ),
+                              ),
+                            ),
+                            onTap: () {
+                              Navigator.of(ctx).pop();
+                              final double? currentPrice =
+                                  _parsePriceDynamic(_ad!.price);
+                              _showPriceNotificationDialog(
+                                userId,
+                                group.id,
+                                currentPrice: currentPrice,
+                              );
+                            },
+                          );
+                        },
                       ),
-                    ),
+                    );
+                  }),
+                  SizedBox(height: 24.h),
+                  InkWell(
+                    onTap: () {
+                      Navigator.of(ctx).pop();
+                      _createNewGroup(userId, ctx);
+                    },
                     child: Text(
-                      'إنشاء'.tr,
+                      'إنشاء قائمة جديدة',
                       style: TextStyle(
                         fontFamily: AppTextStyles.appFontFamily,
-                        color: Colors.white,
+                        fontSize: AppTextStyles.medium,
+                        color: AppColors.buttonAndLinksColor,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),
                 ],
               ),
-            ],
-          ),
-        ),
-      ),
-    ),
-    barrierDismissible: true,
-  );
-}
-
-
-/// دياج الإعدادات قبل الإضافة — يعرض السعر كما هو (ل.س) ويتيح "اعلام دائماً" أو الذهاب لصفحة تحديد السعر
-void _showPriceNotificationDialog(int userId, int groupId, {double? currentPrice}) {
-  final isDarkMode = Get.find<ThemeController>().isDarkMode.value;
-  final cardColor = AppColors.surface(isDarkMode);
-  final textColor = AppColors.textPrimary(isDarkMode);
-  final dividerColor = AppColors.divider(isDarkMode);
-
-  final displayPrice = currentPrice != null ? NumberFormat('#,###', 'en_US').format(currentPrice) : (widget.ad!.price?.toString() ?? '-');
-
-  Get.dialog(
-    Builder(builder: (ctx) {
-      return Center(
-        child: Container(
-          width: MediaQuery.of(ctx).size.width * 0.30,
-          padding: EdgeInsets.symmetric(horizontal: 18.w, vertical: 14.h),
-          decoration: BoxDecoration(
-            color: cardColor,
-            borderRadius: BorderRadius.circular(12.r),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 18, offset: Offset(0, 6))],
-          ),
-          child: Material(
-            color: Colors.transparent,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SizedBox(height: 8.h),
-                Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 8.w),
-                  child: Text(
-                    'اختر إعدادات الإشعار والإضافة للمفضلة',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: AppTextStyles.medium, fontWeight: FontWeight.w700, color: textColor),
-                  ),
-                ),
-              
-                SizedBox(height: 16.h),
-                Divider(height: 1.h, thickness: 0.9, color: dividerColor),
-                SizedBox(height: 12.h),
-
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton(
-                    onPressed: () {
-                      Navigator.of(ctx).pop();
-                      _showSetPriceDialog(userId, groupId, currentPrice: currentPrice);
-                    },
-                    style: OutlinedButton.styleFrom(padding: EdgeInsets.symmetric(vertical: 14.h), side: BorderSide(color: AppColors.primary, width: 1.6), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.r)), backgroundColor: Colors.transparent),
-                    child: Text('أعلمني عندما ينخفض السعر إلى ما دون السعر المحدد', textAlign: TextAlign.center, style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: AppTextStyles.medium, fontWeight: FontWeight.w600, color: AppColors.primary)),
-                  ),
-                ),
-
-                SizedBox(height: 12.h),
-
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () async {
-                      // "اعلام دائماً": اضف المفضلة الآن مع notifyEmail=true notifyPush=true notifyOnAnyChange=true
-                      Navigator.of(ctx).pop();
-                      final notif = NotificationSettings(
-                        notifyEmail: true,
-                        notifyPush: true,
-                        notifyOnAnyChange: true,
-                        minPrice: null,
-                        lastNotifiedPrice: null,
-                      );
-
-                      final success = await _favoritesController.addFavorite(
-                        userId: userId,
-                        adId: widget.ad!.id,
-                        favoriteGroupId: groupId,
-                        notificationSettings: notif,
-                      );
-
-                      final loading = Get.find<LoadingController>();
-                      final topic = 'AdId_${widget.ad!.id}';
-
-                      if (success) {
-                        await loading.subscribeToTopicPublic(topic);
-                        setState(() {
-                          _isFavorite = true;
-                        });
-                        Get.rawSnackbar(title: 'تم التفعيل', message: 'تمت الإضافة للمفضلة وتفعيل الإشعارات', duration: Duration(seconds: 2));
-                      } else {
-                        Get.rawSnackbar(title: 'خطأ', message: 'فشل حفظ التفضيلات', duration: Duration(seconds: 2));
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(padding: EdgeInsets.symmetric(vertical: 14.h), elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.r)), backgroundColor: AppColors.buttonAndLinksColor),
-                    child: Text('اعلام دائماً', style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: AppTextStyles.medium, fontWeight: FontWeight.w700, color: Colors.white)),
-                  ),
-                ),
-
-                SizedBox(height: 6.h),
-              ],
             ),
           ),
-        ),
-      );
-    }),
-    barrierDismissible: true,
-  );
-}
-
-/// شاشة تحديد السعر — تفاعلية، تستخدم سياق builder محلي لكل زر إغلاق/حفظ
-void _showSetPriceDialog(int userId, int groupId, {double? currentPrice}) {
-  final isDarkMode = Get.find<ThemeController>().isDarkMode.value;
-  final cardColor = AppColors.surface(isDarkMode);
-  final textColor = AppColors.textPrimary(isDarkMode);
-  final dividerColor = AppColors.divider(isDarkMode);
-
-  final priceController = TextEditingController();
-  if (currentPrice != null) {
-    // عرض السعر كما هو (بدون ضرب ×10)
-    priceController.text = NumberFormat('#,###', 'en_US').format(currentPrice);
-  }
-
-  Get.dialog(
-    Builder(builder: (ctx) {
-      // المتغيرات تُعرف هنا (خارج StatefulBuilder) حتى لا تُعاد تهيئتها عند كل rebuild
-      int selectedRadio = 2; // 1=every change, 2=below target, 3=mute
-      bool notifyEmail = true;
-      bool notifyMobile = true;
-
-      bool showTargetInput() => selectedRadio == 2;
-
-      return Center(
-        child: Material(
-          color: Colors.transparent,
-          child: Container(
-            width: MediaQuery.of(ctx).size.width * 0.46,
-            height: MediaQuery.of(ctx).size.height * 0.72,
-            padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
-            decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(8.r)),
-            child: StatefulBuilder(builder: (context, setState) {
-              return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                // Header: Title + Close
-                Row(children: [
-                  Expanded(
-                    child: Text(
-                      'إشعارات الأسعار',
-                      style: TextStyle(
-                        fontFamily: AppTextStyles.appFontFamily,
-                        fontSize: AppTextStyles.xxlarge,
-                        fontWeight: FontWeight.w800,
-                        color: textColor,
-                      ),
-                    ),
-                  ),
-                  InkWell(
-                    onTap: () => Navigator.of(ctx).pop(),
-                    child: Padding(padding: EdgeInsets.all(6.w), child: Icon(Icons.close, size: 22.w, color: textColor)),
-                  ),
-                ]),
-
-                SizedBox(height: 10.h),
-                Container(height: 8.h, color: dividerColor.withOpacity(0.25)),
-                SizedBox(height: 10.h),
-
-                // Body (scrollable)
-                Expanded(
-                  child: SingleChildScrollView(
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                      Text(
-                        'نوع الإشعار',
-                        style: TextStyle(
-                          fontFamily: AppTextStyles.appFontFamily,
-                          fontSize: AppTextStyles.medium,
-                          fontWeight: FontWeight.w700,
-                          color: textColor,
-                        ),
-                      ),
-                      SizedBox(height: 8.h),
-
-                      // Radio 1: كل مرة
-                      InkWell(
-                        onTap: () => setState(() => selectedRadio = 1),
-                        child: Row(
-                          children: [
-                            Radio<int>(
-                              value: 1,
-                              groupValue: selectedRadio,
-                              onChanged: (v) => setState(() => selectedRadio = v ?? selectedRadio),
-                              activeColor: AppColors.primary,
-                            ),
-                            Expanded(
-                              child: Text(
-                                'أعلمني في كل مرة يتغير فيها السعر',
-                                style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: AppTextStyles.medium, color: textColor),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      // Radio 2: سعر محدد
-                      InkWell(
-                        onTap: () => setState(() => selectedRadio = 2),
-                        child: Row(
-                          children: [
-                            Radio<int>(
-                              value: 2,
-                              groupValue: selectedRadio,
-                              onChanged: (v) => setState(() => selectedRadio = v ?? selectedRadio),
-                              activeColor: AppColors.primary,
-                            ),
-                            Expanded(
-                              child: Text(
-                                'أعلمني عندما ينخفض السعر إلى ما دون السعر المحدد',
-                                style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: AppTextStyles.medium, color: textColor),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      SizedBox(height: 12.h),
-
-                      Text(
-                        'السعر الحالي (ل.س)',
-                        style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: AppTextStyles.medium, fontWeight: FontWeight.w700, color: textColor),
-                      ),
-                      SizedBox(height: 8.h),
-                      TextField(
-                        enabled: false,
-                        decoration: InputDecoration(
-                          hintText: currentPrice != null ? NumberFormat('#,###', 'en_US').format(currentPrice) : (widget.ad!.price?.toString() ?? '-'),
-                          filled: true,
-                          fillColor: Theme.of(context).brightness == Brightness.dark ? Colors.white.withOpacity(0.03) : Colors.grey.shade100,
-                          disabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6.r), borderSide: BorderSide(color: Colors.grey.shade300)),
-                        ),
-                      ),
-
-                      SizedBox(height: 12.h),
-
-                      // الحقل الظاهر فقط لو اخترنا السعر المحدد
-                      if (showTargetInput()) ...[
-                        Text(
-                          'السعر الذي حددته (ل.س)',
-                          style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: AppTextStyles.medium, fontWeight: FontWeight.w700, color: textColor),
-                        ),
-                        SizedBox(height: 8.h),
-                        TextField(
-                          controller: priceController,
-                          keyboardType: TextInputType.numberWithOptions(decimal: true),
-                          inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
-                          decoration: InputDecoration(hintText: 'أدخل السعر الذي حددته', border: OutlineInputBorder(borderRadius: BorderRadius.circular(6.r))),
-                        ),
-                        SizedBox(height: 12.h),
-                      ],
-
-                      // Radio 3: كتم
-                      InkWell(
-                        onTap: () => setState(() => selectedRadio = 3),
-                        child: Row(
-                          children: [
-                            Radio<int>(
-                              value: 3,
-                              groupValue: selectedRadio,
-                              onChanged: (v) => setState(() => selectedRadio = v ?? selectedRadio),
-                              activeColor: AppColors.primary,
-                            ),
-                            Expanded(
-                              child: Text(
-                                'كتم إشعارات الأسعار',
-                                style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: AppTextStyles.medium, color: textColor),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      SizedBox(height: 12.h),
-                      Divider(height: 1.h, thickness: 0.8, color: dividerColor),
-                      SizedBox(height: 12.h),
-
-                      Text('قناة الإشعارات', style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: AppTextStyles.medium, fontWeight: FontWeight.w700, color: textColor)),
-                      SizedBox(height: 10.h),
-
-                      // Email checkbox
-                      GestureDetector(
-                        onTap: () => setState(() => notifyEmail = !notifyEmail),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 28.w,
-                              height: 28.w,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(6.r),
-                                border: Border.all(color: AppColors.textSecondary(isDarkMode), width: 1.2),
-                                color: notifyEmail ? AppColors.primary : Colors.transparent,
-                              ),
-                              child: notifyEmail ? Icon(Icons.check, size: 18.w, color: Colors.white) : SizedBox.shrink(),
-                            ),
-                            SizedBox(width: 10.w),
-                            Text('إشعار البريد الإلكتروني', style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: AppTextStyles.medium, color: textColor)),
-                          ],
-                        ),
-                      ),
-                      SizedBox(height: 12.h),
-
-                      // Mobile checkbox
-                      GestureDetector(
-                        onTap: () => setState(() => notifyMobile = !notifyMobile),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 28.w,
-                              height: 28.w,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(6.r),
-                                border: Border.all(color: AppColors.buttonAndLinksColor, width: 1.2),
-                                color: notifyMobile ? AppColors.buttonAndLinksColor : Colors.transparent,
-                              ),
-                              child: notifyMobile ? Icon(Icons.check, size: 18.w, color: Colors.white) : SizedBox.shrink(),
-                            ),
-                            SizedBox(width: 10.w),
-                            Text('إشعارات الهاتف المحمول', style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: AppTextStyles.medium, color: textColor)),
-                          ],
-                        ),
-                      ),
-
-                      SizedBox(height: 16.h),
-                    ]),
-                  ),
-                ),
-
-                // Footer buttons
-                SizedBox(height: 8.h),
-                Row(children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.of(ctx).pop(),
-                      style: OutlinedButton.styleFrom(side: BorderSide(color: AppColors.buttonAndLinksColor, width: 1.4), padding: EdgeInsets.symmetric(vertical: 12.h), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.r))),
-                      child: Text('إلغاء', style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: AppTextStyles.medium, color: AppColors.buttonAndLinksColor, fontWeight: FontWeight.w600)),
-                    ),
-                  ),
-                  SizedBox(width: 12.w),
-                  Expanded(
-                    child: ElevatedButton(
-                     onPressed: () async {
-  // تحقق إدخال السعر لو وضع target
-  if (selectedRadio == 2 && priceController.text.trim().isEmpty) {
-    Get.snackbar('', 'من فضلك أدخل السعر الذي تريده', snackPosition: SnackPosition.BOTTOM,
-      margin: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
-      backgroundColor: Colors.black87, colorText: Colors.white, duration: Duration(seconds: 2));
-    return;
-  }
-
-  // parse targetPrice (المستخدم يدخل بالل.س مباشرة)
-  double? targetPrice;
-  if (priceController.text.trim().isNotEmpty) {
-    final normalized = priceController.text.replaceAll('.', '').replaceAll(',', '').trim();
-    try {
-      targetPrice = double.parse(normalized);
-    } catch (e) {
-      targetPrice = null;
-    }
-  }
-
-  // قرّر وضع الحفظ (mode) والقيم التي نمرّرها للدالة الموحدة
-  final mode = selectedRadio; // 1,2,3
-  bool passNotifyEmail;
-  bool passNotifyMobile;
-
-  if (mode == 3) {
-    passNotifyEmail = false;
-    passNotifyMobile = false;
-  } else if (mode == 1) {
-    passNotifyEmail = true;
-    passNotifyMobile = true;
-  } else {
-    // mode == 2 -> نمرر ما اختاره المستخدم في الشيكبوكس
-    passNotifyEmail = notifyEmail;
-    passNotifyMobile = notifyMobile;
-  }
-
-  // استدعي الدالة الموحدة
-  final bool ok = await _setNotificationPreference(
-    userId,
-    groupId,
-    targetPrice,
-    mode: mode,
-    notifyEmail: passNotifyEmail,
-    notifyMobile: passNotifyMobile,
-  );
-
-  if (ok) {
-    Navigator.of(ctx).pop(); // أغلق الدياج بعد النجاح
-  } else {
-    // الدالة عرضت سناك خطأ؛ يمكنك هنا إبقاء الدياج مفتوح للسماح للمستخدم بالمحاولة
-  }
-},
-
-                      style: ElevatedButton.styleFrom(backgroundColor: AppColors.buttonAndLinksColor, padding: EdgeInsets.symmetric(vertical: 12.h), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.r))),
-                      child: Text('حفظ', style: TextStyle(fontFamily: AppTextStyles.appFontFamily, fontSize: AppTextStyles.medium, color: Colors.white, fontWeight: FontWeight.w700)),
-                    ),
-                  ),
-                ]),
-              ]);
-            }),
-          ),
-        ),
-      );
-    }),
-    barrierDismissible: true,
-  );
-}
-
-
-// دالة منفصلة تبقى متاحة إذا أردت استدعاء تحديث لاحقاً
-/// ------------ دالة موحّدة لحفظ/تحديث تفضيلات الإشعار وإدارة الاشتراكات ------------
-Future<bool> _setNotificationPreference(int userId, int groupId, double? targetPrice, {
-  required int mode, // 1=every change,2=when below target,3=mute
-  required bool notifyEmail,
-  required bool notifyMobile,
-}) async {
-  final notif = NotificationSettings(
-    notifyEmail: notifyEmail,
-    notifyPush: notifyMobile,
-    notifyOnAnyChange: mode == 1,
-    minPrice: mode == 2 ? targetPrice : null,
-    lastNotifiedPrice: null,
-  );
-
-  try {
-    final success = await _favoritesController.addFavorite(
-      userId: userId,
-      adId: widget.ad!.id,
-      favoriteGroupId: groupId,
-      notificationSettings: notif,
+        );
+      }),
+      barrierDismissible: true,
     );
-
-    final loading = Get.find<LoadingController>();
-    final topic = 'AdId_${widget.ad!.id}';
-
-    if (!success) {
-      Get.rawSnackbar(title: 'خطأ', message: 'فشل حفظ تفضيلات الإشعارات', duration: Duration(seconds: 2));
-      return false;
-    }
-
-    // إدارة اشتراكات FCM
-    if (mode == 3) {
-      // كتم → إلغاء الاشتراك من القناة
-      await loading.unsubscribeFromTopicPublic(topic);
-    } else {
-      if (notifyMobile) {
-        await loading.subscribeToTopicPublic(topic);
-      } else {
-        await loading.unsubscribeFromTopicPublic(topic);
-      }
-    }
-
-    // تحديث الواجهة محليًا
-    setState(() {
-      _isFavorite = true;
-    });
-
-    Get.rawSnackbar(title: 'تم الحفظ', message: 'تم تعيين تفضيلات الإشعارات بنجاح', duration: Duration(seconds: 2));
-    return true;
-  } catch (e, st) {
-    debugPrint('Exception in _setNotificationPreference: $e\n$st');
-    Get.rawSnackbar(title: 'خطأ', message: 'حدث خطأ أثناء حفظ التفضيلات', duration: Duration(seconds: 2));
-    return false;
   }
-}void _handleReportAd() {
-  final user = Get.find<LoadingController>().currentUser;
-  if (user == null) {
-    Get.snackbar(
-      'تنبيه'.tr, 
-      'يجب تسجيل الدخول لتقديم بلاغ'.tr,
-      snackPosition: SnackPosition.BOTTOM,
-      duration: Duration(seconds: 3),
-    );
-    return;
-  }
-  
-  // إذا كان المستخدم مسجلاً، اعرض نموذج الإبلاغ
-  _showReportDialog();
-}
 
-void _showReportDialog() {
-  final isDarkMode = Get.find<ThemeController>().isDarkMode.value;
-  final cardColor = AppColors.surface(isDarkMode);
-  final textColor = AppColors.textPrimary(isDarkMode);
-  final successColor = Colors.green;
-  final errorColor = Colors.red;
-  final AdReportController _reportController = Get.put(AdReportController());
+  Future<void> _createNewGroup(int userId, BuildContext ctx) async {
+    final groupsCtrl = _ensureFavoriteGroupsController();
 
+    final nameController = TextEditingController();
+    final isDark = Get.find<ThemeController>().isDarkMode.value;
+    final cardColor = AppColors.card(isDark);
+    final textColor = AppColors.textPrimary(isDark);
 
-  Get.dialog(
-    StatefulBuilder(
-      builder: (context, setState) {
-        // نقل المتغيرات داخل StatefulBuilder
-        String selectedReason = 'إعلان مخالف';
-        TextEditingController detailsController = TextEditingController();
-        bool isLoading = false;
-        String? message;
-        bool isSuccess = false;
-
-        Future<void> submitReport() async {
-          setState(() {
-            isLoading = true;
-            message = null;
-          });
-
-          try {
-            final Map<String, dynamic> reportData = {
-              'ad_id': widget.ad?.id??0,
-              'reason': selectedReason,
-              'details': detailsController.text,
-              'reporter_id': Get.find<LoadingController>().currentUser?.id,
-            };
-
-            final success = await _reportController.createReport(reportData);
-
-            setState(() {
-              isLoading = false;
-              isSuccess = success;
-              message = success 
-                  ? 'تم استلام بلاغك وسيتم مراجعته'.tr
-                  : 'فشل في إرسال البلاغ'.tr;
-            });
-
-            if (success) {
-              await Future.delayed(Duration(seconds: 2));
-              if (context.mounted) {
-                Get.back();
-                Get.snackbar(
-                  'شكراً لك'.tr,
-                  'تم استلام بلاغك وسيتم مراجعته'.tr,
-                  snackPosition: SnackPosition.BOTTOM,
-                  backgroundColor: successColor,
-                  colorText: Colors.white,
-                  duration: Duration(seconds: 3),
-                );
-              }
-            }
-          } catch (e) {
-            setState(() {
-              isLoading = false;
-              isSuccess = false;
-              message = 'حدث خطأ أثناء إرسال البلاغ'.tr;
-            });
-          }
-        }
-
-        return Dialog(
-          backgroundColor: cardColor,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20.r),
+    await Get.dialog(
+      Dialog(
+        backgroundColor: cardColor,
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+        insetPadding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 24.h),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: MediaQuery.of(ctx).size.width * 0.3,
           ),
-          elevation: 5,
-          child: Container(
-            padding: EdgeInsets.all(24.w),
+          child: Padding(
+            padding: EdgeInsets.all(16.w),
             child: Column(
               mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // العنوان
-                Center(
-                  child: Text(
-                    'الإبلاغ عن إعلان مخالف'.tr,
-                    style: TextStyle(
-                      fontSize: AppTextStyles.xxlarge,
-                      fontWeight: FontWeight.bold,
-                      color: textColor,
-                      fontFamily: AppTextStyles.appFontFamily,
-                    ),
-                  ),
-                ),
-                SizedBox(height: 24.h),
-                
-                // سبب الإبلاغ
                 Text(
-                  'سبب الإبلاغ'.tr,
+                  'إنشاء مجموعة جديدة'.tr,
                   style: TextStyle(
-                    fontSize: AppTextStyles.medium,
-                    fontWeight: FontWeight.w600,
-                    color: textColor,
                     fontFamily: AppTextStyles.appFontFamily,
-                  ),
-                ),
-                SizedBox(height: 8.h),
-                
-                // قائمة أسباب الإبلاغ - تم إصلاح مشكلة التحديث
-                Container(
-                  width: double.infinity,
-                  padding: EdgeInsets.symmetric(horizontal: 16.w),
-                  decoration: BoxDecoration(
-                    color: isDarkMode ? Colors.grey[800] : Colors.grey[100],
-                  
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      value: selectedReason,
-                      isExpanded: true,
-                      icon: Icon(Icons.arrow_drop_down,
-                          color: textColor.withOpacity(0.7)),
-                      items: [
-                        'إعلان مخالف',
-                        'إعلان مكرر',
-                        'معلومات خاطئة',
-                        'احتيال',
-                        'محتوى غير لائق',
-                        'أخرى'
-                      ].map((String value) {
-                        return DropdownMenuItem<String>(
-                          value: value,
-                          child: Text(
-                            value.tr,
-                            style: TextStyle(
-                              fontSize: AppTextStyles.medium,
-                              fontFamily: AppTextStyles.appFontFamily,
-                              color: textColor,
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                      onChanged: isLoading
-                          ? null
-                          : (newValue) {
-                              setState(() {
-                                selectedReason = newValue!;
-                              });
-                            },
-                    ),
-                  ),
-                ),
-                SizedBox(height: 20.h),
-                
-                // تفاصيل الإبلاغ
-                Text(
-                  'تفاصيل الإبلاغ (اختياري)'.tr,
-                  style: TextStyle(
-                    fontSize: AppTextStyles.medium,
-                    fontWeight: FontWeight.w600,
+                    fontSize: AppTextStyles.xlarge,
+                    fontWeight: FontWeight.bold,
                     color: textColor,
-                    fontFamily: AppTextStyles.appFontFamily,
                   ),
                 ),
-                SizedBox(height: 8.h),
-                
+                SizedBox(height: 16.h),
                 TextField(
-                  controller: detailsController,
-                  maxLines: 4,
-                  enabled: !isLoading,
+                  controller: nameController,
                   decoration: InputDecoration(
-                    filled: true,
-                    fillColor: isDarkMode ? Colors.grey[800] : Colors.grey[100],
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12.r),
-                      borderSide: BorderSide.none,
-                    ),
-                    hintText: 'يرجى توضيح سبب الإبلاغ'.tr,
-                    hintStyle: TextStyle(
+                    labelText: 'اسم المجموعة'.tr,
+                    labelStyle: TextStyle(
                       fontFamily: AppTextStyles.appFontFamily,
-                      color: textColor.withOpacity(0.5),
+                      color: AppColors.textSecondary(isDark),
                     ),
-                    contentPadding: EdgeInsets.all(16.w),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8.r),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8.r),
+                      borderSide: BorderSide(color: AppColors.primary),
+                    ),
                   ),
                 ),
                 SizedBox(height: 24.h),
-                
-                // رسالة النتيجة
-                if (message != null)
-                  Container(
-                    width: double.infinity,
-                    padding: EdgeInsets.all(16.w),
-                    decoration: BoxDecoration(
-                      color: isSuccess ? successColor.withOpacity(0.15) : errorColor.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(12.r),
-                      border: Border.all(
-                        color: isSuccess ? successColor : errorColor,
-                        width: 1,
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          isSuccess ? Icons.check_circle : Icons.error,
-                          color: isSuccess ? successColor : errorColor,
-                        ),
-                        SizedBox(width: 8.w),
-                        Expanded(
-                          child: Text(
-                            message!,
-                            style: TextStyle(
-                              color: isSuccess ? successColor : errorColor,
-                              fontFamily: AppTextStyles.appFontFamily,
-                              fontSize: AppTextStyles.medium,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                if (message != null) SizedBox(height: 16.h),
-                
-                // أزرار الإجراءات
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    // زر الإلغاء
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: isLoading ? null : () => Get.back(),
-                        style: OutlinedButton.styleFrom(
-                          padding: EdgeInsets.symmetric(vertical: 16.h),
-                          side: BorderSide(
-                              color: AppColors.buttonAndLinksColor),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12.r),
-                          ),
+                    TextButton(
+                      onPressed: () => Get.back(),
+                      child: Text(
+                        'إلغاء'.tr,
+                        style: TextStyle(
+                          fontFamily: AppTextStyles.appFontFamily,
+                          color: AppColors.textSecondary(isDark),
                         ),
-                        child: Text('إلغاء'.tr,
-                            style: TextStyle(
-                                fontFamily: AppTextStyles.appFontFamily)),
                       ),
                     ),
-                    SizedBox(width: 16.w),
-                    
-                    // زر الإرسال
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: isLoading ? null : submitReport,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.buttonAndLinksColor,
-                          padding: EdgeInsets.symmetric(vertical: 16.h),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12.r),
-                          ),
+                    ElevatedButton(
+                      onPressed: () async {
+                        final name = nameController.text.trim();
+                        if (name.isEmpty) {
+                          Get.snackbar('', 'من فضلك أدخل اسم المجموعة'.tr,
+                              snackPosition: SnackPosition.BOTTOM,
+                              duration: const Duration(seconds: 2));
+                          return;
+                        }
+
+                        Get.back();
+
+                        try {
+                          final newGroup = await groupsCtrl.createGroup(
+                            userId: userId,
+                            name: name,
+                          );
+
+                          if (newGroup != null) {
+                            Get.snackbar('نجاح'.tr, 'تم إنشاء مجموعة جديدة'.tr,
+                                snackPosition: SnackPosition.BOTTOM,
+                                duration: const Duration(seconds: 2));
+
+                            await groupsCtrl.fetchGroups(userId: userId);
+                            _showFavoriteGroups();
+                          } else {
+                            Get.snackbar('خطأ'.tr, 'فشل إنشاء المجموعة'.tr,
+                                snackPosition: SnackPosition.BOTTOM,
+                                duration: const Duration(seconds: 2));
+                          }
+                        } catch (e, st) {
+                          debugPrint('createGroup error: $e\n$st');
+                          Get.snackbar('خطأ'.tr, 'حدث خطأ أثناء الإنشاء'.tr,
+                              snackPosition: SnackPosition.BOTTOM,
+                              duration: const Duration(seconds: 2));
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8.r),
                         ),
-                        child: isLoading
-                            ? SizedBox(
-                                width: 20.w,
-                                height: 20.h,
-                                child: CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : Text('إرسال البلاغ'.tr,
-                                style: TextStyle(
-                                    fontFamily: AppTextStyles.appFontFamily,
-                                    color: Colors.white)),
+                      ),
+                      child: Text(
+                        'إنشاء'.tr,
+                        style: const TextStyle(
+                          color: Colors.white,
+                        ),
                       ),
                     ),
                   ],
@@ -1181,125 +496,1011 @@ void _showReportDialog() {
               ],
             ),
           ),
+        ),
+      ),
+      barrierDismissible: true,
+    );
+  }
+
+  void _showPriceNotificationDialog(int userId, int groupId,
+      {double? currentPrice}) {
+    final isDarkMode = Get.find<ThemeController>().isDarkMode.value;
+    final cardColor = AppColors.surface(isDarkMode);
+    final textColor = AppColors.textPrimary(isDarkMode);
+    final dividerColor = AppColors.divider(isDarkMode);
+
+    Get.dialog(
+      Builder(builder: (ctx) {
+        return Center(
+          child: Container(
+            width: MediaQuery.of(ctx).size.width * 0.30,
+            padding: EdgeInsets.symmetric(horizontal: 18.w, vertical: 14.h),
+            decoration: BoxDecoration(
+              color: cardColor,
+              borderRadius: BorderRadius.circular(12.r),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.12),
+                  blurRadius: 18,
+                  offset: const Offset(0, 6),
+                )
+              ],
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(height: 8.h),
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 8.w),
+                    child: Text(
+                      'اختر إعدادات الإشعار والإضافة للمفضلة',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontFamily: AppTextStyles.appFontFamily,
+                        fontSize: AppTextStyles.medium,
+                        fontWeight: FontWeight.w700,
+                        color: textColor,
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: 16.h),
+                  Divider(height: 1.h, thickness: 0.9, color: dividerColor),
+                  SizedBox(height: 12.h),
+
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton(
+                      onPressed: () {
+                        Navigator.of(ctx).pop();
+                        _showSetPriceDialog(userId, groupId,
+                            currentPrice: currentPrice);
+                      },
+                      style: OutlinedButton.styleFrom(
+                        padding: EdgeInsets.symmetric(vertical: 14.h),
+                        side: BorderSide(color: AppColors.primary, width: 1.6),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8.r)),
+                        backgroundColor: Colors.transparent,
+                      ),
+                      child: Text(
+                        'أعلمني عندما ينخفض السعر إلى ما دون السعر المحدد',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontFamily: AppTextStyles.appFontFamily,
+                          fontSize: AppTextStyles.medium,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  SizedBox(height: 12.h),
+
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () async {
+                        Navigator.of(ctx).pop();
+
+                        final favCtrl = _ensureFavoritesController();
+
+                        final notif = NotificationSettings(
+                          notifyEmail: true,
+                          notifyPush: true,
+                          notifyOnAnyChange: true,
+                          minPrice: null,
+                          lastNotifiedPrice: null,
+                        );
+
+                        final success = await favCtrl.addFavorite(
+                          userId: userId,
+                          adId: _ad!.id,
+                          favoriteGroupId: groupId,
+                          notificationSettings: notif,
+                        );
+
+                        final topic = 'AdId_${_ad!.id}';
+
+                        if (success) {
+                          await _loadingController.subscribeToTopicPublic(topic);
+                          setState(() => _isFavorite = true);
+                          Get.rawSnackbar(
+                            title: 'تم التفعيل',
+                            message: 'تمت الإضافة للمفضلة وتفعيل الإشعارات',
+                            duration: const Duration(seconds: 2),
+                          );
+                        } else {
+                          Get.rawSnackbar(
+                            title: 'خطأ',
+                            message: 'فشل حفظ التفضيلات',
+                            duration: const Duration(seconds: 2),
+                          );
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        padding: EdgeInsets.symmetric(vertical: 14.h),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8.r)),
+                        backgroundColor: AppColors.buttonAndLinksColor,
+                      ),
+                      child: Text(
+                        'اعلام دائماً',
+                        style: TextStyle(
+                          fontFamily: AppTextStyles.appFontFamily,
+                          fontSize: AppTextStyles.medium,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: 6.h),
+                ],
+              ),
+            ),
+          ),
         );
-      },
-    ),
-  );
-}
+      }),
+      barrierDismissible: true,
+    );
+  }
 
+  void _showSetPriceDialog(int userId, int groupId, {double? currentPrice}) {
+    final isDarkMode = Get.find<ThemeController>().isDarkMode.value;
+    final cardColor = AppColors.surface(isDarkMode);
+    final textColor = AppColors.textPrimary(isDarkMode);
+    final dividerColor = AppColors.divider(isDarkMode);
 
-//////////////
+    final priceController = TextEditingController();
+    if (currentPrice != null) {
+      priceController.text = NumberFormat('#,###', 'en_US').format(currentPrice);
+    }
 
+    Get.dialog(
+      Builder(builder: (ctx) {
+        int selectedRadio = 2;
+        bool notifyEmail = true;
+        bool notifyMobile = true;
+
+        bool showTargetInput() => selectedRadio == 2;
+
+        return Center(
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              width: MediaQuery.of(ctx).size.width * 0.46,
+              height: MediaQuery.of(ctx).size.height * 0.72,
+              padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
+              decoration: BoxDecoration(
+                color: cardColor,
+                borderRadius: BorderRadius.circular(8.r),
+              ),
+              child: StatefulBuilder(builder: (context, setState) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'إشعارات الأسعار',
+                            style: TextStyle(
+                              fontFamily: AppTextStyles.appFontFamily,
+                              fontSize: AppTextStyles.xxlarge,
+                              fontWeight: FontWeight.w800,
+                              color: textColor,
+                            ),
+                          ),
+                        ),
+                        InkWell(
+                          onTap: () => Navigator.of(ctx).pop(),
+                          child: Padding(
+                            padding: EdgeInsets.all(6.w),
+                            child: Icon(Icons.close,
+                                size: 22.w, color: textColor),
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 10.h),
+                    Container(height: 8.h, color: dividerColor.withOpacity(0.25)),
+                    SizedBox(height: 10.h),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text(
+                              'نوع الإشعار',
+                              style: TextStyle(
+                                fontFamily: AppTextStyles.appFontFamily,
+                                fontSize: AppTextStyles.medium,
+                                fontWeight: FontWeight.w700,
+                                color: textColor,
+                              ),
+                            ),
+                            SizedBox(height: 8.h),
+                            InkWell(
+                              onTap: () => setState(() => selectedRadio = 1),
+                              child: Row(
+                                children: [
+                                  Radio<int>(
+                                    value: 1,
+                                    groupValue: selectedRadio,
+                                    onChanged: (v) => setState(() =>
+                                        selectedRadio = v ?? selectedRadio),
+                                    activeColor: AppColors.primary,
+                                  ),
+                                  Expanded(
+                                    child: Text(
+                                      'أعلمني في كل مرة يتغير فيها السعر',
+                                      style: TextStyle(
+                                        fontFamily: AppTextStyles.appFontFamily,
+                                        fontSize: AppTextStyles.medium,
+                                        color: textColor,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            InkWell(
+                              onTap: () => setState(() => selectedRadio = 2),
+                              child: Row(
+                                children: [
+                                  Radio<int>(
+                                    value: 2,
+                                    groupValue: selectedRadio,
+                                    onChanged: (v) => setState(() =>
+                                        selectedRadio = v ?? selectedRadio),
+                                    activeColor: AppColors.primary,
+                                  ),
+                                  Expanded(
+                                    child: Text(
+                                      'أعلمني عندما ينخفض السعر إلى ما دون السعر المحدد',
+                                      style: TextStyle(
+                                        fontFamily: AppTextStyles.appFontFamily,
+                                        fontSize: AppTextStyles.medium,
+                                        color: textColor,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            SizedBox(height: 12.h),
+                            Text(
+                              'السعر الحالي (ل.س)',
+                              style: TextStyle(
+                                fontFamily: AppTextStyles.appFontFamily,
+                                fontSize: AppTextStyles.medium,
+                                fontWeight: FontWeight.w700,
+                                color: textColor,
+                              ),
+                            ),
+                            SizedBox(height: 8.h),
+                            TextField(
+                              enabled: false,
+                              decoration: InputDecoration(
+                                hintText: currentPrice != null
+                                    ? NumberFormat('#,###', 'en_US')
+                                        .format(currentPrice)
+                                    : (_ad!.price?.toString() ?? '-'),
+                                filled: true,
+                                fillColor:
+                                    Theme.of(context).brightness == Brightness.dark
+                                        ? Colors.white.withOpacity(0.03)
+                                        : Colors.grey.shade100,
+                                disabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(6.r),
+                                  borderSide:
+                                      BorderSide(color: Colors.grey.shade300),
+                                ),
+                              ),
+                            ),
+                            SizedBox(height: 12.h),
+                            if (showTargetInput()) ...[
+                              Text(
+                                'السعر الذي حددته (ل.س)',
+                                style: TextStyle(
+                                  fontFamily: AppTextStyles.appFontFamily,
+                                  fontSize: AppTextStyles.medium,
+                                  fontWeight: FontWeight.w700,
+                                  color: textColor,
+                                ),
+                              ),
+                              SizedBox(height: 8.h),
+                              TextField(
+                                controller: priceController,
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(decimal: true),
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))
+                                ],
+                                decoration: InputDecoration(
+                                  hintText: 'أدخل السعر الذي حددته',
+                                  border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(6.r)),
+                                ),
+                              ),
+                              SizedBox(height: 12.h),
+                            ],
+                            InkWell(
+                              onTap: () => setState(() => selectedRadio = 3),
+                              child: Row(
+                                children: [
+                                  Radio<int>(
+                                    value: 3,
+                                    groupValue: selectedRadio,
+                                    onChanged: (v) => setState(() =>
+                                        selectedRadio = v ?? selectedRadio),
+                                    activeColor: AppColors.primary,
+                                  ),
+                                  Expanded(
+                                    child: Text(
+                                      'كتم إشعارات الأسعار',
+                                      style: TextStyle(
+                                        fontFamily: AppTextStyles.appFontFamily,
+                                        fontSize: AppTextStyles.medium,
+                                        color: textColor,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            SizedBox(height: 12.h),
+                            Divider(height: 1.h, thickness: 0.8, color: dividerColor),
+                            SizedBox(height: 12.h),
+                            Text(
+                              'قناة الإشعارات',
+                              style: TextStyle(
+                                fontFamily: AppTextStyles.appFontFamily,
+                                fontSize: AppTextStyles.medium,
+                                fontWeight: FontWeight.w700,
+                                color: textColor,
+                              ),
+                            ),
+                            SizedBox(height: 10.h),
+                            GestureDetector(
+                              onTap: () =>
+                                  setState(() => notifyEmail = !notifyEmail),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 28.w,
+                                    height: 28.w,
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(6.r),
+                                      border: Border.all(
+                                        color: AppColors.textSecondary(isDarkMode),
+                                        width: 1.2,
+                                      ),
+                                      color: notifyEmail
+                                          ? AppColors.primary
+                                          : Colors.transparent,
+                                    ),
+                                    child: notifyEmail
+                                        ? Icon(Icons.check,
+                                            size: 18.w, color: Colors.white)
+                                        : const SizedBox.shrink(),
+                                  ),
+                                  SizedBox(width: 10.w),
+                                  Text(
+                                    'إشعار البريد الإلكتروني',
+                                    style: TextStyle(
+                                      fontFamily: AppTextStyles.appFontFamily,
+                                      fontSize: AppTextStyles.medium,
+                                      color: textColor,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            SizedBox(height: 12.h),
+                            GestureDetector(
+                              onTap: () =>
+                                  setState(() => notifyMobile = !notifyMobile),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 28.w,
+                                    height: 28.w,
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(6.r),
+                                      border: Border.all(
+                                          color: AppColors.buttonAndLinksColor,
+                                          width: 1.2),
+                                      color: notifyMobile
+                                          ? AppColors.buttonAndLinksColor
+                                          : Colors.transparent,
+                                    ),
+                                    child: notifyMobile
+                                        ? Icon(Icons.check,
+                                            size: 18.w, color: Colors.white)
+                                        : const SizedBox.shrink(),
+                                  ),
+                                  SizedBox(width: 10.w),
+                                  Text(
+                                    'إشعارات الهاتف المحمول',
+                                    style: TextStyle(
+                                      fontFamily: AppTextStyles.appFontFamily,
+                                      fontSize: AppTextStyles.medium,
+                                      color: textColor,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            SizedBox(height: 16.h),
+                          ],
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 8.h),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => Navigator.of(ctx).pop(),
+                            style: OutlinedButton.styleFrom(
+                              side: BorderSide(
+                                  color: AppColors.buttonAndLinksColor, width: 1.4),
+                              padding: EdgeInsets.symmetric(vertical: 12.h),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8.r)),
+                            ),
+                            child: Text(
+                              'إلغاء',
+                              style: TextStyle(
+                                fontFamily: AppTextStyles.appFontFamily,
+                                fontSize: AppTextStyles.medium,
+                                color: AppColors.buttonAndLinksColor,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: 12.w),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () async {
+                              if (selectedRadio == 2 &&
+                                  priceController.text.trim().isEmpty) {
+                                Get.snackbar(
+                                  '',
+                                  'من فضلك أدخل السعر الذي تريده',
+                                  snackPosition: SnackPosition.BOTTOM,
+                                  margin: EdgeInsets.symmetric(
+                                      horizontal: 16.w, vertical: 12.h),
+                                  backgroundColor: Colors.black87,
+                                  colorText: Colors.white,
+                                  duration: const Duration(seconds: 2),
+                                );
+                                return;
+                              }
+
+                              double? targetPrice;
+                              if (priceController.text.trim().isNotEmpty) {
+                                final normalized = priceController.text
+                                    .replaceAll('.', '')
+                                    .replaceAll(',', '')
+                                    .trim();
+                                try {
+                                  targetPrice = double.parse(normalized);
+                                } catch (_) {
+                                  targetPrice = null;
+                                }
+                              }
+
+                              final mode = selectedRadio;
+
+                              bool passNotifyEmail;
+                              bool passNotifyMobile;
+
+                              if (mode == 3) {
+                                passNotifyEmail = false;
+                                passNotifyMobile = false;
+                              } else if (mode == 1) {
+                                passNotifyEmail = true;
+                                passNotifyMobile = true;
+                              } else {
+                                passNotifyEmail = notifyEmail;
+                                passNotifyMobile = notifyMobile;
+                              }
+
+                              final ok = await _setNotificationPreference(
+                                userId,
+                                groupId,
+                                targetPrice,
+                                mode: mode,
+                                notifyEmail: passNotifyEmail,
+                                notifyMobile: passNotifyMobile,
+                              );
+
+                              if (ok) {
+                                Navigator.of(ctx).pop();
+                              }
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.buttonAndLinksColor,
+                              padding: EdgeInsets.symmetric(vertical: 12.h),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8.r)),
+                            ),
+                            child: Text(
+                              'حفظ',
+                              style: TextStyle(
+                                fontFamily: AppTextStyles.appFontFamily,
+                                fontSize: AppTextStyles.medium,
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                );
+              }),
+            ),
+          ),
+        );
+      }),
+      barrierDismissible: true,
+    );
+  }
+
+  Future<bool> _setNotificationPreference(
+    int userId,
+    int groupId,
+    double? targetPrice, {
+    required int mode,
+    required bool notifyEmail,
+    required bool notifyMobile,
+  }) async {
+    final favCtrl = _ensureFavoritesController();
+
+    final notif = NotificationSettings(
+      notifyEmail: notifyEmail,
+      notifyPush: notifyMobile,
+      notifyOnAnyChange: mode == 1,
+      minPrice: mode == 2 ? targetPrice : null,
+      lastNotifiedPrice: null,
+    );
+
+    try {
+      final success = await favCtrl.addFavorite(
+        userId: userId,
+        adId: _ad!.id,
+        favoriteGroupId: groupId,
+        notificationSettings: notif,
+      );
+
+      final topic = 'AdId_${_ad!.id}';
+
+      if (!success) {
+        Get.rawSnackbar(
+          title: 'خطأ',
+          message: 'فشل حفظ تفضيلات الإشعارات',
+          duration: const Duration(seconds: 2),
+        );
+        return false;
+      }
+
+      if (mode == 3) {
+        await _loadingController.unsubscribeFromTopicPublic(topic);
+      } else {
+        if (notifyMobile) {
+          await _loadingController.subscribeToTopicPublic(topic);
+        } else {
+          await _loadingController.unsubscribeFromTopicPublic(topic);
+        }
+      }
+
+      setState(() => _isFavorite = true);
+      Get.rawSnackbar(
+        title: 'تم الحفظ',
+        message: 'تم تعيين تفضيلات الإشعارات بنجاح',
+        duration: const Duration(seconds: 2),
+      );
+      return true;
+    } catch (e, st) {
+      debugPrint('Exception in _setNotificationPreference: $e\n$st');
+      Get.rawSnackbar(
+        title: 'خطأ',
+        message: 'حدث خطأ أثناء حفظ التفضيلات',
+        duration: const Duration(seconds: 2),
+      );
+      return false;
+    }
+  }
+
+  void _handleReportAd() {
+    final user = _loadingController.currentUser;
+    if (user == null) {
+      Get.snackbar('تنبيه'.tr, 'يجب تسجيل الدخول لتقديم بلاغ'.tr,
+          snackPosition: SnackPosition.BOTTOM,
+          duration: const Duration(seconds: 3));
+      return;
+    }
+    _showReportDialog();
+  }
+
+  void _showReportDialog() {
+    final isDarkMode = Get.find<ThemeController>().isDarkMode.value;
+    final cardColor = AppColors.surface(isDarkMode);
+    final textColor = AppColors.textPrimary(isDarkMode);
+    const successColor = Colors.green;
+    const errorColor = Colors.red;
+    final AdReportController _reportController = Get.put(AdReportController());
+
+    Get.dialog(
+      StatefulBuilder(
+        builder: (context, setState) {
+          String selectedReason = 'إعلان مخالف';
+          TextEditingController detailsController = TextEditingController();
+          bool isLoading = false;
+          String? message;
+          bool isSuccess = false;
+
+          Future<void> submitReport() async {
+            setState(() {
+              isLoading = true;
+              message = null;
+            });
+
+            try {
+              final Map<String, dynamic> reportData = {
+                'ad_id': _ad?.id ?? 0,
+                'reason': selectedReason,
+                'details': detailsController.text,
+                'reporter_id': _loadingController.currentUser?.id,
+              };
+
+              final success = await _reportController.createReport(reportData);
+
+              setState(() {
+                isLoading = false;
+                isSuccess = success;
+                message = success
+                    ? 'تم استلام بلاغك وسيتم مراجعته'.tr
+                    : 'فشل في إرسال البلاغ'.tr;
+              });
+
+              if (success) {
+                await Future.delayed(const Duration(seconds: 2));
+                if (context.mounted) {
+                  Get.back();
+                  Get.snackbar(
+                    'شكراً لك'.tr,
+                    'تم استلام بلاغك وسيتم مراجعته'.tr,
+                    snackPosition: SnackPosition.BOTTOM,
+                    backgroundColor: successColor,
+                    colorText: Colors.white,
+                    duration: const Duration(seconds: 3),
+                  );
+                }
+              }
+            } catch (e) {
+              setState(() {
+                isLoading = false;
+                isSuccess = false;
+                message = 'حدث خطأ أثناء إرسال البلاغ'.tr;
+              });
+            }
+          }
+
+          return Dialog(
+            backgroundColor: cardColor,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20.r)),
+            elevation: 5,
+            child: Container(
+              padding: EdgeInsets.all(24.w),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Text(
+                      'الإبلاغ عن إعلان مخالف'.tr,
+                      style: TextStyle(
+                        fontSize: AppTextStyles.xxlarge,
+                        fontWeight: FontWeight.bold,
+                        color: textColor,
+                        fontFamily: AppTextStyles.appFontFamily,
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: 24.h),
+                  Text(
+                    'سبب الإبلاغ'.tr,
+                    style: TextStyle(
+                      fontSize: AppTextStyles.medium,
+                      fontWeight: FontWeight.w600,
+                      color: textColor,
+                      fontFamily: AppTextStyles.appFontFamily,
+                    ),
+                  ),
+                  SizedBox(height: 8.h),
+                  Container(
+                    width: double.infinity,
+                    padding: EdgeInsets.symmetric(horizontal: 16.w),
+                    decoration: BoxDecoration(
+                      color: isDarkMode ? Colors.grey[800] : Colors.grey[100],
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: selectedReason,
+                        isExpanded: true,
+                        icon: Icon(Icons.arrow_drop_down,
+                            color: textColor.withOpacity(0.7)),
+                        items: [
+                          'إعلان مخالف',
+                          'إعلان مكرر',
+                          'معلومات خاطئة',
+                          'احتيال',
+                          'محتوى غير لائق',
+                          'أخرى'
+                        ].map((String value) {
+                          return DropdownMenuItem<String>(
+                            value: value,
+                            child: Text(
+                              value.tr,
+                              style: TextStyle(
+                                fontSize: AppTextStyles.medium,
+                                fontFamily: AppTextStyles.appFontFamily,
+                                color: textColor,
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: isLoading
+                            ? null
+                            : (newValue) {
+                                setState(() {
+                                  selectedReason = newValue!;
+                                });
+                              },
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: 20.h),
+                  Text(
+                    'تفاصيل الإبلاغ (اختياري)'.tr,
+                    style: TextStyle(
+                      fontSize: AppTextStyles.medium,
+                      fontWeight: FontWeight.w600,
+                      color: textColor,
+                      fontFamily: AppTextStyles.appFontFamily,
+                    ),
+                  ),
+                  SizedBox(height: 8.h),
+                  TextField(
+                    controller: detailsController,
+                    maxLines: 4,
+                    enabled: !isLoading,
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor:
+                          isDarkMode ? Colors.grey[800] : Colors.grey[100],
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12.r),
+                        borderSide: BorderSide.none,
+                      ),
+                      hintText: 'يرجى توضيح سبب الإبلاغ'.tr,
+                      hintStyle: TextStyle(
+                        fontFamily: AppTextStyles.appFontFamily,
+                        color: textColor.withOpacity(0.5),
+                      ),
+                      contentPadding: EdgeInsets.all(16.w),
+                    ),
+                  ),
+                  SizedBox(height: 24.h),
+                  if (message != null)
+                    Container(
+                      width: double.infinity,
+                      padding: EdgeInsets.all(16.w),
+                      decoration: BoxDecoration(
+                        color: isSuccess
+                            ? successColor.withOpacity(0.15)
+                            : errorColor.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(12.r),
+                        border: Border.all(
+                          color: isSuccess ? successColor : errorColor,
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            isSuccess ? Icons.check_circle : Icons.error,
+                            color: isSuccess ? successColor : errorColor,
+                          ),
+                          SizedBox(width: 8.w),
+                          Expanded(
+                            child: Text(
+                              message!,
+                              style: TextStyle(
+                                color: isSuccess ? successColor : errorColor,
+                                fontFamily: AppTextStyles.appFontFamily,
+                                fontSize: AppTextStyles.medium,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  if (message != null) SizedBox(height: 16.h),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: isLoading ? null : () => Get.back(),
+                          style: OutlinedButton.styleFrom(
+                            padding: EdgeInsets.symmetric(vertical: 16.h),
+                            side: BorderSide(
+                                color: AppColors.buttonAndLinksColor),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12.r),
+                            ),
+                          ),
+                          child: Text(
+                            'إلغاء'.tr,
+                            style: TextStyle(
+                                fontFamily: AppTextStyles.appFontFamily),
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: 16.w),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: isLoading ? null : submitReport,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.buttonAndLinksColor,
+                            padding: EdgeInsets.symmetric(vertical: 16.h),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12.r),
+                            ),
+                          ),
+                          child: isLoading
+                              ? SizedBox(
+                                  width: 20.w,
+                                  height: 20.h,
+                                  child: const CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : Text(
+                                  'إرسال البلاغ'.tr,
+                                  style: TextStyle(
+                                    fontFamily: AppTextStyles.appFontFamily,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-      final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-
     final themeController = Get.find<ThemeController>();
     final isDarkMode = themeController.isDarkMode.value;
     final HomeController _homeController = Get.find<HomeController>();
-  final FavoritesController _favoritesController = Get.put(FavoritesController());
-
-
- 
-
-
 
     return Obx(() {
-      
       return Scaffold(
-
         key: _scaffoldKey,
-    endDrawer: Obx(
-      () => AnimatedSwitcher(
-        duration: const Duration(milliseconds: 300),
-        child: _homeController.drawerType.value == DrawerType.settings
-            ? const SettingsDrawerDeskTop(key: ValueKey('settings'))
-            : const DesktopServicesDrawer(key: ValueKey('services')),
-      ),
-    ),
+        endDrawer: Obx(
+          () => AnimatedSwitcher(
+            duration: const Duration(milliseconds: 300),
+            child: _homeController.drawerType.value == DrawerType.settings
+                ? const SettingsDrawerDeskTop(key: ValueKey('settings'))
+                : const DesktopServicesDrawer(key: ValueKey('services')),
+          ),
+        ),
         backgroundColor: AppColors.background(isDarkMode),
         body: Column(
           children: [
-            // القوائم العلوية
             TopAppBarDeskTop(),
-            SecondaryAppBarDeskTop(scaffoldKey: _scaffoldKey,),
-
+            SecondaryAppBarDeskTop(scaffoldKey: _scaffoldKey),
             Expanded(
               child: SingleChildScrollView(
                 padding: EdgeInsets.symmetric(horizontal: 40.w, vertical: 30.h),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // ─── الصف الرئيسي (الصور - الخصائص - المعلن) ────────────
                     Padding(
                       padding: EdgeInsets.symmetric(horizontal: 20.w),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(
-                            widget.ad!.title,
-                            style: TextStyle(
-                              fontFamily: AppTextStyles.appFontFamily,
-                              fontSize: AppTextStyles.medium,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.textPrimary(isDarkMode),
+                          Expanded(
+                            child: Text(
+                              _ad!.title,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontFamily: AppTextStyles.appFontFamily,
+                                fontSize: AppTextStyles.medium,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.textPrimary(isDarkMode),
+                              ),
                             ),
                           ),
                           Row(
                             children: [
-
-                         
                               InkWell(
-                                                 onTap: _toggleFavorite,
-
+                                onTap: _toggleFavorite,
                                 child: Text(
-                                _isFavorite?"ازل من المفضلة":
-
-                                  "اضف إلى مفضلتي".tr,
+                                  _isFavorite
+                                      ? "ازل من المفضلة"
+                                      : "اضف إلى مفضلتي".tr,
                                   style: TextStyle(
-                                   fontSize: AppTextStyles.medium,
+                                    fontSize: AppTextStyles.medium,
                                     fontWeight: FontWeight.bold,
-                                    color:_isFavorite?Colors.red:
-                                     AppColors.buttonAndLinksColor,
+                                    color: _isFavorite
+                                        ? Colors.red
+                                        : AppColors.buttonAndLinksColor,
                                   ),
                                 ),
                               ),
-                              Icon( _isFavorite?Icons.favorite:
-                                Icons.star, 
-                                  color: AppColors.textSecondary(isDarkMode),
-                                  size: 12.sp),
-                                  
-                                  SizedBox(width: 10.w,),
-                                        SizedBox(
-          width:150.w,
-          child: ElevatedButton(
-            onPressed: (){
-
-                   final userId =  Get.find<LoadingController>().currentUser?.id;
-    if (userId == null) {
-      Get.snackbar('تنبيه'.tr, 'يجب تسجيل الدخول للبلاغ '.tr);
-      return;
-    }
-    _handleReportAd();
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.buttonAndLinksColor,
-              foregroundColor: Colors.white,
-              padding: EdgeInsets.symmetric(vertical: 14.h),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10.r),
-              ),
-            ),
-            child: Text(
-            'بلاغ'.tr,
-              style: TextStyle(
-               fontSize: AppTextStyles.medium,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ),
+                              Icon(
+                                _isFavorite ? Icons.favorite : Icons.star,
+                                color: AppColors.textSecondary(isDarkMode),
+                                size: 12.sp,
+                              ),
+                              SizedBox(width: 10.w),
+                              SizedBox(
+                                width: 150.w,
+                                child: ElevatedButton(
+                                  onPressed: () {
+                                    final userId =
+                                        _loadingController.currentUser?.id;
+                                    if (userId == null) {
+                                      Get.snackbar('تنبيه'.tr,
+                                          'يجب تسجيل الدخول للبلاغ '.tr);
+                                      return;
+                                    }
+                                    _handleReportAd();
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor:
+                                        AppColors.buttonAndLinksColor,
+                                    foregroundColor: Colors.white,
+                                    padding:
+                                        EdgeInsets.symmetric(vertical: 14.h),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius:
+                                          BorderRadius.circular(10.r),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    'بلاغ'.tr,
+                                    style: TextStyle(
+                                      fontSize: AppTextStyles.medium,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ),
                             ],
                           ),
                         ],
@@ -1309,36 +1510,26 @@ void _showReportDialog() {
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // ─── الجزء الأيمن: معرض الوسائط ─────────────────────
                         Expanded(
                           flex: 4,
-                          child: _buildMediaGallery(isDarkMode, widget.ad!)
+                          child: _buildMediaGallery(isDarkMode, _ad!),
                         ),
                         SizedBox(width: 40.w),
-
-                        // ─── الجزء الأوسط: خصائص الإعلان ──────────────────
                         Expanded(
                           flex: 3,
-                          child: _buildAdProperties(isDarkMode, widget.ad!),
+                          child: _buildAdProperties(isDarkMode, _ad!),
                         ),
                         SizedBox(width: 40.w),
-
-                        // ─── الجزء الأيسر: معلومات المعلن ──────────────────
                         Expanded(
                           flex: 3,
-                          child: _buildAdvertiserInfo(isDarkMode, widget.ad!),
+                          child: _buildAdvertiserInfo(isDarkMode, _ad!),
                         ),
                       ],
                     ),
-
                     SizedBox(height: 50.h),
-
-                    // ─── تبويبات أسفل المحتوى ─────────────────────────────
                     _buildBottomTabs(isDarkMode),
-
-                    // الفوتر (في نهاية المحتوى وقابل للتمرير)
                     SizedBox(height: 40.h),
-                    Footer(scaffoldKey: _scaffoldKey,),
+                    Footer(scaffoldKey: _scaffoldKey),
                   ],
                 ),
               ),
@@ -1349,15 +1540,11 @@ void _showReportDialog() {
     });
   }
 
-  // ─── معرض الوسائط (الصور والفيديوهات) ───────────────────────────────────
   Widget _buildMediaGallery(bool isDarkMode, Ad ad) {
     return _MediaGallery(ad: ad, isDarkMode: isDarkMode);
   }
 
-  // ─── خصائص الإعلان ───────────────────────────────────────────────────
-  Widget _buildAdProperties(bool isDarkMode, Ad ad) {   
-    final currency = Get.put(CurrencyController());
-
+  Widget _buildAdProperties(bool isDarkMode, Ad ad) {
     return Container(
       padding: EdgeInsets.all(20.w),
       decoration: BoxDecoration(
@@ -1374,180 +1561,165 @@ void _showReportDialog() {
                   'السعر:'.tr,
                   style: TextStyle(
                     fontFamily: AppTextStyles.appFontFamily,
-                   fontSize: AppTextStyles.small,
+                    fontSize: AppTextStyles.small,
                     fontWeight: FontWeight.bold,
                     color: AppColors.textSecondary(isDarkMode),
                   ),
                 ),
                 SizedBox(width: 8.w),
                 Text(
-                  currency.formatPrice(widget.ad!.price!),
+                  _currencyController.formatPrice(ad.price!),
                   style: TextStyle(
                     fontFamily: AppTextStyles.appFontFamily,
-                   fontSize: AppTextStyles.medium,
+                    fontSize: AppTextStyles.medium,
                     fontWeight: FontWeight.bold,
                     color: AppColors.primary,
                   ),
                 ),
               ],
-            ),   Divider(color: AppColors.divider(isDarkMode)),
-         Row(
-              children: [
-                Text(
-                  'رقم الإعلان:'.tr,
-                  style: TextStyle(
-                      fontFamily: AppTextStyles.appFontFamily,
-                   fontSize: AppTextStyles.small,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textSecondary(isDarkMode),
-                  ),
-                ),
-                SizedBox(width: 8.w),
-                Text(
-               widget.ad!.ad_number,
-                  style: TextStyle(
-                    fontFamily: AppTextStyles.appFontFamily,
-                   fontSize: AppTextStyles.medium,
-                    fontWeight: FontWeight.bold,
-                       color: AppColors.redId,
-                  ),
-                ),
-              ],
             ),
           Divider(color: AppColors.divider(isDarkMode)),
-
-          // الفئات (التسلسل الهرمي الجديد)
-          _buildCategoryHierarchy(isDarkMode, ad),
-        
+          Row(
+            children: [
+              Text(
+                'رقم الإعلان:'.tr,
+                style: TextStyle(
+                  fontFamily: AppTextStyles.appFontFamily,
+                  fontSize: AppTextStyles.small,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textSecondary(isDarkMode),
+                ),
+              ),
+              SizedBox(width: 8.w),
+              Text(
+                ad.ad_number,
+                style: TextStyle(
+                  fontFamily: AppTextStyles.appFontFamily,
+                  fontSize: AppTextStyles.medium,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.redId,
+                ),
+              ),
+            ],
+          ),
           Divider(color: AppColors.divider(isDarkMode)),
-          
+          _buildCategoryHierarchy(isDarkMode, ad),
+          Divider(color: AppColors.divider(isDarkMode)),
           _buildAttributesList(ad.attributes, isDarkMode),
         ],
       ),
     );
   }
 
-  // ─── بناء التسلسل الهرمي للفئات ──────────────────────────────────────
- // ─── بناء التسلسل الهرمي للفئات ──────────────────────────────────────
-Widget _buildCategoryHierarchy(bool isDarkMode, Ad ad) {
-  // التصنيفات
-  final mainCategory = ad.category;
-  final subCategory = ad.subCategoryLevelOne;
-  final subTwoCategory = ad.subCategoryLevelTwo;
+  Widget _buildCategoryHierarchy(bool isDarkMode, Ad ad) {
+    final mainCategory = ad.category;
+    final subCategory = ad.subCategoryLevelOne;
+    final subTwoCategory = ad.subCategoryLevelTwo;
 
-  List<Widget> categoriesWidgets = [];
+    List<Widget> categoriesWidgets = [];
 
-  // المستوى الأول
-  categoriesWidgets.add(
-    GestureDetector(
-      onTap: () {
-        Get.toNamed(
-          AppRoutes.adsScreen,
-          arguments: {
-            'categoryId': mainCategory.id,
-            'nameOfMain': mainCategory.name,
-           
-   
+    categoriesWidgets.add(
+      GestureDetector(
+        onTap: () {
+          Get.toNamed(
+            AppRoutes.adsScreen,
+            arguments: {
+              'categoryId': mainCategory.id,
+              'nameOfMain': mainCategory.name,
+            },
+          );
+        },
+        child: Text(
+          mainCategory.name,
+          style: TextStyle(
+            fontFamily: AppTextStyles.appFontFamily,
+            fontSize: AppTextStyles.medium,
+            color: AppColors.buttonAndLinksColor,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
 
-           
+    if (subCategory != null) {
+      categoriesWidgets.add(Text(" / ",
+          style: TextStyle(color: AppColors.textSecondary(isDarkMode))));
+      categoriesWidgets.add(
+        GestureDetector(
+          onTap: () {
+            Get.toNamed(
+              AppRoutes.adsScreen,
+              arguments: {
+                'categoryId': mainCategory.id,
+                'subCategoryId': subCategory.id,
+                'nameOfMain': mainCategory.name,
+                'nameOFsub': subCategory.name,
+              },
+            );
           },
-        );
-      },
-      child: Text(
-        mainCategory.name,
-        style: TextStyle(
-          fontFamily: AppTextStyles.appFontFamily,
-         fontSize: AppTextStyles.medium,
-          color: AppColors.buttonAndLinksColor,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    ),
-  );
-
-  // المستوى الثاني
-  if (subCategory != null) {
-    categoriesWidgets.add(Text(" / ",
-        style: TextStyle(color: AppColors.textSecondary(isDarkMode))));
-
-    categoriesWidgets.add(
-      GestureDetector(
-        onTap: () {
-          Get.toNamed(
-            AppRoutes.adsScreen,
-            arguments: {
-              'categoryId': mainCategory.id,
-              'subCategoryId': subCategory.id,
-            
-              'nameOfMain': mainCategory.name,
-              'nameOFsub': subCategory.name,
-             
-            },
-          );
-        },
-        child: Text(
-          subCategory.name,
-          style: TextStyle(
-            fontFamily: AppTextStyles.appFontFamily,
-           fontSize: AppTextStyles.medium,
-            color: AppColors.buttonAndLinksColor,
-            fontWeight: FontWeight.w600,
+          child: Text(
+            subCategory.name,
+            style: TextStyle(
+              fontFamily: AppTextStyles.appFontFamily,
+              fontSize: AppTextStyles.medium,
+              color: AppColors.buttonAndLinksColor,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
-      ),
+      );
+    }
+
+    if (subTwoCategory != null) {
+      categoriesWidgets.add(Text(" / ",
+          style: TextStyle(color: AppColors.textSecondary(isDarkMode))));
+      categoriesWidgets.add(
+        GestureDetector(
+          onTap: () {
+            Get.toNamed(
+              AppRoutes.adsScreen,
+              arguments: {
+                'categoryId': mainCategory.id,
+                'subCategoryId': subCategory?.id,
+                'subTwoCategoryId': subTwoCategory.id,
+                'nameOfMain': mainCategory.name,
+                'nameOFsub': subTwoCategory.name,
+                'nameOFsubTwo': subTwoCategory.name,
+              },
+            );
+          },
+          child: Text(
+            subTwoCategory.name,
+            style: TextStyle(
+              fontFamily: AppTextStyles.appFontFamily,
+              fontSize: AppTextStyles.medium,
+              color: AppColors.buttonAndLinksColor,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Row(
+      children: [
+        Expanded(
+          child: Wrap(
+            spacing: 4,
+            runSpacing: 2,
+            children: categoriesWidgets,
+          ),
+        ),
+      ],
     );
   }
 
-  // المستوى الثالث
-  if (subTwoCategory != null) {
-    categoriesWidgets.add(Text(" / ",
-        style: TextStyle(color: AppColors.textSecondary(isDarkMode))));
-
-    categoriesWidgets.add(
-      GestureDetector(
-        onTap: () {
-          Get.toNamed(
-            AppRoutes.adsScreen,
-            arguments: {
-              'categoryId': mainCategory.id,
-              'subCategoryId': subCategory.id,
-              'subTwoCategoryId': subTwoCategory.id,
-              'nameOfMain': mainCategory.name,
-              'nameOFsub': subTwoCategory.name,
-              'nameOFsubTwo': subTwoCategory.name,
-            
-            },
-          );
-        },
-        child: Text(
-          subTwoCategory.name,
-          style: TextStyle(
-            fontFamily: AppTextStyles.appFontFamily,
-           fontSize: AppTextStyles.medium,
-            color: AppColors.buttonAndLinksColor,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
-    );
-  }
-
-  return Row(
-    children: [
-      Expanded(
-        child: Wrap(
-          spacing: 4,
-          runSpacing: 2,
-          children: categoriesWidgets,
-        ),
-      ),
-    ],
-  );
-}
-
-  // ─── معلومات المعلن ──────────────────────────────────────────────────
   Widget _buildAdvertiserInfo(bool isDarkMode, Ad ad) {
     final advertiser = ad.advertiser;
+
+    final logo = (advertiser.logo ?? '').trim();
+    final desc = (advertiser.description ?? '').trim();
+
     return Container(
       padding: EdgeInsets.all(20.w),
       decoration: BoxDecoration(
@@ -1567,10 +1739,8 @@ Widget _buildCategoryHierarchy(bool isDarkMode, Ad ad) {
             ),
           ),
           SizedBox(height: 20.h),
-
           Row(
             children: [
-              // صورة المعلن
               Container(
                 width: 80.w,
                 height: 80.h,
@@ -1578,14 +1748,15 @@ Widget _buildCategoryHierarchy(bool isDarkMode, Ad ad) {
                   shape: BoxShape.circle,
                   color: AppColors.background(isDarkMode),
                 ),
-                child: advertiser.logo.isNotEmpty
+                child: logo.isNotEmpty
                     ? ClipOval(
                         child: Image.network(
-                          advertiser.logo,
+                          logo,
                           fit: BoxFit.cover,
                           loadingBuilder: (context, child, progress) {
                             if (progress == null) return child;
-                            return Center(child: CircularProgressIndicator());
+                            return const Center(
+                                child: CircularProgressIndicator());
                           },
                           errorBuilder: (context, error, stackTrace) {
                             return Icon(Icons.person, size: 40.w);
@@ -1595,107 +1766,118 @@ Widget _buildCategoryHierarchy(bool isDarkMode, Ad ad) {
                     : Icon(Icons.person, size: 40.w),
               ),
               SizedBox(width: 20.w),
-
-              // اسم ووصف المعلن
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     InkWell(
-                      onTap:   (){ showGeneralDialog(
-                            context: context,
-                            barrierDismissible: true,
-                            barrierLabel: 'Dismiss',
-                            barrierColor: Colors.black.withOpacity(0.5),
-                            transitionDuration: const Duration(milliseconds: 200),
-                            pageBuilder: (_, __, ___) {
-                              return Center(
-                                child: Material(
-                                  color: Colors.transparent,
-                                  child: Container(
-                                    width: MediaQuery.of(context).size.width * 0.40,
-                                    padding: EdgeInsets.all(20.w),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Align(
-                                          alignment: Alignment.topRight,
-                                          child: GestureDetector(
-                                            onTap: () => Navigator.of(context).pop(),
-                                            child: Icon(Icons.close, size: 24),
+                      onTap: () {
+                        showGeneralDialog(
+                          context: context,
+                          barrierDismissible: true,
+                          barrierLabel: 'Dismiss',
+                          barrierColor: Colors.black.withOpacity(0.5),
+                          transitionDuration:
+                              const Duration(milliseconds: 200),
+                          pageBuilder: (_, __, ___) {
+                            return Center(
+                              child: Material(
+                                color: Colors.transparent,
+                                child: Container(
+                                  width:
+                                      MediaQuery.of(context).size.width * 0.40,
+                                  padding: EdgeInsets.all(20.w),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Align(
+                                        alignment: Alignment.topRight,
+                                        child: GestureDetector(
+                                          onTap: () =>
+                                              Navigator.of(context).pop(),
+                                          child: const Icon(Icons.close, size: 24),
+                                        ),
+                                      ),
+                                      Align(
+                                        alignment: Alignment.center,
+                                        child: Text(
+                                          'المعاملات'.tr,
+                                          style: TextStyle(
+                                            fontFamily:
+                                                AppTextStyles.appFontFamily,
+                                            fontSize: AppTextStyles.medium,
+                                            fontWeight: FontWeight.bold,
                                           ),
                                         ),
-                                        Align(
-                                          alignment: Alignment.center,
-                                          child: Text(
-                                            'المعاملات'.tr,
-                                            style: TextStyle(
-                                              fontFamily: AppTextStyles.appFontFamily,
-                                              fontSize: AppTextStyles.medium,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(height: 16),
-                                        Align(
-                                          alignment: Alignment.centerRight,
-                                          child: InkWell(
-                                            onTap: () {
-                                              
-                   final userId =  Get.find<LoadingController>().currentUser?.id;
-    if (userId == null) {
-      Get.snackbar('تنبيه'.tr, 'يجب تسجيل الدخول لإضافة إلى المفضلة'.tr);
-      return;
-    }
-                                              favoriteSellerController.toggleFavoriteByIds(
-                                                userId: _loadingController.currentUser?.id ?? 0,
-                                                advertiserProfileId: widget.ad!.idAdvertiser,
-                                              );
-                                            },
-                                            child: Text(
-                                              'متابعة مالك الإعلان'.tr,
-                                              style: TextStyle(
-                                                fontFamily: AppTextStyles.appFontFamily,
-                                                fontSize: AppTextStyles.medium,
-                                                fontWeight: FontWeight.w500,
-                                                color: Colors.grey[700],
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(height: 8),
-                                        Divider(height: 1, color: Colors.grey[300]),
-                                        const SizedBox(height: 12),
-                                        InkWell(
+                                      ),
+                                      const SizedBox(height: 16),
+                                      Align(
+                                        alignment: Alignment.centerRight,
+                                        child: InkWell(
                                           onTap: () {
-                                            Get.to(() => AdvertiserAdsScreenDesktop(
-                                                  advertiser: widget.ad!.advertiser,
-                                                  idAdv: widget.ad!.idAdvertiser,
-                                                ));
+                                            final userId =
+                                                _loadingController
+                                                    .currentUser?.id;
+                                            if (userId == null) {
+                                              Get.snackbar(
+                                                'تنبيه'.tr,
+                                                'يجب تسجيل الدخول لإضافة إلى المفضلة'.tr,
+                                              );
+                                              return;
+                                            }
+                                            _ensureFavoriteSellerController()
+                                                .toggleFavoriteByIds(
+                                              userId: userId,
+                                              advertiserProfileId: ad.idAdvertiser,
+                                            );
                                           },
                                           child: Text(
-                                            '${'جميع إعلانات '.tr}${widget.ad!.advertiser.name.toString()}',
-                                            textAlign: TextAlign.start,
+                                            'متابعة مالك الإعلان'.tr,
                                             style: TextStyle(
-                                              fontFamily: AppTextStyles.appFontFamily,
+                                              fontFamily:
+                                                  AppTextStyles.appFontFamily,
                                               fontSize: AppTextStyles.medium,
-                                              height: 1.4,
+                                              fontWeight: FontWeight.w500,
+                                              color: Colors.grey[700],
                                             ),
                                           ),
                                         ),
-                                      ],
-                                    ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Divider(height: 1, color: Colors.grey[300]),
+                                      const SizedBox(height: 12),
+                                      InkWell(
+                                        onTap: () {
+                                          Get.to(() => AdvertiserAdsScreenDesktop(
+                                                advertiser: ad.advertiser,
+                                                idAdv: ad.idAdvertiser,
+                                              ));
+                                        },
+                                        child: Text(
+                                          '${'جميع إعلانات '.tr}${advertiser.name.toString()}',
+                                          textAlign: TextAlign.start,
+                                          style: TextStyle(
+                                            fontFamily:
+                                                AppTextStyles.appFontFamily,
+                                            fontSize: AppTextStyles.medium,
+                                            height: 1.4,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
-                              );
-                            },
-                          );
-  },
+                              ),
+                            );
+                          },
+                        );
+                      },
                       child: Text(
                         advertiser.name ?? 'معلن'.tr,
                         style: TextStyle(
@@ -1708,7 +1890,7 @@ Widget _buildCategoryHierarchy(bool isDarkMode, Ad ad) {
                     ),
                     SizedBox(height: 8.h),
                     Text(
-                      advertiser.description,
+                      desc,
                       style: TextStyle(
                         fontFamily: AppTextStyles.appFontFamily,
                         fontSize: AppTextStyles.medium,
@@ -1723,16 +1905,15 @@ Widget _buildCategoryHierarchy(bool isDarkMode, Ad ad) {
             ],
           ),
           SizedBox(height: 30.h),
-
-          // أزرار التواصل
           Row(
             children: [
               Expanded(
                 child: ElevatedButton.icon(
                   icon: Icon(Icons.phone, size: 20.w),
-                  label: Text('اتصال'.tr,style: TextStyle(
-                                fontFamily: AppTextStyles.appFontFamily,
-            ),),
+                  label: Text(
+                    'اتصال'.tr,
+                    style: TextStyle(fontFamily: AppTextStyles.appFontFamily),
+                  ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
@@ -1748,11 +1929,12 @@ Widget _buildCategoryHierarchy(bool isDarkMode, Ad ad) {
               Expanded(
                 child: ElevatedButton.icon(
                   icon: Icon(Icons.wallet, size: 20.w),
-                  label: Text('واتساب'.tr,style: TextStyle(
-                                fontFamily: AppTextStyles.appFontFamily,
-            ),),
+                  label: Text(
+                    'واتساب'.tr,
+                    style: TextStyle(fontFamily: AppTextStyles.appFontFamily),
+                  ),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Color(0xFF25D366),
+                    backgroundColor: const Color(0xFF25D366),
                     foregroundColor: Colors.white,
                     padding: EdgeInsets.symmetric(vertical: 15.h),
                     shape: RoundedRectangleBorder(
@@ -1767,9 +1949,10 @@ Widget _buildCategoryHierarchy(bool isDarkMode, Ad ad) {
           SizedBox(height: 15.h),
           ElevatedButton.icon(
             icon: Icon(Icons.message, size: 20.w),
-            label: Text('إرسال رسالة'.tr,style: TextStyle(
-                                fontFamily: AppTextStyles.appFontFamily,
-            ),),
+            label: Text(
+              'إرسال رسالة'.tr,
+              style: TextStyle(fontFamily: AppTextStyles.appFontFamily),
+            ),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.blue[700],
               foregroundColor: Colors.white,
@@ -1780,40 +1963,39 @@ Widget _buildCategoryHierarchy(bool isDarkMode, Ad ad) {
               ),
             ),
             onPressed: () {
-
-                final userId = Get.find<LoadingController>().currentUser?.id;
-    if (userId == null) {
-      Get.snackbar('تنبيه'.tr, 'يجب تسجيل الدخول '.tr);
-      return;
-    }else{
-               Get.to(()=> DesktopConversationScreen(ad: ad,advertiser: advertiser, idAdv: ad.idAdvertiser,));
-            }} 
+              final userId = _loadingController.currentUser?.id;
+              if (userId == null) {
+                Get.snackbar('تنبيه'.tr, 'يجب تسجيل الدخول '.tr);
+                return;
+              }
+              Get.to(() => DesktopConversationScreen(
+                    ad: ad,
+                    advertiser: advertiser,
+                    idAdv: ad.idAdvertiser,
+                  ));
+            },
           ),
         ],
       ),
     );
   }
 
-  // ─── تبويبات أسفل المحتوى ────────────────────────────────────────────
   Widget _buildBottomTabs(bool isDarkMode) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // تبويبات الاختيار
         Row(
           children: [
-                _buildBottomTab(0, 'tabTitle_info'.tr, ),
-                            _buildBottomTab(1, 'tabTitle_location'.tr, ),
-                            _buildBottomTab(2, 'tabTitle_desc'.tr, ),
-         
+            _buildBottomTab(0, 'tabTitle_info'.tr),
+            _buildBottomTab(1, 'tabTitle_location'.tr),
+            _buildBottomTab(2, 'tabTitle_desc'.tr),
           ],
         ),
         SizedBox(height: 30.h),
-
-        // محتوى التبويب المحدد
-        if (_selectedBottomTab == 0) _buildAdDescription(isDarkMode, widget.ad!),
-        if (_selectedBottomTab == 1) _buildLocationMap(isDarkMode, widget.ad!),
-        if (_selectedBottomTab == 2) _buildAdditionalAdvertiserInfo(isDarkMode, widget.ad!),
+        if (_selectedBottomTab == 0) _buildAdDescription(isDarkMode, _ad!),
+        if (_selectedBottomTab == 1) _buildLocationMap(isDarkMode, _ad!),
+        if (_selectedBottomTab == 2)
+          _buildAdditionalAdvertiserInfo(isDarkMode, _ad!),
       ],
     );
   }
@@ -1836,17 +2018,16 @@ Widget _buildCategoryHierarchy(bool isDarkMode, Ad ad) {
           ),
           child: Center(
             child: EditableTextWidget(
-  keyName:title,
-  textAlign: TextAlign.center,
-  fontWeight: FontWeight.w500,
-),
+              keyName: title,
+              textAlign: TextAlign.center,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ),
       ),
     );
   }
 
-  // ─── وصف الإعلان ────────────────────────────────────────────────────
   Widget _buildAdDescription(bool isDarkMode, Ad ad) {
     return Container(
       padding: EdgeInsets.all(20.w),
@@ -1881,7 +2062,6 @@ Widget _buildCategoryHierarchy(bool isDarkMode, Ad ad) {
     );
   }
 
-  // ─── الخريطة ────────────────────────────────────────────────────────
   Widget _buildLocationMap(bool isDarkMode, Ad ad) {
     if (ad.latitude == null || ad.longitude == null) {
       return Center(
@@ -1889,7 +2069,7 @@ Widget _buildCategoryHierarchy(bool isDarkMode, Ad ad) {
           'لا يتوفر موقع جغرافي'.tr,
           style: TextStyle(
             fontFamily: AppTextStyles.appFontFamily,
-            fontSize: 12.sp
+            fontSize: 12.sp,
           ),
         ),
       );
@@ -1916,10 +2096,8 @@ Widget _buildCategoryHierarchy(bool isDarkMode, Ad ad) {
               markers: [
                 Marker(
                   point: LatLng(ad.latitude!, ad.longitude!),
-                  child: Icon(Icons.location_on, 
-                    size: 40.w, 
-                    color: AppColors.primary,
-                  ),
+                  child: Icon(Icons.location_on,
+                      size: 40.w, color: AppColors.primary),
                 ),
               ],
             ),
@@ -1929,7 +2107,6 @@ Widget _buildCategoryHierarchy(bool isDarkMode, Ad ad) {
     );
   }
 
-  // ─── معلومات إضافية عن المعلن ────────────────────────────────────────
   Widget _buildAdditionalAdvertiserInfo(bool isDarkMode, Ad ad) {
     final advertiser = ad.advertiser;
     return Container(
@@ -1951,8 +2128,6 @@ Widget _buildCategoryHierarchy(bool isDarkMode, Ad ad) {
             ),
           ),
           SizedBox(height: 20.h),
-
-          // معلومات الاتصال
           _buildInfoRow('رقم الجوال'.tr, advertiser.contactPhone),
           _buildInfoRow('واتساب'.tr, advertiser.whatsappPhone),
           if (advertiser.name != null)
@@ -1983,7 +2158,7 @@ Widget _buildCategoryHierarchy(bool isDarkMode, Ad ad) {
           Expanded(
             flex: 3,
             child: Text(
-              value,
+              (value).isEmpty ? '—' : value,
               style: TextStyle(
                 fontFamily: AppTextStyles.appFontFamily,
                 fontSize: AppTextStyles.medium,
@@ -1996,11 +2171,10 @@ Widget _buildCategoryHierarchy(bool isDarkMode, Ad ad) {
     );
   }
 
-  // ─── قائمة الخصائص ──────────────────────────────────────────────────
   Widget _buildAttributesList(List<AttributeValue> attributes, bool isDarkMode) {
     return ListView.builder(
       shrinkWrap: true,
-      physics: NeverScrollableScrollPhysics(),
+      physics: const NeverScrollableScrollPhysics(),
       itemCount: attributes.length,
       itemBuilder: (context, index) {
         final attr = attributes[index];
@@ -2013,40 +2187,31 @@ Widget _buildCategoryHierarchy(bool isDarkMode, Ad ad) {
                   Expanded(
                     child: Text(
                       attr.name,
-                      style: TextStyle( 
+                      style: TextStyle(
                         fontFamily: AppTextStyles.appFontFamily,
                         fontWeight: FontWeight.w800,
-                       fontSize: AppTextStyles.medium,
+                        fontSize: AppTextStyles.medium,
                         color: AppColors.textSecondary(isDarkMode),
                       ),
                     ),
                   ),
                   Text(
                     attr.value,
-                    style: TextStyle( 
+                    style: TextStyle(
                       fontFamily: AppTextStyles.appFontFamily,
-                     fontSize: AppTextStyles.medium,
+                      fontSize: AppTextStyles.medium,
                       fontWeight: FontWeight.bold,
                       color: _getValueColor(attr.value, isDarkMode: isDarkMode),
                     ),
                   ),
                 ],
-              ), 
+              ),
               Divider(color: AppColors.divider(isDarkMode)),
             ],
           ),
         );
       },
     );
-  }
-
-  // ─── مساعدات الوظائف ────────────────────────────────────────────────
-  String _formatDate(DateTime date) {
-    final diff = DateTime.now().difference(date);
-    if (diff.inDays > 0) return '${'قبل'.tr} ${diff.inDays} ${'يوم'.tr}';
-    if (diff.inHours > 0) return '${'قبل'.tr} ${diff.inHours} ${'ساعة'.tr}';
-    if (diff.inMinutes > 0) return '${'قبل'.tr} ${diff.inMinutes} ${'دقيقة'.tr}';
-    return 'الآن';
   }
 
   Color _getValueColor(String value, {required bool isDarkMode}) {
@@ -2056,7 +2221,12 @@ Widget _buildCategoryHierarchy(bool isDarkMode, Ad ad) {
   }
 
   Future<void> _makePhoneCall(String phone) async {
-    final url = 'tel:$phone';
+    final p = _sanitizePhone(phone);
+    if (p.isEmpty) {
+      Get.snackbar('خطأ', 'رقم الهاتف غير متوفر');
+      return;
+    }
+    final url = 'tel:$p';
     if (await canLaunchUrl(Uri.parse(url))) {
       await launchUrl(Uri.parse(url));
     } else {
@@ -2065,19 +2235,202 @@ Widget _buildCategoryHierarchy(bool isDarkMode, Ad ad) {
   }
 
   Future<void> _launchWhatsApp(String phone) async {
-    final url = 'https://wa.me/$phone';
+    final p = _sanitizePhone(phone);
+    if (p.isEmpty) {
+      Get.snackbar('خطأ', 'رقم الواتساب غير متوفر');
+      return;
+    }
+    final url = 'https://wa.me/$p';
     if (await canLaunchUrl(Uri.parse(url))) {
       await launchUrl(Uri.parse(url));
     } else {
       Get.snackbar('خطأ', 'تعذر فتح واتساب');
     }
   }
+}
 
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ✅ Web PlatformView: إصلاح الفيديو + إطفاء الصوت عند الخروج/الرجوع
+// ─────────────────────────────────────────────────────────────────────────────
 
+const String _kWebVideoViewType = 'taapuu-web-video-dialog';
 
+bool _webFactoryRegistered = false;
+bool _webDialogOpen = false;
 
-}// ─── معرض الوسائط (الصور والفيديوهات) ───────────────────────────────────────
+// ✅ تخزين URL مؤقت لتمريره للفيديو
+String? _pendingVideoUrl;
+
+// ✅ إطفاء/تفريغ أي فيديو عالق في DOM (حل مشكلة استمرار الصوت)
+void _stopAllWebVideos({bool aggressive = true}) {
+  if (!kIsWeb) return;
+
+  // ✅ أوقف أي <video> موجود
+  try {
+    final vids = html.document.querySelectorAll('video');
+    for (final el in vids) {
+      if (el is html.VideoElement) {
+        try { el.pause(); } catch (_) {}
+        try { el.muted = true; } catch (_) {}
+        try { el.src = ''; } catch (_) {}
+        try { el.load(); } catch (_) {}
+      }
+    }
+  } catch (_) {}
+
+  if (!aggressive) return;
+
+  // ✅ امسح wrappers الخاصة بنا (لو بقيت بالـ DOM)
+  try {
+    final wrappers = html.document.querySelectorAll(
+      '.taapuu-video-outer, .taapuu-video-wrapper, .taapuu-video-element',
+    );
+    for (final w in wrappers) {
+      try { w.remove(); } catch (_) {}
+    }
+  } catch (_) {}
+}
+
+void _ensureWebVideoFactoryRegistered() {
+  if (_webFactoryRegistered) return;
+
+  // ignore: undefined_prefixed_name
+  ui.platformViewRegistry.registerViewFactory(_kWebVideoViewType, (int id) {
+    final v = html.VideoElement()
+      ..controls = true
+      ..autoplay = false
+      ..muted = false
+      ..preload = 'metadata'
+      ..setAttribute('playsinline', 'true')
+      ..setAttribute('webkit-playsinline', 'true')
+      ..setAttribute('controlsList', 'nodownload');
+
+    // ✅ أنماط كافية
+    v.style
+      ..display = 'block'
+      ..width = '100%'
+      ..height = '100%'
+      ..objectFit = 'contain'
+      ..backgroundColor = 'black'
+      ..maxWidth = '100%'
+      ..maxHeight = '100%';
+
+    // ✅ class للتعرف على الفيديو
+    v.className = 'taapuu-video-element';
+
+    // ✅ تمرير URL إذا كان موجوداً
+    if (_pendingVideoUrl != null && _pendingVideoUrl!.isNotEmpty) {
+      try {
+        v.src = _pendingVideoUrl!;
+        v.load();
+      } catch (e) {
+        debugPrint('❌ Failed to set video src in factory: $e');
+      }
+    }
+
+    final wrapper = html.DivElement()
+      ..className = 'taapuu-video-wrapper'
+      ..style.cssText = '''
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background-color: black;
+        overflow: hidden;
+        width: 100%;
+        height: 100%;
+      ''';
+
+    final outer = html.DivElement()
+      ..className = 'taapuu-video-outer'
+      ..style.cssText = '''
+        width: 100%;
+        height: 100%;
+        position: relative;
+        overflow: hidden;
+        background-color: black;
+        contain: strict;
+      ''';
+
+    wrapper.append(v);
+    outer.append(wrapper);
+
+    // ✅ مستمع للتأكد
+    v.onLoadedMetadata.listen((_) {
+      debugPrint('✅ Video metadata loaded in factory');
+      try {
+        if (!v.paused) return;
+        Future.delayed(const Duration(milliseconds: 250), () {
+          try { v.play(); } catch (_) {}
+        });
+      } catch (_) {}
+    });
+
+    v.onError.listen((_) {
+      debugPrint('❌ Video error in factory: ${v.error?.message}');
+    });
+
+    return outer;
+  });
+
+  _webFactoryRegistered = true;
+}
+
+void _webKickHard() {
+  try { html.window.dispatchEvent(html.Event('resize')); } catch (_) {}
+
+  Future.delayed(const Duration(milliseconds: 50), () {
+    try { html.window.dispatchEvent(html.Event('resize')); } catch (_) {}
+  });
+}
+
+Future<void> _openWebVideoDialog(String url) async {
+  if (!kIsWeb) return;
+  if (_webDialogOpen) return;
+
+  _webDialogOpen = true;
+  _pendingVideoUrl = url;
+
+  debugPrint('🎬 Opening web video dialog for: $url');
+
+  // ✅ اقفل أي فيديو سابق قبل فتح الجديد
+  _stopAllWebVideos();
+
+  try {
+    _ensureWebVideoFactoryRegistered();
+
+    await Get.generalDialog(
+      barrierLabel: 'video',
+      barrierDismissible: true,
+      barrierColor: Colors.black.withOpacity(0.72),
+      transitionDuration: Duration.zero,
+      transitionBuilder: (context, a1, a2, child) => child,
+      pageBuilder: (context, a1, a2) {
+        return _WebVideoDialog(
+          viewType: _kWebVideoViewType,
+          videoUrl: url,
+          onKick: _webKickHard,
+        );
+      },
+    );
+  } catch (e) {
+    debugPrint('❌ Web dialog error: $e');
+    try { html.window.open(url, '_blank'); } catch (_) {}
+  } finally {
+    _pendingVideoUrl = null;
+    _webDialogOpen = false;
+
+    // ✅ اقفل/امسح فورًا بعد الإغلاق (بدون تأخير)
+    _stopAllWebVideos();
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ─── معرض الوسائط (الصور والفيديوهات) ───────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+
 class _MediaGallery extends StatefulWidget {
   final Ad ad;
   final bool isDarkMode;
@@ -2096,24 +2449,21 @@ class __MediaGalleryState extends State<_MediaGallery> {
   late final PageController _pageController;
   int _currentIndex = 0;
 
-  // 🎥 إدارة الفيديو
+  // (موجودة كما كانت)
   VideoPlayerController? _videoController;
   ChewieController? _chewieController;
+
   String? _currentVideoUrl;
   bool _isInitializing = false;
   bool _videoError = false;
   String? _videoErrorMessage;
 
-  // صور + فيديوهات
+  bool _isWebVideoDialogOpen = false;
+
   List<MediaItem> get _mediaItems {
     return [
-      // لو تحب الفيديوهات أولاً، بدّل الترتيب هنا
-      ...widget.ad.images.map(
-        (url) => MediaItem(type: MediaType.image, url: url),
-      ),
-      ...widget.ad.videos.map(
-        (url) => MediaItem(type: MediaType.video, url: url),
-      ),
+      ...widget.ad.images.map((url) => MediaItem(type: MediaType.image, url: url)),
+      ...widget.ad.videos.map((url) => MediaItem(type: MediaType.video, url: url)),
     ];
   }
 
@@ -2123,20 +2473,34 @@ class __MediaGalleryState extends State<_MediaGallery> {
     _pageController = PageController();
   }
 
+  // ✅ مهم: عند الانتقال لواجهة ثانية (Back/Push) اطفي الفيديو على الويب
+  @override
+  void deactivate() {
+    if (kIsWeb) _stopAllWebVideos();
+    super.deactivate();
+  }
+
   @override
   void dispose() {
+    if (kIsWeb) _stopAllWebVideos();
     _disposeVideoControllers();
     _pageController.dispose();
     super.dispose();
   }
 
   void _disposeVideoControllers() {
-    try {
-      _chewieController?.dispose();
-    } catch (_) {}
-    try {
-      _videoController?.dispose();
-    } catch (_) {}
+    if (kIsWeb) {
+      // ✅ بدل return الفاضي: اطفي أي فيديو عالق
+      _stopAllWebVideos();
+      _currentVideoUrl = null;
+      _isInitializing = false;
+      _videoError = false;
+      _videoErrorMessage = null;
+      return;
+    }
+
+    try { _chewieController?.dispose(); } catch (_) {}
+    try { _videoController?.dispose(); } catch (_) {}
 
     _chewieController = null;
     _videoController = null;
@@ -2154,194 +2518,25 @@ class __MediaGalleryState extends State<_MediaGallery> {
     return 'الآن'.tr;
   }
 
-  // ===================== UI الرئيسي =====================
+  Future<void> _openHtml5VideoDialogWeb(String url) async {
+    if (_isWebVideoDialogOpen) return;
+    _isWebVideoDialogOpen = true;
 
-  @override
-  Widget build(BuildContext context) {
-    final mediaItems = _mediaItems;
-
-    if (mediaItems.isEmpty) {
-      return Center(
-        child: Icon(
-          Icons.image,
-          size: 100.w,
-          color: Colors.grey,
-        ),
-      );
+    try {
+      await _openWebVideoDialog(url);
+    } finally {
+      _isWebVideoDialogOpen = false;
     }
-
-    return Column(
-      children: [
-        // المنطقة الرئيسية (فيديو أو صورة)
-        Container(
-          height: 400.h,
-          decoration: BoxDecoration(
-            color: AppColors.card(widget.isDarkMode),
-            borderRadius: BorderRadius.circular(16.r),
-          ),
-          clipBehavior: Clip.hardEdge,
-          child: _buildMainMediaDisplay(mediaItems),
-        ),
-        SizedBox(height: 16.h),
-
-        // عدّاد الصفحات فوق المعرض
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
-              decoration: BoxDecoration(
-                color: Colors.black54,
-                borderRadius: BorderRadius.circular(12.r),
-              ),
-              child: Text(
-                '${_currentIndex + 1}/${mediaItems.length}',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: AppTextStyles.medium,
-                  fontFamily: AppTextStyles.appFontFamily,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ),
-          ],
-        ),
-        SizedBox(height: 16.h),
-
-        // شريط مصغرات بسيط أفقي (اختياري – يبقى احترافي)
-        SizedBox(
-          height: 90.h,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            padding: EdgeInsets.symmetric(horizontal: 8.w),
-            itemCount: mediaItems.length,
-            separatorBuilder: (_, __) => SizedBox(width: 8.w),
-            itemBuilder: (_, index) {
-              final item = mediaItems[index];
-              final selected = index == _currentIndex;
-
-              return GestureDetector(
-                onTap: () {
-                  setState(() {
-                    _currentIndex = index;
-                  });
-
-                  if (item.type == MediaType.video) {
-                    _openOrPlayVideo(item.url);
-                  } else {
-                    // لو طلعنا من الفيديو → نوقفه
-                    if (_videoController != null &&
-                        _videoController!.value.isPlaying) {
-                      _videoController!.pause();
-                    }
-                  }
-                },
-                child: Container(
-                  width: 110.w,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(10.r),
-                    border: Border.all(
-                      color: selected ? AppColors.primary : Colors.transparent,
-                      width: 2.w,
-                    ),
-                  ),
-                  clipBehavior: Clip.hardEdge,
-                  child: _buildThumbnail(item),
-                ),
-              );
-            },
-          ),
-        ),
-
-        SizedBox(height: 20.h),
-        Divider(color: AppColors.divider(widget.isDarkMode)),
-        SizedBox(height: 20.h),
-
-        // معلومات الإعلان: التاريخ
-        Row(
-          children: [
-            Icon(Icons.calendar_today, size: 18.sp, color: AppColors.grey),
-            SizedBox(width: 8.w),
-            Text(
-              '${'تاريخ النشر:'.tr} ${_formatDate(widget.ad.createdAt)}',
-              style: TextStyle(
-                fontFamily: AppTextStyles.appFontFamily,
-                fontSize: AppTextStyles.medium,
-                color: AppColors.grey,
-              ),
-            ),
-          ],
-        ),
-        SizedBox(height: 10.h),
-
-        // معلومات الإعلان: الموقع
-        Row(
-          children: [
-            Icon(
-              Icons.location_on,
-              size: 18.sp,
-              color: AppColors.textSecondary(widget.isDarkMode),
-            ),
-            SizedBox(width: 8.w),
-            Expanded(
-              child: Text(
-                '${widget.ad.city?.name ?? ""}, ${widget.ad.area?.name ?? ""}',
-                style: TextStyle(
-                  fontFamily: AppTextStyles.appFontFamily,
-                  fontSize: AppTextStyles.medium,
-                  color: AppColors.textSecondary(widget.isDarkMode),
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
   }
-
-  // ===================== المعرض الرئيسي =====================
-
-  Widget _buildMainMediaDisplay(List<MediaItem> mediaItems) {
-    final safeIndex = _currentIndex.clamp(0, mediaItems.length - 1);
-    final item = mediaItems[safeIndex];
-
-    if (item.type == MediaType.video) {
-      // لو هذا الفيديو هو الحالي ومهيأ → أعرض المشغّل
-      if (_currentVideoUrl == item.url &&
-          _chewieController != null &&
-          _videoController != null &&
-          _videoController!.value.isInitialized &&
-          !_videoError &&
-          !_isInitializing) {
-        return _buildActiveVideoPlayer(item.url);
-      }
-
-      // لو في خطأ
-      if (_videoError) {
-        return _buildVideoErrorState(item.url);
-      }
-
-      // في مرحلة التحميل / التهيئة
-      if (_isInitializing) {
-        return _buildVideoLoadingState();
-      }
-
-      // لسه ما طلبنا تشغيله → ثامبنيل كبير مع زر تشغيل
-      return _buildVideoThumbnailMain(item.url);
-    }
-
-    // صورة
-    return _buildImageDisplay(item.url);
-  }
-
-  // ===================== تشغيل / تهيئة الفيديو =====================
 
   Future<void> _openOrPlayVideo(String url) async {
-    debugPrint('🎥 Trying to play video URL => $url');
+    debugPrint('🎥 Play video => $url');
 
-    // نفس الفيديو ومهيأ → Toggle Play/Pause
+    if (kIsWeb) {
+      await _openHtml5VideoDialogWeb(url);
+      return;
+    }
+
     if (_currentVideoUrl == url &&
         _videoController != null &&
         _videoController!.value.isInitialized &&
@@ -2351,7 +2546,7 @@ class __MediaGalleryState extends State<_MediaGallery> {
       } else {
         await _videoController!.play();
       }
-      setState(() {});
+      if (mounted) setState(() {});
       return;
     }
 
@@ -2369,46 +2564,25 @@ class __MediaGalleryState extends State<_MediaGallery> {
 
       controller.addListener(() {
         if (!mounted) return;
-        final value = controller.value;
-
-        if (value.hasError && !_videoError) {
-          debugPrint('🎥 video_player errorDescription => ${value.errorDescription}');
+        final val = controller.value;
+        if (val.hasError && !_videoError) {
           setState(() {
             _videoError = true;
-            _videoErrorMessage = value.errorDescription;
             _isInitializing = false;
-          });
-        } else if (value.isInitialized && _isInitializing) {
-          setState(() {
-            _isInitializing = false;
+            _videoErrorMessage = val.errorDescription;
           });
         }
       });
 
       await controller.initialize();
-
       if (!mounted) return;
-
-      if (controller.value.hasError) {
-        setState(() {
-          _videoError = true;
-          _videoErrorMessage = controller.value.errorDescription;
-          _isInitializing = false;
-        });
-        return;
-      }
-
-      // تأكد أن الصوت مرفوع
-      await controller.setVolume(1.0);
 
       final chewie = ChewieController(
         videoPlayerController: controller,
         autoPlay: true,
         looping: false,
         allowFullScreen: true,
-        aspectRatio: controller.value.aspectRatio == 0
-            ? 16 / 9
-            : controller.value.aspectRatio,
+        aspectRatio: controller.value.aspectRatio == 0 ? 16 / 9 : controller.value.aspectRatio,
         showControls: true,
         errorBuilder: (_, __) => _buildVideoErrorState(url),
       );
@@ -2432,47 +2606,174 @@ class __MediaGalleryState extends State<_MediaGallery> {
     }
   }
 
-  Widget _buildActiveVideoPlayer(String url) {
-    if (_chewieController == null ||
-        _videoController == null ||
-        !_videoController!.value.isInitialized) {
-      return _buildVideoLoadingState();
+  void _pauseAnyVideo() {
+    if (kIsWeb) return;
+    if (_videoController != null && _videoController!.value.isPlaying) {
+      _videoController!.pause();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final mediaItems = _mediaItems;
+
+    if (mediaItems.isEmpty) {
+      return Center(child: Icon(Icons.image, size: 100.w, color: Colors.grey));
     }
 
-    return Stack(
-      fit: StackFit.expand,
+    return Column(
       children: [
         Container(
-          color: Colors.black,
-          child: Chewie(
-            controller: _chewieController!,
+          height: 400.h,
+          decoration: BoxDecoration(
+            color: AppColors.card(widget.isDarkMode),
+            borderRadius: BorderRadius.circular(16.r),
+          ),
+          clipBehavior: Clip.hardEdge,
+          child: _buildMainMediaDisplay(mediaItems),
+        ),
+        SizedBox(height: 16.h),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
+              decoration: BoxDecoration(
+                color: Colors.black54,
+                borderRadius: BorderRadius.circular(12.r),
+              ),
+              child: Text(
+                '${_currentIndex + 1}/${mediaItems.length}',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: AppTextStyles.medium,
+                  fontFamily: AppTextStyles.appFontFamily,
+                ),
+              ),
+            ),
+          ],
+        ),
+        SizedBox(height: 16.h),
+        SizedBox(
+          height: 90.h,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: EdgeInsets.symmetric(horizontal: 8.w),
+            itemCount: mediaItems.length,
+            separatorBuilder: (_, __) => SizedBox(width: 8.w),
+            itemBuilder: (_, index) {
+              final item = mediaItems[index];
+              final selected = index == _currentIndex;
+
+              return GestureDetector(
+                onTap: () async {
+                  setState(() => _currentIndex = index);
+
+                  if (item.type == MediaType.video) {
+                    await _openOrPlayVideo(item.url);
+                  } else {
+                    _pauseAnyVideo();
+                  }
+                },
+                child: Container(
+                  width: 110.w,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(10.r),
+                    border: Border.all(
+                      color: selected ? AppColors.primary : Colors.transparent,
+                      width: 2.w,
+                    ),
+                  ),
+                  clipBehavior: Clip.hardEdge,
+                  child: _buildThumbnail(item),
+                ),
+              );
+            },
           ),
         ),
-        Positioned(
-          top: 15.h,
-          right: 15.w,
-          child: Container(
-            padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 5.h),
-            decoration: BoxDecoration(
-              color: Colors.black54,
-              borderRadius: BorderRadius.circular(20.r),
+        SizedBox(height: 20.h),
+        Divider(color: AppColors.divider(widget.isDarkMode)),
+        SizedBox(height: 20.h),
+        Row(
+          children: [
+            Icon(Icons.calendar_today, size: 18.sp, color: AppColors.grey),
+            SizedBox(width: 8.w),
+            Text(
+              '${'تاريخ النشر:'.tr} ${_formatDate(widget.ad.createdAt)}',
+              style: TextStyle(
+                fontFamily: AppTextStyles.appFontFamily,
+                fontSize: AppTextStyles.medium,
+                color: AppColors.grey,
+              ),
             ),
-            child: Row(
-              children: [
-                Icon(Icons.videocam, size: 16.w, color: Colors.white),
-                SizedBox(width: 5.w),
-                Text(
-                  'فيديو'.tr,
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: AppTextStyles.medium,
-                  ),
+          ],
+        ),
+        SizedBox(height: 10.h),
+        Row(
+          children: [
+            Icon(Icons.location_on, size: 18.sp, color: AppColors.textSecondary(widget.isDarkMode)),
+            SizedBox(width: 8.w),
+            Expanded(
+              child: Text(
+                '${widget.ad.city?.name ?? ""}, ${widget.ad.area?.name ?? ""}',
+                style: TextStyle(
+                  fontFamily: AppTextStyles.appFontFamily,
+                  fontSize: AppTextStyles.medium,
+                  color: AppColors.textSecondary(widget.isDarkMode),
                 ),
-              ],
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
-          ),
+          ],
         ),
       ],
+    );
+  }
+
+  Widget _buildMainMediaDisplay(List<MediaItem> mediaItems) {
+    final safeIndex = _currentIndex.clamp(0, mediaItems.length - 1);
+    final item = mediaItems[safeIndex];
+
+    if (item.type == MediaType.video) {
+      if (kIsWeb) return _buildVideoThumbnailMain(item.url);
+
+      if (_videoError) return _buildVideoErrorState(item.url);
+      if (_isInitializing) return _buildVideoLoadingState();
+
+      if (_currentVideoUrl == item.url &&
+          _chewieController != null &&
+          _videoController != null &&
+          _videoController!.value.isInitialized) {
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            Container(color: Colors.black, child: Chewie(controller: _chewieController!)),
+            Positioned(top: 15.h, right: 15.w, child: _videoBadge()),
+          ],
+        );
+      }
+
+      return _buildVideoThumbnailMain(item.url);
+    }
+
+    return _buildImageDisplay(item.url);
+  }
+
+  Widget _videoBadge() {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 5.h),
+      decoration: BoxDecoration(
+        color: Colors.black54,
+        borderRadius: BorderRadius.circular(20.r),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.videocam, size: 16.w, color: Colors.white),
+          SizedBox(width: 5.w),
+          Text('فيديو'.tr, style: TextStyle(color: Colors.white, fontSize: AppTextStyles.medium)),
+        ],
+      ),
     );
   }
 
@@ -2487,10 +2788,7 @@ class __MediaGalleryState extends State<_MediaGallery> {
             SizedBox(height: 20.h),
             Text(
               'جاري تحميل الفيديو...'.tr,
-              style: TextStyle(
-                fontSize: AppTextStyles.medium,
-                color: Colors.white,
-              ),
+              style: TextStyle(fontSize: AppTextStyles.medium, color: Colors.white),
             ),
           ],
         ),
@@ -2538,13 +2836,8 @@ class __MediaGalleryState extends State<_MediaGallery> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
-                padding: EdgeInsets.symmetric(
-                  horizontal: 24.w,
-                  vertical: 12.h,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(30.r),
-                ),
+                padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 12.h),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30.r)),
               ),
               onPressed: () => _openOrPlayVideo(url),
             ),
@@ -2553,8 +2846,6 @@ class __MediaGalleryState extends State<_MediaGallery> {
       ),
     );
   }
-
-  // ===================== الثامبنيل للفيديو / الصورة =====================
 
   Widget _buildVideoThumbnailMain(String url) {
     return GestureDetector(
@@ -2565,37 +2856,32 @@ class __MediaGalleryState extends State<_MediaGallery> {
           Container(
             color: Colors.black,
             child: Center(
-              child: Icon(
-                Icons.play_circle_fill,
-                size: 64.w,
-                color: Colors.white,
-              ),
+              child: Icon(Icons.play_circle_fill, size: 64.w, color: Colors.white),
             ),
           ),
-          Positioned(
-            top: 15.h,
-            right: 15.w,
-            child: Container(
-              padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 5.h),
-              decoration: BoxDecoration(
-                color: Colors.black54,
-                borderRadius: BorderRadius.circular(20.r),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.videocam, size: 16.w, color: Colors.white),
-                  SizedBox(width: 5.w),
-                  Text(
-                    'فيديو'.tr,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: AppTextStyles.medium,
-                    ),
+          Positioned(top: 15.h, right: 15.w, child: _videoBadge()),
+          if (kIsWeb)
+            Positioned(
+              bottom: 12.h,
+              left: 12.w,
+              right: 12.w,
+              child: Container(
+                padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 6.h),
+                decoration: BoxDecoration(
+                  color: Colors.black54,
+                  borderRadius: BorderRadius.circular(10.r),
+                ),
+                child: Text(
+                  'اضغط للتشغيل'.tr,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 11.sp,
+                    fontFamily: AppTextStyles.appFontFamily,
                   ),
-                ],
+                ),
               ),
             ),
-          ),
         ],
       ),
     );
@@ -2609,11 +2895,7 @@ class __MediaGalleryState extends State<_MediaGallery> {
           Container(
             color: Colors.black87,
             child: Center(
-              child: Icon(
-                Icons.play_circle_fill,
-                size: 28.w,
-                color: Colors.white,
-              ),
+              child: Icon(Icons.play_circle_fill, size: 28.w, color: Colors.white),
             ),
           ),
           Positioned(
@@ -2625,13 +2907,7 @@ class __MediaGalleryState extends State<_MediaGallery> {
                 color: Colors.black54,
                 borderRadius: BorderRadius.circular(8.r),
               ),
-              child: Text(
-                'فيديو'.tr,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 9.sp,
-                ),
-              ),
+              child: Text('فيديو'.tr, style: TextStyle(color: Colors.white, fontSize: 9.sp)),
             ),
           ),
         ],
@@ -2643,11 +2919,7 @@ class __MediaGalleryState extends State<_MediaGallery> {
       fit: BoxFit.cover,
       errorBuilder: (_, __, ___) => Container(
         color: Colors.grey[300],
-        child: Icon(
-          Icons.broken_image,
-          size: 26.w,
-          color: Colors.grey,
-        ),
+        child: Icon(Icons.broken_image, size: 26.w, color: Colors.grey),
       ),
     );
   }
@@ -2662,8 +2934,7 @@ class __MediaGalleryState extends State<_MediaGallery> {
         return Center(
           child: CircularProgressIndicator(
             value: loadingProgress.expectedTotalBytes != null
-                ? loadingProgress.cumulativeBytesLoaded /
-                    loadingProgress.expectedTotalBytes!
+                ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
                 : null,
           ),
         );
@@ -2684,7 +2955,166 @@ class __MediaGalleryState extends State<_MediaGallery> {
   }
 }
 
-// ================= MODELS =================
+// ─────────────────────────────────────────────────────────────────────────────
+// ✅ Web Dialog Widget
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _WebVideoDialog extends StatefulWidget {
+  final String viewType;
+  final String videoUrl;
+  final VoidCallback onKick;
+
+  const _WebVideoDialog({
+    Key? key,
+    required this.viewType,
+    required this.videoUrl,
+    required this.onKick,
+  }) : super(key: key);
+
+  @override
+  State<_WebVideoDialog> createState() => _WebVideoDialogState();
+}
+
+class _WebVideoDialogState extends State<_WebVideoDialog> {
+  Timer? _kickTimer;
+  int _kicks = 0;
+  bool _videoReady = false;
+
+  @override
+  void initState() {
+    super.initState();
+
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (mounted) widget.onKick();
+    });
+
+    _kickTimer = Timer.periodic(const Duration(milliseconds: 150), (t) {
+      if (!mounted) {
+        t.cancel();
+        return;
+      }
+      if (_kicks >= 4) {
+        t.cancel();
+        return;
+      }
+      _kicks++;
+      widget.onKick();
+    });
+
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (!mounted) return;
+      setState(() => _videoReady = true);
+    });
+  }
+
+  @override
+  void dispose() {
+    try { _kickTimer?.cancel(); } catch (_) {}
+    // ✅ ضمان نهائي لإطفاء الصوت/الفيديو عند إغلاق الدايلوج
+    _stopAllWebVideos();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final sz = MediaQuery.of(context).size;
+
+    final maxW = math.min(sz.width * 0.86, 860.0).clamp(320.0, 860.0);
+    final maxH = math.min(sz.height * 0.82, 580.0).clamp(280.0, 580.0);
+
+    const topBarH = 48.0;
+
+    return Directionality(
+      textDirection: ui.TextDirection.ltr,
+      child: SafeArea(
+        child: Center(
+          child: SizedBox(
+            width: maxW,
+            height: maxH,
+            child: Material(
+              color: Colors.black,
+              elevation: 18,
+              borderRadius: BorderRadius.circular(16.r),
+              child: Column(
+                children: [
+                  Container(
+                    height: topBarH,
+                    padding: EdgeInsets.symmetric(horizontal: 12.w),
+                    color: Colors.black.withOpacity(0.55),
+                    child: Row(
+                      children: [
+                        Icon(Icons.videocam, color: Colors.white, size: 18.sp),
+                        SizedBox(width: 8.w),
+                        Text(
+                          'فيديو'.tr,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 13.sp,
+                            fontFamily: AppTextStyles.appFontFamily,
+                          ),
+                        ),
+                        const Spacer(),
+                        InkWell(
+                          onTap: () {
+                            // ✅ اطفي قبل الخروج
+                            _stopAllWebVideos();
+                            Get.back();
+                          },
+                          child: Container(
+                            padding: EdgeInsets.all(8.w),
+                            decoration: const BoxDecoration(
+                              color: Colors.black54,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(Icons.close, color: Colors.white, size: 18.sp),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: SizedBox.expand(
+                      child: Stack(
+                        children: [
+                          // ✅ HtmlElementView للفيديو (key ثابت لمنع غرائب platform-view)
+                          HtmlElementView(
+                            key: ValueKey(widget.viewType),
+                            viewType: widget.viewType,
+                          ),
+
+                          if (!_videoReady)
+                            Container(
+                              color: Colors.black,
+                              child: Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const CircularProgressIndicator(color: Colors.white),
+                                    SizedBox(height: 16.h),
+                                    Text(
+                                      'جاري تحضير الفيديو...'.tr,
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: AppTextStyles.medium,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 enum MediaType { image, video }
 
@@ -2693,3 +3123,7 @@ class MediaItem {
   final String url;
   MediaItem({required this.type, required this.url});
 }
+
+
+
+

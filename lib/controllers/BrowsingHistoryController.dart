@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import 'package:tappuu_website/controllers/LoadingController.dart';
-import 'package:tappuu_website/controllers/LoadingController.dart';
 
 import '../core/data/model/AdResponse.dart';
 import '../core/data/model/BrowsingHistory.dart';

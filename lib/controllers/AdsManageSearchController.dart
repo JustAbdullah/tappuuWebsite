@@ -104,7 +104,7 @@ Future<void> ensureHomeInitialized() async {
   Rxn<double> latitude = Rxn<double>();
   Rxn<double> longitude = Rxn<double>();
   RxBool isLoadingLocation = false.obs;
-  RxDouble selectedRadius = RxDouble(0.0);
+final RxnDouble selectedRadius = RxnDouble(); // null افتراضيًا
   final List<double> radiusOptions = [1, 5, 10, 20, 50];
   Timer? _filterTimer; // إضافة مؤقت للفلترة الجغرافية
 
@@ -366,134 +366,6 @@ Future<void> ensureHomeInitialized() async {
     }).toList());
   }
 
-/*نسخة الويب القديم
-  // ==================== جلب الإعلانات (الوظيفة الأساسية) ====================
-  Future<void> fetchAds({
-  // التصنيفات
-  int? categoryId,
-  int? subCategoryLevelOneId,
-  int? subCategoryLevelTwoId,
-
-  // البحث والفرز
-  String? search,
-  String? sortBy,        // 'price', 'date', 'views', ...
-  String order = 'desc', // 'asc' أو 'desc'
-
-  // الفلترة الجغرافية
-  int? cityId,
-  int? areaId,
-
-  // فلترة السمات
-  List<Map<String, dynamic>>? attributes,
-
-  // **الفلاتر الجديدة**
-  String? timeframe,     // '24h', '48h' أو null (كل الإعلانات)
-  bool onlyFeatured = false, // جلب المميزة فقط؟
-
-  // إعدادات عامة
-  required String lang,
-  int page = 1,
-  int perPage = 15,
-}) async {
-  // 1) حفظ الحالة بمحاذاة الـ Rx
-  currentCategoryId.value            = categoryId??0;
-  currentSubCategoryLevelOneId.value = subCategoryLevelOneId;
-  currentSubCategoryLevelTwoId.value = subCategoryLevelTwoId;
-  currentSearch.value                = search?.trim() ?? '';
-  currentSortBy.value                = sortBy;
-  currentOrder.value                 = order;
-  // (cityId, areaId, attributes handled similarly إذا كنت تستخدمهم في الواجهة)
-  currentTimeframe.value             = timeframe;
-  this.onlyFeatured.value            = onlyFeatured;
-  currentLang                        = lang;
-
-  isLoadingAds.value = true;
-  try {
-    // 2) قرر متى تستخدم POST /ads/filter
-    final bool useFilterEndpoint = 
-         categoryId != null
-      || subCategoryLevelOneId != null
-      || subCategoryLevelTwoId != null
-      || (search?.isNotEmpty ?? false)
-      || sortBy != null
-      || cityId != null
-      || areaId != null
-      || (attributes != null && attributes.isNotEmpty)
-      || onlyFeatured
-      || (timeframe != null && timeframe != 'all');
-
-    late http.Response response;
-
-    if (useFilterEndpoint) {
-      // === POST إلى /ads/filter ===
-      final uri = Uri.parse('$_baseUrl/ads/filter');
-      final body = <String, dynamic>{
-        if (categoryId != null)            'category_id':             categoryId,
-        if (subCategoryLevelOneId != null) 'sub_category_level_one_id': subCategoryLevelOneId,
-        if (subCategoryLevelTwoId != null) 'sub_category_level_two_id': subCategoryLevelTwoId,
-        if (search?.isNotEmpty ?? false)   'search':                    search!.trim(),
-        if (sortBy != null)                'sort_by':                   sortBy,
-        'order':                           order,
-        if (cityId != null)                'city_id':                   cityId,
-        if (areaId != null)                'area_id':                   areaId,
-        if (attributes != null && attributes.isNotEmpty)
-                                           'attributes':                attributes,
-        if (timeframe != null && timeframe != 'all')
-                                           'timeframe':                 timeframe,
-        if (onlyFeatured)                  'only_featured':             true,
-        'lang':                            lang,
-        'page':                            page,
-        'per_page':                        perPage,
-      };
-
-      print('📤 [POST REQUEST] URL: $uri');
-      print('📤 [POST BODY] ${json.encode(body)}');
-
-      response = await http.post(
-        uri,
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode(body),
-      );
-    } else {
-      // === GET إلى /ads ===
-      final params = <String, String>{
-        'lang':      lang,
-        'page':      page.toString(),
-        'per_page':  perPage.toString(),
-        'order':     order,
-      };
-      // لا نضيف categoryId أو أي فلتر آخر هنا
-      final uri = Uri.parse('$_baseUrl/ads').replace(queryParameters: params);
-      print('📤 [GET REQUEST] URL: $uri');
-      response = await http.get(uri);
-    }
-
-    // 3) تسجيل الاستجابة
-    print('📥 [RESPONSE] Status: ${response.statusCode}');
-    print('📥 [RESPONSE BODY] ${response.body}');
-
-    // 4) المعالجة
-    if (response.statusCode == 200) {
-      final jsonData = json.decode(response.body) as Map<String, dynamic>;
-      final rawList = (jsonData['data'] as List<dynamic>);
-      print('✅ [DATA COUNT] ${rawList.length} items');
-
-      final adResponse = AdResponse.fromJson({'data': rawList});
-      adsList.value         = adResponse.data;
-      filteredAdsList.value = adResponse.data;
-    } else {
-      print('❌ [ERROR] HTTP ${response.statusCode}');
-      Get.snackbar("خطأ", "تعذّر جلب الإعلانات (${response.statusCode})");
-    }
-  } catch (e, st) {
-    print('‼️ [EXCEPTION] $e');
-    print(st);
-    Get.snackbar("خطأ", "حدث خطأ أثناء جلب الإعلانات");
-  } finally {
-    isLoadingAds.value = false;
-  }
-}
-*/
 
 
 
@@ -759,38 +631,41 @@ Future<void> fetchAds({
     selectedRadius.value = 0.0;
   }
 
+ 
   // ==================== وظائف السمات ====================
   Future<void> fetchAttributes({
     required int categoryId,
     String lang = 'ar',
+    bool onlyFilterVisible = true,
   }) async {
+    // ✅ ثبّت التصنيف + امسح القديم فوراً
+    attributesCategoryId.value = categoryId;
+    attributesList.clear();
+
     isLoadingAttributes.value = true;
     try {
-      final uri = Uri.parse('$_baseUrl/categories/$categoryId/attributes')
-          .replace(queryParameters: {'lang': lang});
-      final response = await http.get(uri);
+      final uri = Uri.parse('$_baseUrl/categories/$categoryId/attributes').replace(
+        queryParameters: {
+          'lang': lang,
+          if (onlyFilterVisible) 'only_filter_visible': '1',
+        },
+      );
 
+      final response = await http.get(uri);
       if (response.statusCode == 200) {
-        final jsonData = json.decode(response.body);
-        CategoryAttributesResponse resp;
-        
-        if (jsonData is Map<String, dynamic>) {
-          resp = CategoryAttributesResponse.fromJson(jsonData);
-        } else {
-          resp = CategoryAttributesResponse(
-            success: true,
-            attributes: (jsonData as List)
-                .map((e) => CategoryAttribute.fromJson(e))
-                .toList(),
-          );
-        }
-        
+        final jsonData = json.decode(response.body) as Map<String, dynamic>;
+        final resp = CategoryAttributesResponse.fromJson(jsonData);
         if (resp.success) {
           attributesList.value = resp.attributes;
+        } else {
+          attributesList.clear();
         }
+      } else {
+        attributesList.clear();
       }
     } catch (e) {
       print('خطأ في جلب السمات: $e');
+      attributesList.clear();
     } finally {
       isLoadingAttributes.value = false;
     }
@@ -1690,5 +1565,16 @@ Future<void> searchAdsByImage({
     } catch (e) {
       debugPrint('Error setting default SEO data: $e');
     }
+  }
+
+
+    // ✅ جديد: تتبع الخصائص لأي تصنيف
+  Rxn<int> attributesCategoryId = Rxn<int>();
+
+  // ✅ جديد: تنظيف حالة الخصائص بالكامل
+  void resetAttributesState() {
+    attributesList.clear();
+    attributesCategoryId.value = null;
+    isLoadingAttributes.value = false;
   }
 }

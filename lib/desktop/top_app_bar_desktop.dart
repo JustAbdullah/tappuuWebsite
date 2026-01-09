@@ -4,8 +4,8 @@ import 'package:get/get.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import 'package:tappuu_website/controllers/ThemeController.dart';
+import 'package:tappuu_website/controllers/editable_text_controller.dart' show EditableTextController;
 import 'package:tappuu_website/core/constant/app_text_styles.dart';
-import 'package:tappuu_website/core/constant/images_path.dart';
 import 'package:tappuu_website/core/constant/appcolors.dart';
 import 'package:tappuu_website/core/localization/changelanguage.dart';
 import 'package:tappuu_website/core/services/appservices.dart';
@@ -13,7 +13,7 @@ import 'package:tappuu_website/core/services/appservices.dart';
 import 'package:tappuu_website/controllers/LoadingController.dart';
 import 'package:tappuu_website/core/data/model/user.dart';
 
-import 'package:tappuu_website/controllers/editable_text_controller.dart';
+import '../core/constant/images_path.dart';
 import '../customWidgets/EditableTextWidget.dart';
 import 'AuthScreenDeskTop/LoginDesktopScreen.dart';
 import 'SettingsDeskTop/UserInfoPageDeskTop.dart';
@@ -97,26 +97,94 @@ class _TopAppBarDeskTopState extends State<TopAppBarDeskTop> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             // ـــ الشعار + اسم الموقع ـــ
-            Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
+           
+            Row(
               children: [
-                EditableTextWidget(
-                  keyName: isDarkMode ? 'mainTitle' : 'mainTitleWeb',
-                  textAlign: TextAlign.start,
-                  fontWeight: FontWeight.w800,
-                ),
-                SizedBox(height: 2.h),
-                Text(
-                  'منصة الإعلانات الرائدة'.tr,
-                  style: TextStyle(
-                    fontSize: 13.sp,
-                    color: isDarkMode
-                        ? Colors.grey.shade400
-                        : Colors.grey.shade600,
-                    fontFamily: AppTextStyles.appFontFamily,
-                    fontWeight: FontWeight.w400,
-                  ),
+                  Container(
+                                width: 46.w,
+                                height: 46.w,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(10.r),
+                                  color: AppColors.card(isDarkMode),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color:
+                                          Colors.black.withOpacity(0.05),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 3),
+                                    ),
+                                  ],
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(10.r),
+                                  child: logoUrl != null &&
+                                          logoUrl.isNotEmpty
+                                      ? Image.network(
+                                          logoUrl,
+                                          fit: BoxFit.contain,
+                                          key: ValueKey(logoUrl),
+                                          loadingBuilder: (context, child,
+                                              loadingProgress) {
+                                            if (loadingProgress == null) {
+                                              return child;
+                                            }
+                                            return Center(
+                                              child: SizedBox(
+                                                width: 16.w,
+                                                height: 16.w,
+                                                child:
+                                                    CircularProgressIndicator(
+                                                  strokeWidth: 1.6,
+                                                  value: loadingProgress
+                                                              .expectedTotalBytes !=
+                                                          null
+                                                      ? loadingProgress
+                                                              .cumulativeBytesLoaded /
+                                                          loadingProgress
+                                                              .expectedTotalBytes!
+                                                      : null,
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                          errorBuilder:
+                                              (_, __, ___) =>
+                                                  Image.asset(
+                                            ImagesPath.logo,
+                                            fit: BoxFit.contain,
+                                          ),
+                                        )
+                                      : Image.asset(
+                                          ImagesPath.logo,
+                                          fit: BoxFit.contain,
+                                        ),
+                                ),
+                              ),
+
+                              SizedBox(width: 10.w,),
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                   
+                    EditableTextWidget(
+                      keyName: isDarkMode ? 'mainTitle' : 'mainTitleWeb',
+                      textAlign: TextAlign.start,
+                      fontWeight: FontWeight.w800,
+                    ),
+                    SizedBox(height: 2.h),
+                    Text(
+                      'منصة الإعلانات الرائدة v1.17'.tr,
+                      style: TextStyle(
+                        fontSize: 13.sp,
+                        color: isDarkMode
+                            ? Colors.grey.shade400
+                            : Colors.grey.shade600,
+                        fontFamily: AppTextStyles.appFontFamily,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),

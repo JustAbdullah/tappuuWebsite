@@ -320,7 +320,7 @@ class _FullScreenMapState extends State<FullScreenMap> {
                   color: AppColors.primary.withOpacity(0.2),
                   borderColor: AppColors.primary,
                   borderStrokeWidth: 2,
-                  radius: _adsController.selectedRadius.value * 1000, // تحويل الكيلومترات إلى أمتار
+                  radius: _adsController.selectedRadius.value! * 1000, // تحويل الكيلومترات إلى أمتار
                 ),
               ],
             ),
@@ -328,6 +328,7 @@ class _FullScreenMapState extends State<FullScreenMap> {
         ],
       ),
     );
+    
   }
 
   // تنفيذ البحث
