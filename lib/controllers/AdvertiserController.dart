@@ -22,7 +22,7 @@ class AdvertiserController extends GetxController {
 
   // ================== API Endpoints ==================
   static const String _root =
-      "https://stayinme.arabiagroup.net/lar_stayInMe/public/api";
+      "https://taapuu.com/api";
   final String uploadApiUrl = "$_root/upload";
   final String baseUrl = "$_root/advertiser-profiles";
 

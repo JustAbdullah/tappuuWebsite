@@ -1399,25 +1399,31 @@ class _AdDetailsDesktopState extends State<AdDetailsDesktop> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final themeController = Get.find<ThemeController>();
-    final isDarkMode = themeController.isDarkMode.value;
-    final HomeController _homeController = Get.find<HomeController>();
+ @override
+Widget build(BuildContext context) {
+  final themeController = Get.find<ThemeController>();
+  final HomeController homeController = Get.find<HomeController>();
 
-    return Obx(() {
-      return Scaffold(
-        key: _scaffoldKey,
-        endDrawer: Obx(
-          () => AnimatedSwitcher(
-            duration: const Duration(milliseconds: 300),
-            child: _homeController.drawerType.value == DrawerType.settings
-                ? const SettingsDrawerDeskTop(key: ValueKey('settings'))
-                : const DesktopServicesDrawer(key: ValueKey('services')),
-          ),
+  return Obx(() {
+    // ✅ لازم القراءة تكون داخل Obx
+    final isDarkMode = themeController.isDarkMode.value;
+
+    return Scaffold(
+      key: _scaffoldKey,
+      endDrawer: Obx(
+        () => AnimatedSwitcher(
+          duration: const Duration(milliseconds: 300),
+          child: homeController.drawerType.value == DrawerType.settings
+              ? const SettingsDrawerDeskTop(key: ValueKey('settings'))
+              : const DesktopServicesDrawer(key: ValueKey('services')),
         ),
-        backgroundColor: AppColors.background(isDarkMode),
-        body: Column(
+      ),
+      backgroundColor: AppColors.background(isDarkMode),
+
+      // ✅ غطّي الخلفية لضمان ما يبقى أي جزء شفاف
+      body: Container(
+        color: AppColors.background(isDarkMode),
+        child: Column(
           children: [
             TopAppBarDeskTop(),
             SecondaryAppBarDeskTop(scaffoldKey: _scaffoldKey),
@@ -1450,15 +1456,11 @@ class _AdDetailsDesktopState extends State<AdDetailsDesktop> {
                               InkWell(
                                 onTap: _toggleFavorite,
                                 child: Text(
-                                  _isFavorite
-                                      ? "ازل من المفضلة"
-                                      : "اضف إلى مفضلتي".tr,
+                                  _isFavorite ? "ازل من المفضلة" : "اضف إلى مفضلتي".tr,
                                   style: TextStyle(
                                     fontSize: AppTextStyles.medium,
                                     fontWeight: FontWeight.bold,
-                                    color: _isFavorite
-                                        ? Colors.red
-                                        : AppColors.buttonAndLinksColor,
+                                    color: _isFavorite ? Colors.red : AppColors.buttonAndLinksColor,
                                   ),
                                 ),
                               ),
@@ -1472,24 +1474,19 @@ class _AdDetailsDesktopState extends State<AdDetailsDesktop> {
                                 width: 150.w,
                                 child: ElevatedButton(
                                   onPressed: () {
-                                    final userId =
-                                        _loadingController.currentUser?.id;
+                                    final userId = _loadingController.currentUser?.id;
                                     if (userId == null) {
-                                      Get.snackbar('تنبيه'.tr,
-                                          'يجب تسجيل الدخول للبلاغ '.tr);
+                                      Get.snackbar('تنبيه'.tr, 'يجب تسجيل الدخول للبلاغ '.tr);
                                       return;
                                     }
                                     _handleReportAd();
                                   },
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor:
-                                        AppColors.buttonAndLinksColor,
+                                    backgroundColor: AppColors.buttonAndLinksColor,
                                     foregroundColor: Colors.white,
-                                    padding:
-                                        EdgeInsets.symmetric(vertical: 14.h),
+                                    padding: EdgeInsets.symmetric(vertical: 14.h),
                                     shape: RoundedRectangleBorder(
-                                      borderRadius:
-                                          BorderRadius.circular(10.r),
+                                      borderRadius: BorderRadius.circular(10.r),
                                     ),
                                   ),
                                   child: Text(
@@ -1510,20 +1507,11 @@ class _AdDetailsDesktopState extends State<AdDetailsDesktop> {
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          flex: 4,
-                          child: _buildMediaGallery(isDarkMode, _ad!),
-                        ),
+                        Expanded(flex: 4, child: _buildMediaGallery(isDarkMode, _ad!)),
                         SizedBox(width: 40.w),
-                        Expanded(
-                          flex: 3,
-                          child: _buildAdProperties(isDarkMode, _ad!),
-                        ),
+                        Expanded(flex: 3, child: _buildAdProperties(isDarkMode, _ad!)),
                         SizedBox(width: 40.w),
-                        Expanded(
-                          flex: 3,
-                          child: _buildAdvertiserInfo(isDarkMode, _ad!),
-                        ),
+                        Expanded(flex: 3, child: _buildAdvertiserInfo(isDarkMode, _ad!)),
                       ],
                     ),
                     SizedBox(height: 50.h),
@@ -1536,9 +1524,11 @@ class _AdDetailsDesktopState extends State<AdDetailsDesktop> {
             ),
           ],
         ),
-      );
-    });
-  }
+      ),
+    );
+  });
+}
+
 
   Widget _buildMediaGallery(bool isDarkMode, Ad ad) {
     return _MediaGallery(ad: ad, isDarkMode: isDarkMode);
@@ -2412,7 +2402,7 @@ Future<void> _openWebVideoDialog(String url) async {
           viewType: _kWebVideoViewType,
           videoUrl: url,
           onKick: _webKickHard,
-        );
+    );
       },
     );
   } catch (e) {

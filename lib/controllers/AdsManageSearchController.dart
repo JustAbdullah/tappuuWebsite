@@ -65,7 +65,7 @@ Future<void> ensureHomeInitialized() async {
   var currentAttributes = <Map<String, dynamic>>[].obs;
 
   // ==================== إعدادات API ====================
-  final String _baseUrl = 'https://stayinme.arabiagroup.net/lar_stayInMe/public/api';
+  final String _baseUrl = 'https://taapuu.com/api';
   
   // ==================== قوائم البيانات الرئيسية ====================
   var adsList = <Ad>[].obs;
@@ -371,43 +371,29 @@ final RxnDouble selectedRadius = RxnDouble(); // null افتراضيًا
 
 
 // ==================== جلب الإعلانات (الوظيفة الأساسية) ====================
+// ==================== جلب الإعلانات (محدث مع Pagination) ====================
 Future<void> fetchAds({
-  // التصنيفات
   int? categoryId,
   int? subCategoryLevelOneId,
   int? subCategoryLevelTwoId,
-
-  // البحث والفرز
   String? search,
-  String? sortBy,        // 'price_asc','price_desc','newest',...
+  String? sortBy,
   String order = 'desc',
-
-  // الجغرافيا
   double? latitude,
   double? longitude,
   double? distanceKm,
-
-  // السمات
   List<Map<String, dynamic>>? attributes,
-
-  // المدينة/المنطقة
   int? cityId,
   int? areaId,
-
-  // الفلاتر الجديدة
   String? timeframe,
   bool onlyFeatured = false,
-
-  // ✅ السعر
   double? priceMin,
   double? priceMax,
-
-  // عام
   required String lang,
   int page = 1,
   int perPage = 15,
 }) async {
-  // 1) حفظ حالة أساسية
+  // 1) حفظ الحالة (للـ pagination)
   currentCategoryId.value            = categoryId ?? 0;
   currentSubCategoryLevelOneId.value = subCategoryLevelOneId;
   currentSubCategoryLevelTwoId.value = subCategoryLevelTwoId;
@@ -420,56 +406,56 @@ Future<void> fetchAds({
   this.onlyFeatured.value            = onlyFeatured;
   currentLang                        = lang;
 
+  currentPage.value = page;
+  perPageRx.value = perPage;
+
   isLoadingAds.value = true;
+  currentPriceMin.value = priceMin;
+currentPriceMax.value = priceMax;
+
   try {
     final bool useFilterEndpoint =
-         categoryId != null
-      || subCategoryLevelOneId != null
-      || subCategoryLevelTwoId != null
-      || (search?.isNotEmpty ?? false)
-      || sortBy != null
-      || latitude != null
-      || longitude != null
-      || distanceKm != null
-      || (attributes != null && attributes.isNotEmpty)
-      || cityId != null
-      || areaId != null
-      || onlyFeatured
-      || (timeframe != null && timeframe != 'all')
-      || priceMin != null
-      || priceMax != null;
+        categoryId != null ||
+        subCategoryLevelOneId != null ||
+        subCategoryLevelTwoId != null ||
+        (search?.isNotEmpty ?? false) ||
+        sortBy != null ||
+        latitude != null ||
+        longitude != null ||
+        distanceKm != null ||
+        (attributes != null && attributes.isNotEmpty) ||
+        cityId != null ||
+        areaId != null ||
+        onlyFeatured ||
+        (timeframe != null && timeframe != 'all') ||
+        priceMin != null ||
+        priceMax != null;
 
     late http.Response response;
 
     if (useFilterEndpoint) {
       final uri = Uri.parse('$_baseUrl/ads/filter');
       final body = <String, dynamic>{
-        if (categoryId != null)            'category_id':               categoryId,
-        if (subCategoryLevelOneId != null) 'sub_category_level_one_id': subCategoryLevelOneId,
-        if (subCategoryLevelTwoId != null) 'sub_category_level_two_id': subCategoryLevelTwoId,
-        if (search?.isNotEmpty ?? false)   'search':                    search!.trim(),
-        if (sortBy != null)                'sort_by':                   sortBy,
-        'order':                           order,
-        if (latitude  != null)             'latitude':                  latitude,
-        if (longitude != null)             'longitude':                 longitude,
-        if (distanceKm!= null)             'distance':                  distanceKm,
-        if (attributes != null && attributes.isNotEmpty)
-                                           'attributes':                attributes,
-        if (cityId != null)                'city_id':                   cityId,
-        if (areaId != null)                'area_id':                   areaId,
-        if (timeframe != null && timeframe != 'all')
-                                           'timeframe':                 timeframe,
-        if (onlyFeatured)                  'only_featured':             true,
-        // ✅ السعر
-        if (priceMin != null)              'price_min':                 priceMin,
-        if (priceMax != null)              'price_max':                 priceMax,
-        'lang':                            lang,
-        'page':                            page,
-        'per_page':                        perPage,
+        if (categoryId != null)             'category_id': categoryId,
+        if (subCategoryLevelOneId != null)  'sub_category_level_one_id': subCategoryLevelOneId,
+        if (subCategoryLevelTwoId != null)  'sub_category_level_two_id': subCategoryLevelTwoId,
+        if (search?.isNotEmpty ?? false)    'search': search!.trim(),
+        if (sortBy != null)                 'sort_by': sortBy,
+        'order': order,
+        if (latitude != null)               'latitude': latitude,
+        if (longitude != null)              'longitude': longitude,
+        if (distanceKm != null)             'distance': distanceKm,
+        if (attributes != null && attributes.isNotEmpty) 'attributes': attributes,
+        if (cityId != null)                 'city_id': cityId,
+        if (areaId != null)                 'area_id': areaId,
+        if (timeframe != null && timeframe != 'all') 'timeframe': timeframe,
+        if (onlyFeatured)                   'only_featured': true,
+        if (priceMin != null)               'price_min': priceMin,
+        if (priceMax != null)               'price_max': priceMax,
+        'lang': lang,
+        'page': page,
+        'per_page': perPage,
       };
-
-      print('📤 [POST REQUEST] URL: $uri');
-      print('📤 [POST BODY] ${json.encode(body)}');
 
       response = await http.post(
         uri,
@@ -478,33 +464,72 @@ Future<void> fetchAds({
       );
     } else {
       final params = <String, String>{
-        'lang':     lang,
-        'page':     page.toString(),
+        'lang': lang,
+        'page': page.toString(),
         'per_page': perPage.toString(),
-        'order':    order,
+        'order': order,
       };
       final uri = Uri.parse('$_baseUrl/ads').replace(queryParameters: params);
-      print('📤 [GET REQUEST] URL: $uri');
       response = await http.get(uri);
     }
 
     if (response.statusCode == 200) {
       final jsonData = json.decode(response.body) as Map<String, dynamic>;
-      final rawList = (jsonData['data'] as List<dynamic>);
+
+      List<dynamic> rawList = const [];
+      int? total;
+      int? lastPage;
+      int? currentPageFromApi;
+      int? perPageFromApi;
+
+      final dataField = jsonData['data'];
+
+      if (dataField is List) {
+        rawList = dataField;
+      } else if (dataField is Map<String, dynamic>) {
+        if (dataField['data'] is List) rawList = (dataField['data'] as List);
+        total = (dataField['total'] is num) ? (dataField['total'] as num).toInt() : total;
+        lastPage = (dataField['last_page'] is num) ? (dataField['last_page'] as num).toInt() : lastPage;
+        currentPageFromApi = (dataField['current_page'] is num) ? (dataField['current_page'] as num).toInt() : currentPageFromApi;
+        perPageFromApi = (dataField['per_page'] is num) ? (dataField['per_page'] as num).toInt() : perPageFromApi;
+      }
+
+      final meta = jsonData['meta'];
+      if (meta is Map<String, dynamic>) {
+        total = (meta['total'] is num) ? (meta['total'] as num).toInt() : total;
+        lastPage = (meta['last_page'] is num) ? (meta['last_page'] as num).toInt() : lastPage;
+        currentPageFromApi = (meta['current_page'] is num) ? (meta['current_page'] as num).toInt() : currentPageFromApi;
+        perPageFromApi = (meta['per_page'] is num) ? (meta['per_page'] as num).toInt() : perPageFromApi;
+      }
+
+      total = (jsonData['total'] is num) ? (jsonData['total'] as num).toInt() : total;
+      lastPage = (jsonData['last_page'] is num) ? (jsonData['last_page'] as num).toInt() : lastPage;
+      currentPageFromApi = (jsonData['current_page'] is num) ? (jsonData['current_page'] as num).toInt() : currentPageFromApi;
+      perPageFromApi = (jsonData['per_page'] is num) ? (jsonData['per_page'] as num).toInt() : perPageFromApi;
+
+      final effectivePerPage = perPageFromApi ?? perPage;
+      final effectiveTotal = total ?? rawList.length;
+      final effectiveLastPage = lastPage ?? ((effectiveTotal / (effectivePerPage == 0 ? 1 : effectivePerPage)).ceil());
+
+      totalAdsCount.value = effectiveTotal;
+      totalPages.value = effectiveLastPage <= 0 ? 1 : effectiveLastPage;
+      currentPage.value = currentPageFromApi ?? page;
+      perPageRx.value = effectivePerPage;
+
       var ads = AdResponse.fromJson({'data': rawList}).data;
 
-      // ترتيب حسب قرب الموقع إن أُرسل
+      // ترتيب حسب القرب إن أُرسل
       if (latitude != null && longitude != null) {
         double _deg2rad(double deg) => deg * pi / 180;
         double haversine(double lat1, double lng1, double lat2, double lng2) {
           const R = 6371;
           final dLat = _deg2rad(lat2 - lat1);
           final dLon = _deg2rad(lng2 - lng1);
-          final a = sin(dLat/2)*sin(dLat/2)
-                  + cos(_deg2rad(lat1))*cos(_deg2rad(lat2))
-                  * sin(dLon/2)*sin(dLon/2);
-          final c = 2*atan2(sqrt(a), sqrt(1 - a));
-          return R*c;
+          final a = sin(dLat / 2) * sin(dLat / 2) +
+              cos(_deg2rad(lat1)) * cos(_deg2rad(lat2)) *
+                  sin(dLon / 2) * sin(dLon / 2);
+          final c = 2 * atan2(sqrt(a), sqrt(1 - a));
+          return R * c;
         }
 
         ads.sort((a, b) {
@@ -514,11 +539,12 @@ Future<void> fetchAds({
         });
       }
 
-      adsList.value         = ads;
-      filteredAdsList.value = ads;
-      allAdsList.value      = ads;
+      // ✅ الأهم: assignAll لضمان تحديث الـ Obx دائمًا
+      adsList.assignAll(ads);
+      filteredAdsList.assignAll(ads);
+      allAdsList.assignAll(ads);
+
     } else {
-      print('❌ [ERROR] HTTP ${response.statusCode}');
       Get.snackbar("خطأ", "تعذّر جلب الإعلانات (${response.statusCode})");
     }
   } catch (e, st) {
@@ -530,6 +556,9 @@ Future<void> fetchAds({
   }
 }
 
+
+final RxnDouble currentPriceMin = RxnDouble();
+final RxnDouble currentPriceMax = RxnDouble();
 
 ///
   /// دالة تحميل الإعلانات المميزة (POST /ads/filter)
@@ -752,7 +781,8 @@ Future<void> fetchAds({
   }
   
   /// يمسح كل الفلاتر ويعيد القيم إلى الافتراضي
-  void clearAllFilters() {
+  void clearAllFilters() {  currentPriceMin.value = null;
+currentPriceMax.value = null;
     currentSearch.value = '';
     searchController.clear();
     isSearching.value = false;
@@ -825,24 +855,49 @@ Future<void> fetchAds({
 
 
   // ==================== إدارة الترقيم ====================
-  var totalAdsCount = 0.obs;
-  var totalPages = 0.obs;
-  var currentPage = 1.obs;
+final RxInt currentPage = 1.obs;
+final RxInt perPageRx = 15.obs;
+final RxInt totalPages = 1.obs;
+final RxInt totalAdsCount = 0.obs;
   
-  void goToPage(int page) {
-    currentPage.value = page;
-    fetchAds(
-      page: page,
-      lang: currentLang,
-    );
-  }
+  // ==================== goToPage (مهم جداً لتفعيل الأزرار) ====================
+Future<void> goToPage(int page) async {
+  if (isLoadingAds.value) return;
+  if (page < 1 || page > totalPages.value) return;
+
+ await fetchAds(
+  categoryId: currentCategoryId.value == 0 ? null : currentCategoryId.value,
+  subCategoryLevelOneId: currentSubCategoryLevelOneId.value,
+  subCategoryLevelTwoId: currentSubCategoryLevelTwoId.value,
+  search: currentSearch.value.isEmpty ? null : currentSearch.value,
+  sortBy: currentSortBy.value,
+  order: currentOrder.value,
+  attributes: currentAttributes.value.isNotEmpty ? currentAttributes.value : null,
+  timeframe: currentTimeframe.value,
+  onlyFeatured: onlyFeatured.value,
+  cityId: selectedCity.value?.id,
+  areaId: selectedArea.value?.id,
+  priceMin: currentPriceMin.value, // ✅
+  priceMax: currentPriceMax.value, // ✅
+  lang: currentLang,
+  page: page,
+  perPage: perPageRx.value,
+);
+
+}
+
   
   void resetFilters() {
+
+      currentPriceMin.value = null;
+currentPriceMax.value = null;
     clearAllFilters();
     fetchAds(
       lang: Get.find<ChangeLanguageController>().currentLocale.value.languageCode,
       page: 1,
     );
+  
+
   }
   
   // ==================== جلب أحدث الإعلانات ====================
@@ -1320,261 +1375,391 @@ Future<void> searchAdsByImage({
     isLoadingAds.value = false;
   }
 }
-  /// جلب بيانات SEO من API
-  Future<Map<String, dynamic>> fetchSeoData(int adId, {String lang = 'ar'}) async {
-    try {
-      final uri = Uri.parse('$_baseUrl/ad-seo/$adId?lang=$lang');
-      final response = await http.get(uri);
 
-      if (response.statusCode == 200) {
-        final decoded = json.decode(response.body);
-        // قد يعيد الـ API لاحقًا غلافًا آخر؛ ضمّن فحصًا بسيطًا
-        if (decoded is Map<String, dynamic>) return decoded;
+///..... جلب بيانات SEO من API
+Future<Map<String, dynamic>> fetchSeoData(int adId, {String lang = 'ar'}) async {
+  try {
+    final uri = Uri.parse('$_baseUrl/ad-seo/$adId?lang=$lang');
+    final response = await http.get(
+      uri,
+      headers: {'Accept': 'application/json'},
+    );
+
+    if (response.statusCode == 200) {
+      final decoded = json.decode(response.body);
+
+      // يدعم: {data:{...}} أو {...}
+      if (decoded is Map<String, dynamic>) {
+        final data = decoded['data'];
+        if (data is Map<String, dynamic>) {
+          return Map<String, dynamic>.from(data);
+        }
+        return decoded;
+      }
+
+      if (decoded is Map) {
         return Map<String, dynamic>.from(decoded);
       }
-      return {};
-    } catch (e) {
-      debugPrint('Error fetching SEO data: $e');
-      return {};
     }
+
+    return {};
+  } catch (e) {
+    debugPrint('Error fetching SEO data: $e');
+    return {};
   }
+}
 
-  /// تحديث رأس الصفحة ببيانات SEO (نسخة محسنة وكاملة)
-  void updateDocumentHead(Map<String, dynamic> seoData) {
-    try {
-      // تأكد من وجود الوثيقة
-      if (html.document == null) {
-        debugPrint('HTML document is not available');
-        return;
+// ✅ helper: اقرأ نص من أكثر من مفتاح (camel + snake)
+String? _pickStr(Map<String, dynamic> data, List<String> keys) {
+  for (final k in keys) {
+    final v = data[k];
+    if (v == null) continue;
+    final s = v.toString().trim();
+    if (s.isNotEmpty) return s;
+  }
+  return null;
+}
+
+/// تحديث رأس الصفحة ببيانات SEO (نسخة محسنة وكاملة)
+void updateDocumentHead(Map<String, dynamic> seoData) {
+  try {
+    if (html.document.head == null) return;
+
+    // ✅ يدعم camelCase + snake_case
+    final title        = _pickStr(seoData, ['metaTitle', 'meta_title', 'title']);
+    final description  = _pickStr(seoData, ['metaDescription', 'meta_description', 'description']);
+    final canonicalRaw = _pickStr(seoData, ['canonical', 'canonical_url', 'canonicalUrl']);
+    final ogImageRaw   = _pickStr(seoData, ['ogImage', 'og_image', 'og_image_url']);
+
+    // title + H1
+    if (title != null && title.isNotEmpty) {
+      html.document.title = title;
+      _injectOrUpdateAdH1(title);
+      _updateMetaTag('og:title', title);
+      _updateMetaTag('twitter:title', title);
+    }
+
+    // meta description
+    if (description != null && description.isNotEmpty) {
+      _updateMetaTag('description', description);
+      _updateMetaTag('og:description', description);
+      _updateMetaTag('twitter:description', description);
+    }
+
+    // canonical + og:url (✅ نبدّل للهست الحالي)
+    final canonical = (canonicalRaw != null && canonicalRaw.isNotEmpty)
+        ? _normalizeUrl(
+            canonicalRaw,
+            forceCurrentHost: true,
+            allowHostSwap: true,
+            dropFragment: true,
+          )
+        : _currentCleanUrl();
+
+    _updateLinkTag('canonical', canonical);
+    _updateMetaTag('og:url', canonical);
+
+    // og:image + twitter:image (🚨 لا تبدّل الهوست للصور)
+    if (ogImageRaw != null && ogImageRaw.isNotEmpty) {
+      final ogImage = _normalizeUrl(
+        ogImageRaw,
+        forceCurrentHost: false,
+        allowHostSwap: false, // مهم جدًا عندك
+        dropFragment: false,
+      );
+      _updateMetaTag('og:image', ogImage);
+      _updateMetaTag('og:image:alt', title ?? '');
+      _updateMetaTag('twitter:image', ogImage);
+    }
+
+    // JSON-LD
+    final jsonLd = seoData['jsonLd'] ?? seoData['json_ld'];
+    if (jsonLd != null) {
+      final normalized = _normalizeJsonLd(jsonLd);
+      if (normalized != null) {
+        _updateJsonLd(normalized);
       }
+    }
+  } catch (e) {
+    debugPrint('Error updating document head: $e');
+  }
+}
 
-      // title
-      final title = seoData['metaTitle']?.toString();
-      if (title != null && title.isNotEmpty) {
-        html.document.title = title;
-        _injectOrUpdateAdH1(title);
-      }
+/// دالة لحقن/تحديث H1 داخل DOM (بدون ستايلات “قبيحة”)
+void _injectOrUpdateAdH1(String title) {
+  try {
+    final t = title.trim();
+    if (t.isEmpty) return;
 
-      // meta description
-      final description = seoData['metaDescription']?.toString();
-      if (description != null && description.isNotEmpty) {
-        _updateMetaTag('description', description);
-      }
+    final existing = html.document.getElementById('ad-title-h1');
+    if (existing != null) {
+      existing.text = t;
+      return;
+    }
 
-      // canonical
-      final canonical = seoData['canonical']?.toString();
-      if (canonical != null && canonical.isNotEmpty) {
-        final normalizedCanonical = _normalizeCanonical(canonical);
-        _updateLinkTag('canonical', normalizedCanonical);
-        _updateMetaTag('og:url', normalizedCanonical);
+    final h1 = html.Element.tag('h1')
+      ..id = 'ad-title-h1'
+      ..text = t
+      ..classes.add('seo-ad-h1');
+
+    h1.setAttribute('itemprop', 'headline');
+    h1.setAttribute('role', 'heading');
+
+    final anchor = html.document.getElementById('ad-seo-anchor');
+    if (anchor != null) {
+      anchor.append(h1);
+      return;
+    }
+
+    final body = html.document.body;
+    if (body != null) {
+      final wrapper = html.DivElement()
+        ..id = 'ad-seo-anchor'
+        ..classes.add('seo-anchor');
+      wrapper.append(h1);
+
+      if (body.firstChild != null) {
+        body.insertBefore(wrapper, body.firstChild);
       } else {
-        // غلاف احتياطي: استخدم رابط الصفحة الحالية إن لم توجد canonical
-        final fallback = html.window.location.href;
-        _updateLinkTag('canonical', fallback);
-        _updateMetaTag('og:url', fallback);
+        body.append(wrapper);
       }
+      return;
+    }
 
-      // og:image
-      final ogImage = seoData['ogImage']?.toString();
-      if (ogImage != null && ogImage.isNotEmpty) {
-        final normalizedOgImage = _normalizeCanonical(ogImage);
-        _updateMetaTag('og:image', normalizedOgImage);
-        _updateMetaTag('og:image:alt', title ?? '');
-      }
+    html.document.head?.append(h1);
+  } catch (e) {
+    debugPrint('inject H1 error: $e');
+  }
+}
 
-      // twitter tags
-      if (title != null && title.isNotEmpty) _updateMetaTag('twitter:title', title);
-      if (description != null && description.isNotEmpty) _updateMetaTag('twitter:description', description);
-      if (ogImage != null && ogImage.isNotEmpty) _updateMetaTag('twitter:image', _normalizeCanonical(ogImage));
+/// URL نظيف للصفحة الحالية (بدون # للـ SEO)
+String _currentCleanUrl() {
+  try {
+    final u = Uri.base;
+    return u.replace(fragment: '').toString();
+  } catch (_) {
+    return html.window.location.href;
+  }
+}
 
-      // JSON-LD
-      final jsonLd = seoData['jsonLd'];
-      if (jsonLd != null) {
-        try {
-          final Map<String, dynamic> normalizedJsonLd =
-              jsonDecode(jsonEncode(jsonLd)) as Map<String, dynamic>;
+/// تطبيع canonical و/أو روابط الصور (تنظيف مسارات الاستضافة القديمة)
+String _normalizeUrl(
+  String url, {
+  bool forceCurrentHost = false,
+  bool allowHostSwap = true, // ✅ جديد: نتحكم بتبديل الهوست
+  bool dropFragment = false,
+}) {
+  try {
+    if (url.trim().isEmpty) return url;
 
-          if (normalizedJsonLd['url'] != null && normalizedJsonLd['url'] is String) {
-            normalizedJsonLd['url'] =
-                _normalizeCanonical(normalizedJsonLd['url'] as String);
-          }
+    final current = Uri.base;
+    final currentHost = current.host;
+    final currentScheme = current.scheme.isNotEmpty ? current.scheme : 'https';
 
-          if (normalizedJsonLd['image'] != null) {
-            if (normalizedJsonLd['image'] is String) {
-              normalizedJsonLd['image'] =
-                  _normalizeCanonical(normalizedJsonLd['image'] as String);
-            } else if (normalizedJsonLd['image'] is List) {
-              normalizedJsonLd['image'] = (normalizedJsonLd['image'] as List).map((e) {
-                if (e is String) return _normalizeCanonical(e);
-                return e;
-              }).toList();
-            }
-          }
+    String fixed = url.trim();
 
-          _updateJsonLd(normalizedJsonLd);
-        } catch (e) {
-          // لو فشل التطبيع، جرّب إضافة الـ jsonLd كما هو
-          try {
-            _updateJsonLd(jsonLd as Map<String, dynamic>);
-          } catch (_) {
-            debugPrint('Failed to update JSON-LD: $e');
-          }
+    // //example.com/path
+    if (fixed.startsWith('//')) fixed = '$currentScheme:$fixed';
+
+    Uri? u = Uri.tryParse(fixed);
+    if (u == null) return fixed;
+
+    // لو الرابط نسبي
+    if (!u.hasScheme) {
+      u = Uri.parse(current.origin).resolveUri(u);
+    }
+
+    // تنظيف path من مشاكل الاستضافة القديمة
+    String path = u.path;
+    path = path.replaceFirst(RegExp(r'^/BackEnd_Taapuu/public/?', caseSensitive: false), '/');
+    path = path.replaceFirst(RegExp(r'^/public/?', caseSensitive: false), '/');
+    path = path.replaceAll(RegExp(r'/public/', caseSensitive: false), '/');
+
+    final legacyHosts = <String>{
+      'stayinme.arabiagroup.net',
+      'testing.arabiagroup.net',
+      'www.taapuu.com',
+    };
+
+    final isLegacyHost = u.host.isNotEmpty && legacyHosts.contains(u.host.toLowerCase());
+    final hasLegacyPath = fixed.contains('BackEnd_Taapuu/public') || fixed.contains('/public/');
+
+    final shouldSwapHost =
+        forceCurrentHost || (allowHostSwap && (isLegacyHost || hasLegacyPath));
+
+    Uri out = u.replace(path: path);
+
+    if (shouldSwapHost) {
+      out = out.replace(
+        scheme: currentScheme,
+        host: currentHost,
+        port: null,
+      );
+    }
+
+    if (dropFragment) out = out.replace(fragment: '');
+
+    return out.toString();
+  } catch (_) {
+    return url;
+  }
+}
+
+/// تطبيع JSON-LD (يدعم Map / List / String JSON)
+Map<String, dynamic>? _normalizeJsonLd(dynamic jsonLd) {
+  try {
+    dynamic obj = jsonLd;
+
+    if (obj is String) {
+      obj = jsonDecode(obj);
+    }
+
+    // ✅ لو كانت قائمة: نغلفها داخل @graph
+    if (obj is List) {
+      obj = <String, dynamic>{
+        '@context': 'https://schema.org',
+        '@graph': List<dynamic>.from(obj),
+      };
+    }
+
+    if (obj is! Map) return null;
+
+    final map = (jsonDecode(jsonEncode(obj)) as Map).cast<String, dynamic>();
+
+    // url (✅ بدّل للهست الحالي)
+    if (map['url'] is String) {
+      map['url'] = _normalizeUrl(
+        map['url'] as String,
+        forceCurrentHost: true,
+        allowHostSwap: true,
+        dropFragment: true,
+      );
+    }
+
+    // image (🚨 لا تبدّل الهوست للصور)
+    final img = map['image'];
+    if (img is String) {
+      map['image'] = _normalizeUrl(
+        img,
+        forceCurrentHost: false,
+        allowHostSwap: false,
+      );
+    } else if (img is List) {
+      map['image'] = img.map((e) {
+        if (e is String) {
+          return _normalizeUrl(
+            e,
+            forceCurrentHost: false,
+            allowHostSwap: false,
+          );
         }
-      }
-    } catch (e) {
-      debugPrint('Error updating document head: $e');
+        return e;
+      }).toList();
     }
+
+    return map;
+  } catch (e) {
+    debugPrint('normalize JSON-LD failed: $e');
+    return null;
   }
+}
 
-  /// دالة لحقن/تحديث H1 داخل DOM (تضمن وجود H1 مرئي لكل إعلان)
-  void _injectOrUpdateAdH1(String title) {
-    try {
-      final t = title.trim();
-      if (t.isEmpty) return;
+/// تحديث/إضافة وسم meta (OG property + Twitter name) — ✅ يمنع التكرار لو كان موجود بسمة غلط
+void _updateMetaTag(String key, String content) {
+  try {
+    final c = content.trim();
+    if (c.isEmpty) return;
 
-      final existing = html.document.getElementById('ad-title-h1');
-      if (existing != null) {
-        existing.text = t;
-        return;
-      }
+    final isOg = key.startsWith('og:');
+    final attr = isOg ? 'property' : 'name';
 
-      final h1 = html.Element.tag('h1')
-        ..id = 'ad-title-h1'
-        ..text = t;
+    // التقطه سواء كان name أو property
+    html.Element? element =
+        html.document.head?.querySelector('meta[property="$key"], meta[name="$key"]');
 
-      h1.setAttribute('itemprop', 'headline');
-      h1.setAttribute('role', 'heading');
-
-      // ستايل افتراضي — يمكن تعديله من index.html عبر CSS
-      h1.style.margin = '10px 0';
-      h1.style.fontSize = '20px';
-      h1.style.fontWeight = '700';
-      h1.style.color = '#222';
-
-      final anchor = html.document.getElementById('ad-seo-anchor');
-      if (anchor != null) {
-        anchor.append(h1);
-      } else {
-        final body = html.document.body;
-        if (body != null) {
-          body.insertBefore(h1, body.firstChild);
-        } else {
-          html.document.head?.append(h1); // حل أخير
-        }
-      }
-    } catch (e) {
-      debugPrint('inject H1 error: $e');
+    if (element == null) {
+      final meta = html.MetaElement()..setAttribute(attr, key);
+      html.document.head?.append(meta);
+      element = meta;
+    } else {
+      // صحّح السمة لو كانت غلط
+      element.attributes.remove(isOg ? 'name' : 'property');
+      element.setAttribute(attr, key);
     }
+
+    element.setAttribute('content', c);
+  } catch (e) {
+    debugPrint('Error updating meta tag $key: $e');
   }
+}
 
-  /// تطبيع canonical و/أو روابط الصور
-  String _normalizeCanonical(String url) {
-    try {
-      if (url.isEmpty) return url;
+/// تحديث/إضافة وسم link (مثل canonical)
+void _updateLinkTag(String rel, String href) {
+  try {
+    final h = href.trim();
+    if (h.isEmpty) return;
 
-      // قاعدة استبدال بسيطة كما طلبت — عدلها حسب بيئة deploy الحقيقية
-      if (url.contains('/lar_stayInMe/public')) {
-        return url.replaceAll(
-            'https://stayinme.arabiagroup.net/lar_stayInMe/public',
-            'https://testing.arabiagroup.net');
-      }
-
-      if (url.startsWith('https://stayinme.arabiagroup.net')) {
-        return url.replaceFirst(
-            'https://stayinme.arabiagroup.net', 'https://testing.arabiagroup.net');
-      }
-
-      return url;
-    } catch (e) {
-      return url;
+    html.Element? element = html.document.head?.querySelector('link[rel="$rel"]');
+    if (element == null) {
+      final link = html.LinkElement()..rel = rel;
+      html.document.head?.append(link);
+      element = link;
     }
+    element.setAttribute('href', h);
+  } catch (e) {
+    debugPrint('Error updating link tag $rel: $e');
   }
+}
 
-  /// تحديث/إضافة وسم meta (name أو property)
-  void _updateMetaTag(String name, String content) {
-    try {
-      final isOgOrTwitter = name.startsWith('og:') || name.startsWith('twitter:');
-      final selector = isOgOrTwitter ? 'meta[property="$name"]' : 'meta[name="$name"]';
-      html.Element? element = html.document.querySelector(selector);
+/// تحديث JSON-LD في head (نستبدل فقط JSON-LD الخاص بالإعلان)
+void _updateJsonLd(Map<String, dynamic> jsonLd) {
+  try {
+    html.document.getElementById('ad-jsonld')?.remove();
 
-      if (element == null) {
-        final meta = html.MetaElement();
-        if (isOgOrTwitter) {
-          meta.setAttribute('property', name);
-        } else {
-          meta.setAttribute('name', name);
-        }
-        html.document.head?.append(meta);
-        element = meta;
-      }
-      element.setAttribute('content', content);
-    } catch (e) {
-      debugPrint('Error updating meta tag $name: $e');
-    }
+    final script = html.ScriptElement()
+      ..id = 'ad-jsonld'
+      ..type = 'application/ld+json'
+      ..text = jsonEncode(jsonLd);
+
+    html.document.head?.append(script);
+  } catch (e) {
+    debugPrint('Error updating JSON-LD: $e');
   }
+}
 
-  /// تحديث/إضافة وسم link (مثل canonical)
-  void _updateLinkTag(String rel, String href) {
-    try {
-      html.Element? element = html.document.querySelector('link[rel="$rel"]');
-      if (element == null) {
-        final link = html.LinkElement();
-        link.setAttribute('rel', rel);
-        html.document.head?.append(link);
-        element = link;
-      }
-      element.setAttribute('href', href);
-    } catch (e) {
-      debugPrint('Error updating link tag $rel: $e');
-    }
+/// دالة مساعدة للتعامل مع حالة عدم توفر بيانات SEO (قيمة افتراضية)
+void handleMissingSeoData() {
+  final defaultTitle = 'طابوو - سوق الإعلانات المبوبة في سوريا';
+  final defaultDescription =
+      'أفضل منصة للإعلانات المبوبة في سوريا - عقارات للبيع والإيجار، سيارات، دراجات نارية وقطع غيار.';
+  final defaultUrl = _currentCleanUrl();
+
+  try {
+    html.document.title = defaultTitle;
+
+    _updateMetaTag('description', defaultDescription);
+    _updateLinkTag('canonical', defaultUrl);
+
+    _updateMetaTag('og:title', defaultTitle);
+    _updateMetaTag('og:description', defaultDescription);
+    _updateMetaTag('og:url', defaultUrl);
+
+    _updateMetaTag('twitter:title', defaultTitle);
+    _updateMetaTag('twitter:description', defaultDescription);
+
+    _injectOrUpdateAdH1(defaultTitle);
+  } catch (e) {
+    debugPrint('Error setting default SEO data: $e');
   }
+}
 
-  /// تحديث JSON-LD في head (نستبدل أي JSON-LD موجود)
-  void _updateJsonLd(Map<String, dynamic> jsonLd) {
-    try {
-      html.document.querySelectorAll('script[type="application/ld+json"]').forEach((element) {
-        element.remove();
-      });
+// ✅ جديد: تتبع الخصائص لأي تصنيف
+Rxn<int> attributesCategoryId = Rxn<int>();
 
-      final script = html.ScriptElement();
-      script.type = 'application/ld+json';
-      script.text = jsonEncode(jsonLd);
-      html.document.head?.append(script);
-    } catch (e) {
-      debugPrint('Error updating JSON-LD: $e');
-    }
-  }
-
-  /// دالة مساعدة للتعامل مع حالة عدم توفر بيانات SEO (قيمة افتراضية)
-  void handleMissingSeoData() {
-    final defaultTitle = 'طابوو - سوق الإعلانات المبوبة في سوريا';
-    final defaultDescription =
-        'أفضل منصة للإعلانات المبوبة في سوريا - عقارات للبيع والإيجار، سيارات، دراجات نارية وقطع غيار.';
-    final defaultUrl = html.window.location.href;
-
-    try {
-      html.document.title = defaultTitle;
-      _updateMetaTag('description', defaultDescription);
-      _updateLinkTag('canonical', defaultUrl);
-      _updateMetaTag('og:title', defaultTitle);
-      _updateMetaTag('og:description', defaultDescription);
-      _updateMetaTag('og:url', defaultUrl);
-
-      // حقن H1 افتراضي (يساعد في الـ Inspector قبل وصول SEO الحقيقي)
-      _injectOrUpdateAdH1(defaultTitle);
-    } catch (e) {
-      debugPrint('Error setting default SEO data: $e');
-    }
-  }
-
-
-    // ✅ جديد: تتبع الخصائص لأي تصنيف
-  Rxn<int> attributesCategoryId = Rxn<int>();
-
-  // ✅ جديد: تنظيف حالة الخصائص بالكامل
-  void resetAttributesState() {
-    attributesList.clear();
-    attributesCategoryId.value = null;
-    isLoadingAttributes.value = false;
-  }
+// ✅ جديد: تنظيف حالة الخصائص بالكامل
+void resetAttributesState() {
+  attributesList.clear();
+  attributesCategoryId.value = null;
+  isLoadingAttributes.value = false;
+}
 }

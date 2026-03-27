@@ -9,7 +9,7 @@ import '../core/data/model/Message.dart';
 import '../core/data/model/conversation.dart';
 
 class ChatController extends GetxController {
-  final String _apiBase = "https://stayinme.arabiagroup.net/lar_stayInMe/public/api";
+  final String _apiBase = "https://taapuu.com/api";
   String get messagesBase => '$_apiBase/messages';
 
   // ---------- state ----------

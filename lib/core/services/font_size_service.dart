@@ -26,7 +26,7 @@ class FontSizeService {
   FontSizeService._private();
   static final FontSizeService instance = FontSizeService._private();
 
-  static const _baseUrl = 'https://stayinme.arabiagroup.net/lar_stayInMe/public/api';
+  static const _baseUrl = 'https://taapuu.com/api';
   static const _kPrefsKey = 'font_sizes_map';
   static const _kPrefsRawKey = 'font_sizes_raw';
 

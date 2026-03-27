@@ -5,7 +5,7 @@ import 'package:http/http.dart' as http;
 import '../core/data/model/company_member.dart';
 
 class CompanyMembersController extends GetxController {
-  static const _baseUrl = 'https://stayinme.arabiagroup.net/lar_stayInMe/public/api';
+  static const _baseUrl = 'https://taapuu.com/api';
 
   var members = <CompanyMember>[].obs;
   var isLoading = false.obs;

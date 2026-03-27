@@ -11,7 +11,7 @@ import '../core/data/model/BrowsingHistory.dart';
 import '../core/localization/changelanguage.dart';
 class BrowsingHistoryController extends GetxController {
 
-    static const _baseUrl = 'https://stayinme.arabiagroup.net/lar_stayInMe/public/api';
+    static const _baseUrl = 'https://taapuu.com/api';
 
 
 

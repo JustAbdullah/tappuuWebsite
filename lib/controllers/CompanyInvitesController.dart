@@ -7,7 +7,7 @@ import '../core/data/model/company_invite.dart';
 
 class CompanyInvitesController extends GetxController {
   static const _baseUrl =
-      'https://stayinme.arabiagroup.net/lar_stayInMe/public/api';
+      'https://taapuu.com/api';
 
   // ===================== State =====================
   final invites = <CompanyInvite>[].obs;       // دعوات شركة محددة

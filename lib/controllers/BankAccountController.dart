@@ -8,7 +8,7 @@ import '../core/data/model/BankAccountModel.dart';
 
 
 class BankAccountController extends GetxController {
-  final String _baseUrl = 'https://stayinme.arabiagroup.net/lar_stayInMe/public/api';
+  final String _baseUrl = 'https://taapuu.com/api';
   RxList<BankAccountModel> accounts = <BankAccountModel>[].obs;
   RxBool isLoading = false.obs;
   Rxn<BankAccountModel> current = Rxn<BankAccountModel>();

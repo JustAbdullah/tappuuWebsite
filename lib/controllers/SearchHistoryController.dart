@@ -12,7 +12,7 @@ import 'package:tappuu_website/controllers/LoadingController.dart';
 import '../core/data/model/SearchHistory.dart';
 
 class SearchHistoryController extends GetxController {
-  final String _baseUrl = 'https://stayinme.arabiagroup.net/lar_stayInMe/public/api';
+  final String _baseUrl = 'https://taapuu.com/api';
 
   var searchHistoryList = <SearchHistory>[].obs;
   var isLoadingHistory = false.obs;

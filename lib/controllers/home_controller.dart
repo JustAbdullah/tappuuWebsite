@@ -65,7 +65,7 @@ class HomeController extends GetxController
   Rx<int?> currentCategoryId = Rx<int?>(null);
   Rx<int?> currentSubCategoryId = Rx<int?>(null);
 
-  final String _baseUrl = "https://stayinme.arabiagroup.net/lar_stayInMe/public/api";
+  final String _baseUrl = "https://taapuu.com/api";
 
   @override
   void onInit() {

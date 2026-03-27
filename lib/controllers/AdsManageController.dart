@@ -1,14 +1,15 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
+import 'dart:html' as html; // ✅ Web only
 
 import 'package:image_picker/image_picker.dart';
+import 'package:mime/mime.dart';
 import 'package:translator/translator.dart';
 import 'package:video_player/video_player.dart';
 import '../core/data/model/AdResponse.dart';
@@ -30,7 +31,7 @@ class ManageAdController extends GetxController {
     var viewMode = 'vertical_simple'.obs;
   void changeViewMode(String mode) => viewMode.value = mode;
 var currentAttributes = <Map<String, dynamic>>[].obs;
-  String _baseUrl = "https://stayinme.arabiagroup.net/lar_stayInMe/public/api";
+  String _baseUrl = "https://taapuu.com/api";
   RxInt currentImageIndex = 0.obs;
   // Main categories
   var categoriesList = <Category>[].obs;
@@ -528,56 +529,85 @@ Future<void> fetchCities(String countryCode, String language) async {
   var selectedVideos = <PlatformFile>[].obs;
   var videoPlayers = <VideoPlayerController>[].obs;
   var uploadedVideoUrls = <String>[].obs;
+var localVideoPreviewUrls = <String>[].obs;
 
-  // 2) دالة اختيار الفيديو من الجهاز (متعدد)
   Future<void> pickVideos() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.video,
-      allowMultiple: true,
-    );
-    if (result != null && result.files.isNotEmpty) {
-      selectedVideos.assignAll(result.files);
-      // إنشاء VideoPlayerControllers للمعاينة
-      videoPlayers.clear();
-      for (final file in selectedVideos) {
-        final controller =
-            VideoPlayerController.file(File(file.path!));
-        await controller.initialize();
-        videoPlayers.add(controller);
-      }
-    }
+  final result = await FilePicker.platform.pickFiles(
+    type: FileType.video,
+    allowMultiple: true,
+    withData: true, // ✅ مهم للويب: نحتاج bytes لأن path غالباً null
+  );
+
+  if (result == null || result.files.isEmpty) return;
+
+  selectedVideos.assignAll(result.files);
+
+  // نظّف القديم
+  for (final p in videoPlayers) {
+    try { p.dispose(); } catch (_) {}
   }
+  videoPlayers.clear();
+
+  for (final u in localVideoPreviewUrls) {
+    try { html.Url.revokeObjectUrl(u); } catch (_) {}
+  }
+  localVideoPreviewUrls.clear();
+
+  // أنشئ ObjectURL لكل فيديو + معاينة عبر networkUrl
+  for (final f in selectedVideos) {
+    final Uint8List? bytes = f.bytes;
+    if (bytes == null || bytes.isEmpty) continue;
+
+    // استخراج MIME من الاسم + جزء صغير من الهيدر
+    final header = bytes.length >= 16 ? bytes.sublist(0, 16) : bytes;
+    final mime = lookupMimeType(f.name, headerBytes: header) ?? 'video/mp4';
+
+    final blob = html.Blob([bytes], mime);
+    final url = html.Url.createObjectUrlFromBlob(blob);
+    localVideoPreviewUrls.add(url);
+
+    final vc = VideoPlayerController.networkUrl(Uri.parse(url));
+    await vc.initialize();
+    vc.setLooping(true);
+    videoPlayers.add(vc);
+  }
+}
+
 
   // 3) دالة رفع الفيديوهات إلى السيرفر
   Future<void> uploadVideosToServer() async {
-    if (selectedVideos.isEmpty) return;
-    uploadedVideoUrls.clear();
+  if (selectedVideos.isEmpty) return;
 
-    final uri = Uri.parse('$_baseUrl/videos/upload');
-    final request = http.MultipartRequest('POST', uri);
+  uploadedVideoUrls.clear();
 
-    // أضف كل ملف إلى الطلب
-    for (final file in selectedVideos) {
-      request.files.add(
-        http.MultipartFile.fromBytes(
-          'videos[]',
-          File(file.path!).readAsBytesSync(),
-          filename: file.name,
-        ),
-      );
-    }
+  final uri = Uri.parse('$_baseUrl/videos/upload');
+  final request = http.MultipartRequest('POST', uri)
+    ..headers['Accept'] = 'application/json';
 
-    final response = await request.send();
-    final body = await response.stream.bytesToString();
+  for (final f in selectedVideos) {
+    final bytes = f.bytes;
+    if (bytes == null) continue;
 
-    if (response.statusCode == 201) {
-      final data = json.decode(body) as Map<String, dynamic>;
-      final urls = List<String>.from(data['video_urls'] ?? []);
-      uploadedVideoUrls.assignAll(urls);
-    } else {
-      throw Exception('فشل في رفع الفيديوهات: $body');
-    }
+    request.files.add(
+      http.MultipartFile.fromBytes(
+        'videos[]',
+        bytes,
+        filename: f.name,
+      ),
+    );
   }
+
+  final response = await request.send();
+  final body = await response.stream.bytesToString();
+
+  if (response.statusCode == 201) {
+    final data = json.decode(body) as Map<String, dynamic>;
+    final urls = List<String>.from(data['video_urls'] ?? []);
+    uploadedVideoUrls.assignAll(urls);
+  } else {
+    throw Exception('فشل في رفع الفيديوهات: $body');
+  }
+}
 
 
 // ========================= متغيّرات على مستوى الكونترولر =========================
@@ -909,13 +939,7 @@ Future<int?> submitAd({bool? isPay, dynamic premiumDays}) async {
           "⏳ انتهت مهلة الاتصال بالخادم. تحقّق من الشبكة وحاول مرة أخرى.",
           bg: Colors.orange);
       return null;
-    } on SocketException catch (e) {
-      hasError.value = true;
-      debugPrint("🌐 مشكلة في الشبكة: $e");
-      _toastErr("مشكلة شبكة",
-          "📡 لا يمكن الوصول للسيرفر. تحقق من اتصال الإنترنت أو عنوان الخادم.");
-      return null;
-    } catch (e) {
+    }  catch (e) {
       hasError.value = true;
       debugPrint("💥 فشل إرسال الطلب: $e");
       _toastErr("خطأ", "🔧 حدث خطأ أثناء إرسال الطلب: ${e.toString()}");
@@ -1180,7 +1204,7 @@ RxInt idOfadvertiserProfiles = 0.obs;
   Future<void> fetchAdvertiserProfiles(int userId) async {
     isProfilesLoading(true);
     try {
-      final res = await http.get(Uri.parse('https://stayinme.arabiagroup.net/lar_stayInMe/public/api/advertiser-profiles/$userId'));
+      final res = await http.get(Uri.parse('https://taapuu.com/api/advertiser-profiles/$userId'));
       if (res.statusCode == 200) {
         final List data = jsonDecode(res.body);
         advertiserProfiles.value = data.map((e) => AdvertiserProfile.fromJson(e)).toList();

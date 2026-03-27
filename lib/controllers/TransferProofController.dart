@@ -13,8 +13,8 @@ import '../core/data/model/TransferProofModel.dart';
 
 class TransferProofController extends GetxController {
   // عدّل الـ base URL على بيئتك إذا لزم
-  final String _baseUrl = 'https://stayinme.arabiagroup.net/lar_stayInMe/public/api';
-  final String uploadApiUrl = 'https://stayinme.arabiagroup.net/lar_stayInMe/public/api/upload';
+  final String _baseUrl = 'https://taapuu.com/api';
+  final String uploadApiUrl = 'https://taapuu.com/api/upload';
   // إذا تحتاج توكن للمصادقة
   String? authToken;
   void setAuthToken(String? token) => authToken = token;
@@ -72,7 +72,7 @@ class TransferProofController extends GetxController {
   /// إذا السيرفر رجع مسار نسبي مثل "/storage/..." يحوله لرابط كامل
   String normalizeServerImageUrl(String url) {
     if (url.startsWith('http')) return url;
-    final base = 'https://stayinme.arabiagroup.net/lar_stayInMe';
+    final base = 'https://taapuu.com/api';
     if (url.startsWith('/')) return '$base$url';
     return '$base/$url';
   }
@@ -215,7 +215,7 @@ class TransferProofController extends GetxController {
           items = [data];
         } else {
           items = [];
-        }
+        }//..!$^!^$!..//
 
         final parsed = items.map((e) {
           final map = Map<String, dynamic>.from(e as Map<String, dynamic>);

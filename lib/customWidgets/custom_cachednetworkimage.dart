@@ -46,7 +46,7 @@ class CustomCachedNetworkImage extends StatelessWidget {
                 heigthContainer: height.h,
                 widthContainer: width.w,
                 child: TextCustom(
-                    theText: "StayInMe",
+                    theText: "Taapu",
                     fontSizeWidth: 20,
                     fontFamily: AppTextStyles.appFontFamily,
                     fontColor: AppColors.primary))));

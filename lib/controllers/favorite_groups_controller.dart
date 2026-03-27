@@ -9,7 +9,7 @@ import 'LoadingController.dart';
 
 class FavoriteGroupsController extends GetxController {
   final LoadingController _loadingController = Get.find<LoadingController>();
-  static const _baseUrl = 'https://stayinme.arabiagroup.net/lar_stayInMe/public/api/favorite-groups';
+  static const _baseUrl = 'https://taapuu.com/api/favorite-groups';
 
   var groups = <FavoriteGroup>[].obs;
   RxBool isLoading = false.obs;

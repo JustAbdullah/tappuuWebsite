@@ -52,7 +52,7 @@ class _AdvertiserProfilesScreenDeskTopState
 
   // نقطة رفع الصورة (مطابقة لباقي الشاشات)
   static const String _root =
-      "https://stayinme.arabiagroup.net/lar_stayInMe/public/api";
+      "https://taapuu.com/api";
   static const String _uploadApi = "$_root/upload";
 
   @override
@@ -766,7 +766,7 @@ class _ProfileAndMemberCardDesktop extends StatelessWidget {
       return trimmed;
     }
     // لو السيرفر يرجّع path نسبي مثل "uploads/advertisers/logo.png"
-    return 'https://stayinme.arabiagroup.net/$trimmed';
+    return 'https://taapuu.com/api/$trimmed';
   }
 
   @override

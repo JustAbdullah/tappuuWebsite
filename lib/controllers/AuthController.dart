@@ -58,7 +58,7 @@ class AuthController extends GetxController {
 
   /// جذر مسارات الـ API
   final String baseUrl =
-      'https://stayinme.arabiagroup.net/lar_stayInMe/public/api/users';
+      'https://taapuu.com/api/users';
 
   // ==================== [v2 Lock & Cache] ====================
 

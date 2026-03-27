@@ -114,7 +114,7 @@ class _SecondaryAppBarDeskTopState extends State<SecondaryAppBarDeskTop> {
                       setState(() => _hoveredIndex = hover ? 4 : -1),
                   onTap: () async {
                     final Uri url =
-                        Uri.parse("http://testing.arabiagroup.net/blog");
+                        Uri.parse("http://taapuu.com/blog");
                     if (await canLaunchUrl(url)) {
                       await launchUrl(url, mode: LaunchMode.externalApplication);
                     } else {

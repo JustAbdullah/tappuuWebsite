@@ -70,7 +70,7 @@ class AppServices {
 
   // ------ إعدادات الـ API ------
   final String _baseUrl =
-      'https://stayinme.arabiagroup.net/lar_stayInMe/public/api';
+      'https://taapuu.com/api';
   String get baseUrl => _baseUrl;
 
   // ------ مفاتيح SharedPreferences ------

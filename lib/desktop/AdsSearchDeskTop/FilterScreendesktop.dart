@@ -105,6 +105,215 @@ class _FilterScreenState extends State<FilterScreenDestktop> {
   final TextEditingController _priceMinController = TextEditingController();
   final TextEditingController _priceMaxController = TextEditingController();
 
+  // ========================= UI HELPERS =========================
+  BorderRadius get _radius => BorderRadius.circular(12.r);
+
+  TextStyle _hintStyle(bool dark) => TextStyle(
+        fontFamily: AppTextStyles.appFontFamily,
+        fontSize: AppTextStyles.small,
+        color: AppColors.textSecondary(dark),
+      );
+
+  TextStyle _valueStyle(bool dark) => TextStyle(
+        fontFamily: AppTextStyles.appFontFamily,
+        fontSize: AppTextStyles.small,
+        color: AppColors.textPrimary(dark),
+        height: 1.0,
+      );
+
+  InputDecoration _fieldDecoration({
+    required String label,
+    String? hint,
+    IconData? prefixIcon,
+    Widget? suffixIcon,
+    bool enabled = true,
+  }) {
+    final dark = isDarkMode;
+
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      labelStyle: _hintStyle(dark),
+      hintStyle: _hintStyle(dark),
+      prefixIcon: prefixIcon == null
+          ? null
+          : Icon(prefixIcon, size: 18.w, color: AppColors.textSecondary(dark)),
+      suffixIcon: suffixIcon,
+      filled: true,
+      fillColor: AppColors.surface(dark),
+      isDense: true,
+      contentPadding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 12.h),
+      border: OutlineInputBorder(
+        borderRadius: _radius,
+        borderSide: BorderSide(color: AppColors.border(dark), width: 0.8),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: _radius,
+        borderSide: BorderSide(color: AppColors.border(dark), width: 0.8),
+      ),
+      disabledBorder: OutlineInputBorder(
+        borderRadius: _radius,
+        borderSide: BorderSide(color: AppColors.border(dark).withOpacity(0.7), width: 0.8),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: _radius,
+        borderSide: BorderSide(color: AppColors.primary, width: 1.2),
+      ),
+    );
+  }
+
+  Widget _sectionHeader({
+    required String title,
+    IconData? icon,
+    String? subtitle,
+  }) {
+    final dark = isDarkMode;
+    return Padding(
+      padding: EdgeInsets.only(bottom: 10.h),
+      child: Row(
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 18.w, color: AppColors.primary),
+            SizedBox(width: 8.w),
+          ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontFamily: AppTextStyles.appFontFamily,
+                    fontSize: AppTextStyles.medium,
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.primary,
+                  ),
+                ),
+                if (subtitle != null) ...[
+                  SizedBox(height: 2.h),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontFamily: AppTextStyles.appFontFamily,
+                      fontSize: AppTextStyles.small,
+                      color: AppColors.textSecondary(dark),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _dropdownText(String text) {
+    final dark = isDarkMode;
+    return Tooltip(
+      message: text,
+      waitDuration: const Duration(milliseconds: 250),
+      child: Align(
+        alignment: AlignmentDirectional.centerStart,
+        child: Text(
+          text,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: _valueStyle(dark),
+        ),
+      ),
+    );
+  }
+
+  List<_DDValue<T>> _uniqueValues<T>(List<_DDValue<T>> input) {
+    final seen = <String>{};
+    final out = <_DDValue<T>>[];
+    for (final v in input) {
+      final key = '${v.value}';
+      if (seen.add(key)) out.add(v);
+    }
+    return out;
+  }
+
+  List<DropdownMenuItem<T>> _ddItems<T>(List<_DDValue<T>> values) {
+    return values
+        .map(
+          (v) => DropdownMenuItem<T>(
+            value: v.value,
+            child: _dropdownText(v.label),
+          ),
+        )
+        .toList();
+  }
+
+  List<Widget> _ddSelectedBuilder<T>(List<_DDValue<T>> values) {
+    return values.map((v) => _dropdownText(v.label)).toList();
+  }
+
+  Widget _niceDropdown<T>({
+    required String label,
+    required List<_DDValue<T>> values,
+    required T? value,
+    required ValueChanged<T?> onChanged,
+    required bool enabled,
+    IconData? prefixIcon,
+    String? hint,
+  }) {
+    final dark = isDarkMode;
+
+    final safeValues = _uniqueValues(values);
+    final items = _ddItems(safeValues);
+
+    // ✅ مهم جدًا: لا تمرّر value إلا إذا كانت موجودة مرة واحدة بالضبط
+    T? safeValue;
+    if (enabled && value != null) {
+      final matches = safeValues.where((e) => e.value == value).length;
+      if (matches == 1) safeValue = value;
+    }
+
+    return DropdownButtonFormField<T>(
+      value: safeValue,
+      items: items,
+      onChanged: enabled ? onChanged : null,
+      isExpanded: true,
+      isDense: true,
+      // ✅ لا نضع itemHeight لتجنب Assertion (يجب >= 48)
+      menuMaxHeight: 320, // ثابت وآمن
+      borderRadius: _radius,
+      icon: Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textSecondary(dark)),
+      dropdownColor: AppColors.card(dark),
+      style: _valueStyle(dark),
+      selectedItemBuilder: (_) => _ddSelectedBuilder(safeValues),
+      decoration: _fieldDecoration(
+        label: label,
+        hint: hint,
+        prefixIcon: prefixIcon,
+        enabled: enabled,
+      ),
+    );
+  }
+
+  Widget _softFieldCard({required Widget child}) {
+    final dark = isDarkMode;
+    return Container(
+      padding: EdgeInsets.all(12.w),
+      decoration: BoxDecoration(
+        color: AppColors.card(dark),
+        borderRadius: _radius,
+        border: Border.all(color: AppColors.border(dark).withOpacity(0.65), width: 0.8),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(dark ? 0.10 : 0.05),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+  // ===========================================================
+
   @override
   void initState() {
     super.initState();
@@ -127,12 +336,10 @@ class _FilterScreenState extends State<FilterScreenDestktop> {
     });
   }
 
-  /// ✅ لو تغيّرت props من الأب (تنقل/ديب لينك)
   @override
   void didUpdateWidget(covariant FilterScreenDestktop oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    // لو تغيّرت الفترة الزمنية فقط
     if (oldWidget.currentTimeframe != widget.currentTimeframe) {
       setState(() => _selectedTimePeriod = widget.currentTimeframe);
     }
@@ -144,14 +351,11 @@ class _FilterScreenState extends State<FilterScreenDestktop> {
     if (oldId == newId) return;
     if (newId <= 0) return;
 
-    // ✅ مهم: إذا الأب أعاد بناء الواجهة فقط ليعكس اختيار المستخدم داخل الفلترة
-    // لا تعمل تنظيف/تحميل مرة ثانية.
     if (_userTouchedCategory && newId == (_adsController.selectedMainCategoryId.value ?? 0)) {
       _userTouchedCategory = false;
       return;
     }
 
-    // ✅ إلغاء أي init قديم + اعتبره تغيير خارجي
     _initToken++;
     _userTouchedCategory = false;
 
@@ -164,11 +368,9 @@ class _FilterScreenState extends State<FilterScreenDestktop> {
     await _adsController.fetchMainCategories(lang);
     if (!mounted || token != _initToken) return;
 
-    // ✅ لا تكتب widget.categoryId فوق اختيار موجود في الكنترولر
     final effectiveCatId = _adsController.selectedMainCategoryId.value ?? widget.categoryId;
 
     if (effectiveCatId != null && effectiveCatId > 0) {
-      // إذا المستخدم ما لمس التصنيف يدويًا، نسمح للـ init يضبطه
       if (!_userTouchedCategory) {
         _adsController.currentCategoryId.value = effectiveCatId;
         _adsController.selectedMainCategoryId.value = effectiveCatId;
@@ -190,7 +392,6 @@ class _FilterScreenState extends State<FilterScreenDestktop> {
     }
   }
 
-  /// ✅ تغيير تصنيف من الأب/روت (خارجي)
   Future<void> _onCategoryChangedExternally(int categoryId) async {
     final token = ++_categorySwitchToken;
 
@@ -352,19 +553,40 @@ class _FilterScreenState extends State<FilterScreenDestktop> {
                   children: [
                     _buildTopFilterBar(),
                     SizedBox(height: 16.h),
-                    _buildKeywordSearch(isDarkMode),
-                    SizedBox(height: 16.h),
-                    _buildCategorySection(isDarkMode),
-                    SizedBox(height: 16.h),
-                    _buildAttributesSection(),
-                    SizedBox(height: 16.h),
-                    _buildPriceSection(),
-                    SizedBox(height: 16.h),
-                    _buildLocationFilterSection(isDarkMode),
-                    SizedBox(height: 16.h),
-                    _buildCityAreaSection(),
-                    SizedBox(height: 16.h),
-                    _buildTimePeriodSection(isDarkMode),
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16.w),
+                      child: _softFieldCard(child: _buildKeywordSearch(isDarkMode)),
+                    ),
+                    SizedBox(height: 14.h),
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16.w),
+                      child: _softFieldCard(child: _buildCategorySection(isDarkMode)),
+                    ),
+                    SizedBox(height: 14.h),
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16.w),
+                      child: _softFieldCard(child: _buildAttributesSection()),
+                    ),
+                    SizedBox(height: 14.h),
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16.w),
+                      child: _softFieldCard(child: _buildPriceSection()),
+                    ),
+                    SizedBox(height: 14.h),
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16.w),
+                      child: _softFieldCard(child: _buildLocationFilterSection(isDarkMode)),
+                    ),
+                    SizedBox(height: 14.h),
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16.w),
+                      child: _softFieldCard(child: _buildCityAreaSection()),
+                    ),
+                    SizedBox(height: 14.h),
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16.w),
+                      child: _softFieldCard(child: _buildTimePeriodSection(isDarkMode)),
+                    ),
                   ],
                 ),
               ),
@@ -401,7 +623,7 @@ class _FilterScreenState extends State<FilterScreenDestktop> {
                   'خيارات الفلترة'.tr,
                   style: TextStyle(
                     fontSize: AppTextStyles.medium,
-                    fontWeight: FontWeight.bold,
+                    fontWeight: FontWeight.w900,
                     fontFamily: AppTextStyles.appFontFamily,
                     color: AppColors.textPrimary(isDarkMode),
                   ),
@@ -425,249 +647,177 @@ class _FilterScreenState extends State<FilterScreenDestktop> {
 
   // ==================== البحث بالكلمات ====================
   Widget _buildKeywordSearch(bool isDarkMode) {
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 16.w),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'البحث بالكلمات'.tr,
-            style: TextStyle(
-              fontSize: AppTextStyles.medium,
-              fontWeight: FontWeight.w600,
-              fontFamily: AppTextStyles.appFontFamily,
-              color: AppColors.textPrimary(isDarkMode),
-            ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionHeader(
+          title: 'البحث بالكلمات'.tr,
+          icon: Icons.search_rounded,
+          subtitle: 'اكتب كلمة أو أكثر للبحث داخل الإعلانات.'.tr,
+        ),
+        TextField(
+          controller: _adsController.searchController,
+          decoration: _fieldDecoration(
+            label: 'ابحث في الإعلانات...'.tr,
+            prefixIcon: Icons.search_rounded,
+            suffixIcon: _adsController.searchController.text.isEmpty
+                ? null
+                : IconButton(
+                    tooltip: 'مسح'.tr,
+                    icon: Icon(Icons.close_rounded, size: 18.w, color: AppColors.textSecondary(isDarkMode)),
+                    onPressed: () {
+                      _searchDebounce?.cancel();
+                      _adsController.searchController.clear();
+                      _adsController.currentSearch.value = '';
+                      _applyFilters();
+                      setState(() {});
+                    },
+                  ),
           ),
-          SizedBox(height: 8.h),
-          TextField(
-            controller: _adsController.searchController,
-            decoration: InputDecoration(
-              labelText: 'ابحث في الإعلانات...'.tr,
-              labelStyle: TextStyle(
-                fontSize: AppTextStyles.small,
-                color: AppColors.textSecondary(isDarkMode),
-              ),
-              prefixIcon: Icon(
-                Icons.search_rounded,
-                size: 20.w,
-                color: AppColors.textSecondary(isDarkMode),
-              ),
-              suffixIcon: IconButton(
-                icon: Icon(
-                  Icons.close_rounded,
-                  size: 18.w,
-                  color: AppColors.textSecondary(isDarkMode),
-                ),
-                onPressed: () {
-                  _searchDebounce?.cancel();
-                  _adsController.searchController.clear();
-                  _adsController.currentSearch.value = '';
-                  _applyFilters();
-                },
-              ),
-              filled: true,
-              fillColor: AppColors.surface(isDarkMode),
-              contentPadding: EdgeInsets.symmetric(vertical: 10.h, horizontal: 12.w),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10.r),
-                borderSide: BorderSide(color: AppColors.border(isDarkMode), width: 0.6),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10.r),
-                borderSide: BorderSide(color: AppColors.border(isDarkMode), width: 0.6),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10.r),
-                borderSide: BorderSide(color: AppColors.primary, width: 1.1),
-              ),
-            ),
-            onChanged: (value) {
-              _searchDebounce?.cancel();
-              _searchDebounce = Timer(const Duration(milliseconds: 350), () {
-                _adsController.currentSearch.value = value;
-              });
-            },
-          ),
-        ],
-      ),
+          style: _valueStyle(isDarkMode),
+          onChanged: (value) {
+            setState(() {});
+            _searchDebounce?.cancel();
+            _searchDebounce = Timer(const Duration(milliseconds: 350), () {
+              _adsController.currentSearch.value = value;
+            });
+          },
+        ),
+      ],
     );
   }
 
   // ==================== التصنيفات ====================
   Widget _buildCategorySection(bool isDarkMode) {
     return Obx(() {
-      return Padding(
-        padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'التصنيفات'.tr,
-              style: TextStyle(
-                fontFamily: AppTextStyles.appFontFamily,
-                fontSize: AppTextStyles.medium,
-                fontWeight: FontWeight.bold,
-                color: AppColors.primary,
-              ),
-            ),
-            SizedBox(height: 12.h),
-            _buildStyledDropdown<int>(
-              hint: 'التصنيف الرئيسي'.tr,
-              items: _adsController.mainCategories
-                  .map((c) => DropdownMenuItem<int>(
-                        value: c.id,
-                        child: Text(c.name ?? '—'),
-                      ))
-                  .toList(),
-              value: _adsController.selectedMainCategoryId.value,
-              onChanged: (v) async {
-                // ✅ هذه أهم سطور تمنع رجوع القيمة بعد 5 ثواني
-                _userTouchedCategory = true;
-                _initToken++; // يلغي init async القديم فورًا
+      final mainValues = _adsController.mainCategories
+          .map((c) => _DDValue<int>(value: c.id, label: (c.name ?? '—')))
+          .toList();
 
-                _adsController.updateMainCategory(v);
-                _clearAttributesState();
+      final subValues = _adsController.subCategories
+          .map((c) => _DDValue<int>(value: c.id, label: (c.name ?? '—')))
+          .toList();
 
-                if (v != null) {
-                  final lang = Get.find<ChangeLanguageController>().currentLocale.value.languageCode;
-                  await _adsController.fetchSubCategories(v, lang);
-                  await _adsController.fetchAttributes(categoryId: v, lang: lang);
-                }
-              },
-              enabled: true,
-              isDarkMode: isDarkMode,
-            ),
-            SizedBox(height: 12.h),
-            _buildStyledDropdown<int>(
-              hint: 'التصنيف الفرعي'.tr,
-              items: _adsController.subCategories
-                  .map((c) => DropdownMenuItem<int>(
-                        value: c.id,
-                        child: Text(c.name ?? '—'),
-                      ))
-                  .toList(),
-              value: _adsController.selectedSubCategoryId.value,
-              onChanged: (v) {
-                _adsController.updateSubCategory(v);
-              },
-              enabled: _adsController.selectedMainCategoryId.value != null,
-              isDarkMode: isDarkMode,
-            ),
-            SizedBox(height: 12.h),
-            _buildStyledDropdown<int>(
-              hint: 'التصنيف الفرعي الثانوي'.tr,
-              items: _adsController.subTwoCategories
-                  .map((c) => DropdownMenuItem<int>(
-                        value: c.id,
-                        child: Text(c.name ?? '—'),
-                      ))
-                  .toList(),
-              value: _adsController.selectedSubTwoCategoryId.value,
-              onChanged: (v) {
-                _adsController.updateSubTwoCategory(v);
-              },
-              enabled: _adsController.selectedSubCategoryId.value != null,
-              isDarkMode: isDarkMode,
-            ),
-          ],
-        ),
+      final subTwoValues = _adsController.subTwoCategories
+          .map((c) => _DDValue<int>(value: c.id, label: (c.name ?? '—')))
+          .toList();
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionHeader(
+            title: 'التصنيفات'.tr,
+            icon: Icons.category_outlined,
+            subtitle: 'اختر التصنيف لتصفية النتائج بدقة.'.tr,
+          ),
+          _niceDropdown<int>(
+            label: 'التصنيف الرئيسي'.tr,
+            values: mainValues,
+            value: _adsController.selectedMainCategoryId.value,
+            enabled: true,
+            prefixIcon: Icons.category_outlined,
+            hint: 'اختر التصنيف'.tr,
+            onChanged: (v) async {
+              _userTouchedCategory = true;
+              _initToken++;
+
+              _adsController.updateMainCategory(v);
+              _clearAttributesState();
+
+              if (v != null) {
+                final lang = Get.find<ChangeLanguageController>().currentLocale.value.languageCode;
+                await _adsController.fetchSubCategories(v, lang);
+                await _adsController.fetchAttributes(categoryId: v, lang: lang);
+              }
+            },
+          ),
+          SizedBox(height: 12.h),
+          _niceDropdown<int>(
+            label: 'التصنيف الفرعي'.tr,
+            values: subValues,
+            value: _adsController.selectedSubCategoryId.value,
+            enabled: _adsController.selectedMainCategoryId.value != null,
+            prefixIcon: Icons.account_tree_outlined,
+            hint: 'اختر التصنيف الفرعي'.tr,
+            onChanged: (v) {
+              _adsController.updateSubCategory(v);
+            },
+          ),
+          SizedBox(height: 12.h),
+          _niceDropdown<int>(
+            label: 'التصنيف الفرعي الثانوي'.tr,
+            values: subTwoValues,
+            value: _adsController.selectedSubTwoCategoryId.value,
+            enabled: _adsController.selectedSubCategoryId.value != null,
+            prefixIcon: Icons.subdirectory_arrow_right_outlined,
+            hint: 'اختر التصنيف الفرعي الثانوي'.tr,
+            onChanged: (v) {
+              _adsController.updateSubTwoCategory(v);
+            },
+          ),
+        ],
       );
     });
   }
 
-  Widget _buildStyledDropdown<T>({
-    required String hint,
-    required List<DropdownMenuItem<T>> items,
-    required T? value,
-    required ValueChanged<T?> onChanged,
-    required bool enabled,
-    required bool isDarkMode,
-  }) {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(10.r),
-        border: Border.all(color: AppColors.border(isDarkMode), width: 0.6),
-      ),
-      child: DropdownButtonFormField<T>(
-        value: enabled && items.any((item) => item.value == value) ? value : null,
-        items: items,
-        onChanged: enabled ? onChanged : null,
-        decoration: InputDecoration(
-          labelText: hint,
-          prefixIcon: Icon(Icons.category_outlined, size: 18.w, color: AppColors.textSecondary(isDarkMode)),
-          contentPadding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
-          filled: true,
-          fillColor: AppColors.surface(isDarkMode),
-          border: InputBorder.none,
-        ),
-        style: TextStyle(
-          fontFamily: AppTextStyles.appFontFamily,
-          fontSize: AppTextStyles.medium,
-          color: AppColors.textPrimary(isDarkMode),
-        ),
-        dropdownColor: AppColors.card(isDarkMode),
-        hint: Text(
-          hint,
-          style: TextStyle(
-            fontFamily: AppTextStyles.appFontFamily,
-            fontSize: AppTextStyles.medium,
-            color: AppColors.textSecondary(isDarkMode),
-          ),
-        ),
-      ),
-    );
-  }
-
   // ==================== الخصائص ====================
   Widget _buildAttributesSection() {
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 16.w),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+    final dark = isDarkMode;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionHeader(
+          title: 'الخصائص'.tr,
+          icon: Icons.tune_rounded,
+          subtitle: 'حدد خصائص إضافية حسب التصنيف.'.tr,
+        ),
+        if (_adsController.attributesList.isEmpty)
           Padding(
-            padding: EdgeInsets.only(bottom: 8.h),
+            padding: EdgeInsets.only(top: 6.h),
             child: Text(
-              'الخصائص'.tr,
+              'لا توجد خصائص لهذا التصنيف'.tr,
               style: TextStyle(
                 fontFamily: AppTextStyles.appFontFamily,
-                fontSize: AppTextStyles.medium,
-                fontWeight: FontWeight.bold,
-                color: AppColors.primary,
+                fontSize: AppTextStyles.small,
+                color: AppColors.textSecondary(dark),
               ),
             ),
           ),
-          ..._adsController.attributesList.map((attribute) {
-            return Padding(
-              padding: EdgeInsets.only(bottom: 6.h),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                    padding: EdgeInsets.only(bottom: 4.h),
-                    child: Text(
-                      attribute.label,
-                      style: TextStyle(
-                        fontFamily: AppTextStyles.appFontFamily,
-                        fontSize: AppTextStyles.medium,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary(isDarkMode),
-                      ),
+        ..._adsController.attributesList.map((attribute) {
+          return Container(
+            margin: EdgeInsets.only(top: 10.h),
+            padding: EdgeInsets.all(12.w),
+            decoration: BoxDecoration(
+              color: AppColors.surface(dark),
+              borderRadius: _radius,
+              border: Border.all(color: AppColors.border(dark).withOpacity(0.75), width: 0.8),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Tooltip(
+                  message: attribute.label,
+                  waitDuration: const Duration(milliseconds: 250),
+                  child: Text(
+                    attribute.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontFamily: AppTextStyles.appFontFamily,
+                      fontSize: AppTextStyles.small,
+                      fontWeight: FontWeight.w900,
+                      color: AppColors.textPrimary(dark),
                     ),
                   ),
-                  _buildAttributeInput(attribute),
-                  Divider(
-                    height: 20.h,
-                    color: AppColors.divider(isDarkMode),
-                    thickness: 0.6,
-                  ),
-                ],
-              ),
-            );
-          }).toList(),
-        ],
-      ),
+                ),
+                SizedBox(height: 10.h),
+                _buildAttributeInput(attribute),
+              ],
+            ),
+          );
+        }).toList(),
+      ],
     );
   }
 
@@ -746,39 +896,15 @@ class _FilterScreenState extends State<FilterScreenDestktop> {
     final selectedIds = _getSelectedIds(attribute);
     final selectedOne = selectedIds.isEmpty ? null : selectedIds.first;
 
-    return DropdownButtonFormField<int>(
+    final values = opts.map((o) => _DDValue<int>(value: o.id, label: o.value)).toList();
+
+    return _niceDropdown<int>(
+      label: attribute.label,
+      values: values,
       value: selectedOne,
-      decoration: InputDecoration(
-        hintText: '${'اختر'.tr} ${attribute.label}',
-        contentPadding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
-        filled: true,
-        fillColor: AppColors.surface(isDarkMode),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10.r),
-          borderSide: BorderSide(color: AppColors.border(isDarkMode), width: 0.6),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10.r),
-          borderSide: BorderSide(color: AppColors.border(isDarkMode), width: 0.6),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10.r),
-          borderSide: BorderSide(color: AppColors.primary, width: 1.1),
-        ),
-      ),
-      items: opts.map((option) {
-        return DropdownMenuItem<int>(
-          value: option.id,
-          child: Text(
-            option.value,
-            style: TextStyle(
-              fontFamily: AppTextStyles.appFontFamily,
-              fontSize: AppTextStyles.medium,
-              color: AppColors.textPrimary(isDarkMode),
-            ),
-          ),
-        );
-      }).toList(),
+      enabled: true,
+      prefixIcon: Icons.list_alt_rounded,
+      hint: '${'اختر'.tr} ${attribute.label}',
       onChanged: (value) {
         setState(() {
           if (value == null) {
@@ -788,7 +914,6 @@ class _FilterScreenState extends State<FilterScreenDestktop> {
           }
         });
       },
-      dropdownColor: AppColors.card(isDarkMode),
     );
   }
 
@@ -824,42 +949,96 @@ class _FilterScreenState extends State<FilterScreenDestktop> {
     );
   }
 
+  // ✅ نعم/لا بشكل احترافي
   Widget _buildBooleanAttribute(CategoryAttribute attribute) {
+    final dark = isDarkMode;
     final currentValue = _attributeValues[attribute.attributeId] as bool?;
-    return Row(
+
+    return Wrap(
+      spacing: 10.w,
+      runSpacing: 10.h,
       children: [
-        _buildBooleanOption('نعم'.tr, currentValue == true, () {
-          setState(() => _attributeValues[attribute.attributeId] = true);
-        }),
-        SizedBox(width: 10.w),
-        _buildBooleanOption('لا'.tr, currentValue == false, () {
-          setState(() => _attributeValues[attribute.attributeId] = false);
-        }),
+        _pillChoice(
+          label: 'نعم'.tr,
+          icon: Icons.check_rounded,
+          selected: currentValue == true,
+          onTap: () => setState(() => _attributeValues[attribute.attributeId] = true),
+          dark: dark,
+        ),
+        _pillChoice(
+          label: 'لا'.tr,
+          icon: Icons.close_rounded,
+          selected: currentValue == false,
+          onTap: () => setState(() => _attributeValues[attribute.attributeId] = false),
+          dark: dark,
+        ),
+        if (currentValue != null)
+          _pillChoice(
+            label: 'مسح'.tr,
+            icon: Icons.delete_outline_rounded,
+            selected: false,
+            onTap: () => setState(() => _attributeValues.remove(attribute.attributeId)),
+            dark: dark,
+            isDanger: true,
+          ),
       ],
     );
   }
 
-  Widget _buildBooleanOption(String label, bool isSelected, VoidCallback onTap) {
-    return GestureDetector(
+  Widget _pillChoice({
+    required String label,
+    required IconData icon,
+    required bool selected,
+    required VoidCallback onTap,
+    required bool dark,
+    bool isDanger = false,
+  }) {
+    final baseBorder = isDanger ? Colors.redAccent : AppColors.border(dark);
+    final activeColor = isDanger ? Colors.redAccent : AppColors.primary;
+
+    return InkWell(
       onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 6.h),
+        duration: const Duration(milliseconds: 160),
+        padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 10.h),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.primary : AppColors.surface(isDarkMode),
-          borderRadius: BorderRadius.circular(20.r),
+          color: selected ? activeColor : AppColors.card(dark),
+          borderRadius: BorderRadius.circular(999),
           border: Border.all(
-            color: isSelected ? AppColors.primary : AppColors.border(isDarkMode),
-            width: 0.7,
+            color: selected ? activeColor : baseBorder.withOpacity(0.8),
+            width: 0.9,
           ),
+          boxShadow: selected
+              ? [
+                  BoxShadow(
+                    color: activeColor.withOpacity(dark ? 0.35 : 0.22),
+                    blurRadius: 14,
+                    offset: const Offset(0, 6),
+                  ),
+                ]
+              : null,
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontFamily: AppTextStyles.appFontFamily,
-            fontSize: AppTextStyles.small,
-            color: isSelected ? Colors.white : AppColors.textPrimary(isDarkMode),
-          ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 16.w,
+              color: selected ? Colors.white : (isDanger ? Colors.redAccent : AppColors.textSecondary(dark)),
+            ),
+            SizedBox(width: 8.w),
+            Text(
+              label,
+              style: TextStyle(
+                fontFamily: AppTextStyles.appFontFamily,
+                fontSize: AppTextStyles.small,
+                fontWeight: FontWeight.w800,
+                color: selected ? Colors.white : (isDanger ? Colors.redAccent : AppColors.textPrimary(dark)),
+                height: 1.0,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -891,29 +1070,12 @@ class _FilterScreenState extends State<FilterScreenDestktop> {
           _attributeValues[attribute.attributeId] = value;
         }
       },
-      decoration: InputDecoration(
-        hintText: '${'أدخل'.tr} ${attribute.label}',
-        contentPadding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
-        filled: true,
-        fillColor: AppColors.surface(isDarkMode),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10.r),
-          borderSide: BorderSide(color: AppColors.border(isDarkMode), width: 0.6),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10.r),
-          borderSide: BorderSide(color: AppColors.border(isDarkMode), width: 0.6),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10.r),
-          borderSide: BorderSide(color: AppColors.primary, width: 1.1),
-        ),
+      decoration: _fieldDecoration(
+        label: attribute.label,
+        hint: '${'أدخل'.tr} ${attribute.label}',
+        prefixIcon: Icons.text_fields_rounded,
       ),
-      style: TextStyle(
-        fontFamily: AppTextStyles.appFontFamily,
-        fontSize: AppTextStyles.small,
-        color: AppColors.textPrimary(isDarkMode),
-      ),
+      style: _valueStyle(isDarkMode),
     );
   }
 
@@ -939,109 +1101,63 @@ class _FilterScreenState extends State<FilterScreenDestktop> {
 
         _attributeValues[attribute.attributeId] = double.tryParse(normalized);
       },
-      decoration: InputDecoration(
-        hintText: '${'أدخل'.tr} ${attribute.label}',
-        contentPadding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
-        filled: true,
-        fillColor: AppColors.surface(isDarkMode),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10.r),
-          borderSide: BorderSide(color: AppColors.border(isDarkMode), width: 0.6),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10.r),
-          borderSide: BorderSide(color: AppColors.border(isDarkMode), width: 0.6),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10.r),
-          borderSide: BorderSide(color: AppColors.primary, width: 1.1),
-        ),
+      decoration: _fieldDecoration(
+        label: attribute.label,
+        hint: '${'أدخل'.tr} ${attribute.label}',
+        prefixIcon: Icons.numbers_rounded,
       ),
-      style: TextStyle(
-        fontFamily: AppTextStyles.appFontFamily,
-        fontSize: AppTextStyles.small,
-        color: AppColors.textPrimary(isDarkMode),
-      ),
+      style: _valueStyle(isDarkMode),
     );
   }
 
   // ==================== المدن والمناطق ====================
   Widget _buildCityAreaSection() {
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 16.w),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionHeader(
+          title: 'الموقع'.tr,
+          icon: Icons.location_on_outlined,
+          subtitle: 'اختر المدينة والمنطقة لتضييق النتائج.'.tr,
+        ),
+        _buildCityDropdown(),
+        if (_adsController.selectedCity.value != null)
           Padding(
-            padding: EdgeInsets.only(bottom: 8.h),
-            child: Text(
-              'الموقع'.tr,
-              style: TextStyle(
-                fontFamily: AppTextStyles.appFontFamily,
-                fontSize: AppTextStyles.small,
-                fontWeight: FontWeight.bold,
-                color: AppColors.primary,
-              ),
-            ),
+            padding: EdgeInsets.only(top: 12.h),
+            child: _buildAreaDropdown(),
           ),
-          _buildCityDropdown(),
-          if (_adsController.selectedCity.value != null)
-            Padding(
-              padding: EdgeInsets.only(top: 12.h),
-              child: _buildAreaDropdown(),
-            ),
-        ],
-      ),
+      ],
     );
   }
 
+  // ✅ City Dropdown باستخدام id لتجنب Assertion (object equality)
   Widget _buildCityDropdown() {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(10.r),
-        border: Border.all(color: AppColors.border(isDarkMode), width: 0.6),
-      ),
-      child: DropdownButtonFormField<TheCity>(
-        value: _adsController.selectedCity.value,
-        decoration: InputDecoration(
-          labelText: 'المدينة'.tr,
-          prefixIcon: Icon(Icons.location_city_rounded, size: 18.w, color: AppColors.textSecondary(isDarkMode)),
-          contentPadding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
-          filled: true,
-          fillColor: AppColors.surface(isDarkMode),
-          border: InputBorder.none,
-        ),
-        items: _adsController.citiesList.map((city) {
-          final cityName = city.translations.isNotEmpty ? city.translations.first.name : '—';
-          return DropdownMenuItem<TheCity>(
-            value: city,
-            child: Text(
-              cityName,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontFamily: AppTextStyles.appFontFamily,
-                fontSize: AppTextStyles.small,
-                color: AppColors.textPrimary(isDarkMode),
-              ),
-            ),
-          );
-        }).toList(),
-        onChanged: (city) {
-          if (city == null) return;
-          _adsController.selectCity(city);
-          _adsController.selectArea(null);
-          setState(() {});
-        },
-        style: TextStyle(
-          fontFamily: AppTextStyles.appFontFamily,
-          fontSize: AppTextStyles.small,
-          color: AppColors.textPrimary(isDarkMode),
-        ),
-        dropdownColor: AppColors.card(isDarkMode),
-      ),
+    final values = _adsController.citiesList.map((city) {
+      final cityName = city.translations.isNotEmpty ? city.translations.first.name : '—';
+      return _DDValue<int>(value: city.id, label: cityName);
+    }).toList();
+
+    final selectedCityId = _adsController.selectedCity.value?.id;
+
+    return _niceDropdown<int>(
+      label: 'المدينة'.tr,
+      values: values,
+      value: selectedCityId,
+      enabled: values.isNotEmpty,
+      prefixIcon: Icons.location_city_rounded,
+      hint: values.isEmpty ? 'جارٍ تحميل المدن...'.tr : 'اختر المدينة'.tr,
+      onChanged: (id) {
+        if (id == null) return;
+        final city = _adsController.citiesList.firstWhereOrNull((c) => c.id == id);
+        if (city == null) return;
+        _adsController.selectCity(city);
+        _adsController.selectArea(null);
+        setState(() {});
+      },
     );
   }
 
+  // ✅ Area Dropdown باستخدام id لتجنب Assertion (object equality)
   Widget _buildAreaDropdown() {
     final localDark = Get.find<ThemeController>().isDarkMode.value;
 
@@ -1049,37 +1165,20 @@ class _FilterScreenState extends State<FilterScreenDestktop> {
       final selectedCity = _adsController.selectedCity.value;
 
       if (selectedCity == null) {
-        return Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(10.r),
-            border: Border.all(color: AppColors.border(localDark), width: 0.6),
+        return DropdownButtonFormField<int>(
+          value: null,
+          items: const [],
+          onChanged: null,
+          isExpanded: true,
+          isDense: true,
+          dropdownColor: AppColors.card(localDark),
+          decoration: _fieldDecoration(
+            label: 'المنطقة'.tr,
+            hint: 'اختر المدينة أولاً'.tr,
+            prefixIcon: Icons.map_outlined,
+            enabled: false,
           ),
-          child: DropdownButtonFormField<Area>(
-            value: null,
-            decoration: InputDecoration(
-              labelText: 'المنطقة'.tr,
-              contentPadding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
-              filled: true,
-              fillColor: AppColors.surface(localDark),
-              border: InputBorder.none,
-            ),
-            items: const [],
-            onChanged: null,
-            hint: Text(
-              'اختر المدينة أولاً'.tr,
-              style: TextStyle(
-                fontFamily: AppTextStyles.appFontFamily,
-                fontSize: AppTextStyles.medium,
-                color: AppColors.textSecondary(localDark),
-              ),
-            ),
-            dropdownColor: AppColors.card(localDark),
-            style: TextStyle(
-              fontFamily: AppTextStyles.appFontFamily,
-              fontSize: AppTextStyles.medium,
-              color: AppColors.textPrimary(localDark),
-            ),
-          ),
+          style: _valueStyle(localDark),
         );
       }
 
@@ -1090,55 +1189,24 @@ class _FilterScreenState extends State<FilterScreenDestktop> {
           final hasError = snapshot.hasError;
           final list = snapshot.data ?? const <Area>[];
 
-          return DropdownButtonFormField<Area>(
-            key: ValueKey<int>(selectedCity.id),
-            value: list.any((a) => a.id == _adsController.selectedArea.value?.id)
-                ? _adsController.selectedArea.value
-                : null,
-            decoration: InputDecoration(
-              labelText: 'المنطقة'.tr,
-              contentPadding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
-              filled: true,
-              fillColor: AppColors.surface(localDark),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10.r),
-                borderSide: BorderSide(color: AppColors.border(localDark), width: 0.6),
-              ),
-            ),
-            items: list.map((area) {
-              return DropdownMenuItem<Area>(
-                value: area,
-                child: Text(
-                  area.name,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontFamily: AppTextStyles.appFontFamily,
-                    fontSize: AppTextStyles.medium,
-                    color: AppColors.textPrimary(localDark),
-                  ),
-                ),
-              );
-            }).toList(),
-            onChanged: (area) {
+          final values = list.map((a) => _DDValue<int>(value: a.id, label: a.name)).toList();
+          final selectedAreaId = _adsController.selectedArea.value?.id;
+
+          return _niceDropdown<int>(
+            label: 'المنطقة'.tr,
+            values: values,
+            value: selectedAreaId,
+            enabled: !isLoading && !hasError && values.isNotEmpty,
+            prefixIcon: Icons.map_outlined,
+            hint: isLoading
+                ? 'جارٍ تحميل المناطق...'.tr
+                : (hasError ? 'حدث خطأ أثناء الجلب'.tr : 'اختر المنطقة'.tr),
+            onChanged: (id) {
+              if (id == null) return;
+              final area = list.firstWhereOrNull((a) => a.id == id);
               _adsController.selectArea(area);
               setState(() {});
             },
-            hint: Text(
-              isLoading
-                  ? 'جارٍ تحميل المناطق...'.tr
-                  : (hasError ? 'حدث خطأ أثناء الجلب'.tr : 'اختر المنطقة'.tr),
-              style: TextStyle(
-                fontFamily: AppTextStyles.appFontFamily,
-                fontSize: AppTextStyles.medium,
-                color: AppColors.textSecondary(localDark),
-              ),
-            ),
-            dropdownColor: AppColors.card(localDark),
-            style: TextStyle(
-              fontFamily: AppTextStyles.appFontFamily,
-              fontSize: AppTextStyles.medium,
-              color: AppColors.textPrimary(localDark),
-            ),
           );
         },
       );
@@ -1147,186 +1215,149 @@ class _FilterScreenState extends State<FilterScreenDestktop> {
 
   // ==================== الفترة الزمنية ====================
   Widget _buildTimePeriodSection(bool isDarkMode) {
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 4.h),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'الفترة الزمنية'.tr,
-            style: TextStyle(
-              fontFamily: AppTextStyles.appFontFamily,
-              fontSize: AppTextStyles.small,
-              fontWeight: FontWeight.bold,
-              color: AppColors.primary,
-            ),
-          ),
-          SizedBox(height: 8.h),
-          Wrap(
-            spacing: 6.w,
-            runSpacing: 6.h,
-            children: timePeriods.map((period) {
-              final value = period['value']!;
-              final label = period['label']!;
-              final isSelected = _selectedTimePeriod == value;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionHeader(
+          title: 'الفترة الزمنية'.tr,
+          icon: Icons.schedule_rounded,
+          subtitle: 'حدد إطارًا زمنيًا لعرض الإعلانات.'.tr,
+        ),
+        Wrap(
+          spacing: 8.w,
+          runSpacing: 8.h,
+          children: timePeriods.map((period) {
+            final value = period['value']!;
+            final label = period['label']!;
+            final isSelected = _selectedTimePeriod == value;
 
-              return ChoiceChip(
-                label: Text(
-                  label,
-                  style: TextStyle(
-                    fontFamily: AppTextStyles.appFontFamily,
-                    fontSize: AppTextStyles.small,
-                    color: isSelected ? Colors.white : AppColors.textPrimary(isDarkMode),
-                  ),
+            return ChoiceChip(
+              label: Text(
+                label,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontFamily: AppTextStyles.appFontFamily,
+                  fontSize: AppTextStyles.small,
+                  fontWeight: FontWeight.w800,
+                  color: isSelected ? Colors.white : AppColors.textPrimary(isDarkMode),
                 ),
-                selected: isSelected,
-                onSelected: (selected) {
-                  setState(() => _selectedTimePeriod = selected ? value : null);
-                },
-                selectedColor: AppColors.primary,
-                backgroundColor: AppColors.surface(isDarkMode),
-                side: BorderSide(
-                  color: isSelected ? AppColors.primary : AppColors.border(isDarkMode),
-                  width: 0.7,
-                ),
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              );
-            }).toList(),
-          ),
-        ],
-      ),
+              ),
+              selected: isSelected,
+              onSelected: (selected) {
+                setState(() => _selectedTimePeriod = selected ? value : null);
+              },
+              selectedColor: AppColors.primary,
+              backgroundColor: AppColors.surface(isDarkMode),
+              side: BorderSide(
+                color: isSelected ? AppColors.primary : AppColors.border(isDarkMode),
+                width: 0.8,
+              ),
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              visualDensity: const VisualDensity(horizontal: -2, vertical: -2),
+            );
+          }).toList(),
+        ),
+      ],
     );
   }
 
   // ==================== السعر ====================
   Widget _buildPriceSection() {
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 4.h),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'السعر'.tr,
-            style: TextStyle(
-              fontFamily: AppTextStyles.appFontFamily,
-              fontSize: AppTextStyles.medium,
-              fontWeight: FontWeight.bold,
-              color: AppColors.primary,
+    final dark = isDarkMode;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionHeader(
+          title: 'السعر'.tr,
+          icon: Icons.payments_outlined,
+          subtitle: 'اختر نمط السعر ثم أدخل القيم.'.tr,
+        ),
+        Wrap(
+          spacing: 10.w,
+          runSpacing: 10.h,
+          children: [
+            _buildPriceModeChip(
+              label: 'نطاق (من–إلى)'.tr,
+              selected: _priceMode == PriceModeDesktop.range,
+              onTap: () => setState(() => _priceMode = PriceModeDesktop.range),
             ),
-          ),
-          SizedBox(height: 8.h),
-          Wrap(
-            spacing: 8.w,
-            children: [
-              _buildPriceModeChip(
-                label: 'نطاق (من–إلى)'.tr,
-                selected: _priceMode == PriceModeDesktop.range,
-                onTap: () => setState(() => _priceMode = PriceModeDesktop.range),
-              ),
-              _buildPriceModeChip(
-                label: 'أعلى من'.tr,
-                selected: _priceMode == PriceModeDesktop.minOnly,
-                onTap: () {
-                  setState(() {
-                    _priceMode = PriceModeDesktop.minOnly;
-                    _priceMaxController.clear();
-                  });
-                },
-              ),
-            ],
-          ),
-          SizedBox(height: 10.h),
-          Row(
-            children: [
-              Expanded(
-                child: TextFormField(
-                  controller: _priceMinController,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp(r'[0-9٠-٩,،,]')),
-                  ],
-                  onChanged: (v) => _formatControllerText(_priceMinController),
-                  decoration: InputDecoration(
-                    labelText: 'السعر من'.tr,
-                    prefixIcon: const Icon(Icons.arrow_upward, size: 18),
-                    filled: true,
-                    fillColor: AppColors.surface(isDarkMode),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10.r),
-                      borderSide: BorderSide(color: AppColors.border(isDarkMode), width: 0.6),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10.r),
-                      borderSide: BorderSide(color: AppColors.border(isDarkMode), width: 0.6),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10.r),
-                      borderSide: BorderSide(color: AppColors.primary, width: 1.1),
-                    ),
-                  ),
+            _buildPriceModeChip(
+              label: 'أعلى من'.tr,
+              selected: _priceMode == PriceModeDesktop.minOnly,
+              onTap: () {
+                setState(() {
+                  _priceMode = PriceModeDesktop.minOnly;
+                  _priceMaxController.clear();
+                });
+              },
+            ),
+          ],
+        ),
+        SizedBox(height: 12.h),
+        Row(
+          children: [
+            Expanded(
+              child: TextFormField(
+                controller: _priceMinController,
+                keyboardType: TextInputType.number,
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[0-9٠-٩,،,]')),
+                ],
+                onChanged: (v) => _formatControllerText(_priceMinController),
+                decoration: _fieldDecoration(
+                  label: 'السعر من'.tr,
+                  prefixIcon: Icons.arrow_upward_rounded,
                 ),
+                style: _valueStyle(dark),
               ),
-              SizedBox(width: 12.w),
-              Expanded(
-                child: TextFormField(
-                  controller: _priceMaxController,
+            ),
+            SizedBox(width: 12.w),
+            Expanded(
+              child: TextFormField(
+                controller: _priceMaxController,
+                enabled: _priceMode == PriceModeDesktop.range,
+                keyboardType: TextInputType.number,
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[0-9٠-٩,،,]')),
+                ],
+                onChanged: (v) => _formatControllerText(_priceMaxController),
+                decoration: _fieldDecoration(
+                  label: 'السعر إلى'.tr,
+                  prefixIcon: Icons.arrow_downward_rounded,
+                  suffixIcon: _priceMode == PriceModeDesktop.minOnly
+                      ? Icon(Icons.lock_outline, size: 18.w, color: AppColors.textSecondary(dark))
+                      : (_priceMaxController.text.isEmpty
+                          ? null
+                          : IconButton(
+                              tooltip: 'مسح'.tr,
+                              icon: Icon(Icons.clear, size: 18.w, color: AppColors.textSecondary(dark)),
+                              onPressed: () => setState(() => _priceMaxController.clear()),
+                            )),
                   enabled: _priceMode == PriceModeDesktop.range,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp(r'[0-9٠-٩,،,]')),
-                  ],
-                  onChanged: (v) => _formatControllerText(_priceMaxController),
-                  decoration: InputDecoration(
-                    labelText: 'السعر إلى'.tr,
-                    prefixIcon: const Icon(Icons.arrow_downward, size: 18),
-                    suffixIcon: _priceMode == PriceModeDesktop.minOnly
-                        ? const Icon(Icons.lock_outline, size: 18)
-                        : (_priceMaxController.text.isEmpty
-                            ? null
-                            : IconButton(
-                                icon: const Icon(Icons.clear, size: 18),
-                                onPressed: () => setState(() => _priceMaxController.clear()),
-                              )),
-                    filled: true,
-                    fillColor: AppColors.surface(isDarkMode),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10.r),
-                      borderSide: BorderSide(color: AppColors.border(isDarkMode), width: 0.6),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10.r),
-                      borderSide: BorderSide(color: AppColors.border(isDarkMode), width: 0.6),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10.r),
-                      borderSide: BorderSide(color: AppColors.primary, width: 1.1),
-                    ),
-                  ),
+                ),
+                style: _valueStyle(dark),
+              ),
+            ),
+          ],
+        ),
+        SizedBox(height: 8.h),
+        Row(
+          children: [
+            Icon(Icons.info_outline, size: 16, color: AppColors.textSecondary(dark)),
+            SizedBox(width: 6.w),
+            Expanded(
+              child: Text(
+                _priceSummary(),
+                style: TextStyle(
+                  fontFamily: AppTextStyles.appFontFamily,
+                  fontSize: AppTextStyles.small,
+                  color: AppColors.textSecondary(dark),
                 ),
               ),
-            ],
-          ),
-          SizedBox(height: 6.h),
-          Row(
-            children: [
-              Icon(Icons.info_outline, size: 16, color: AppColors.textSecondary(isDarkMode)),
-              SizedBox(width: 6.w),
-              Expanded(
-                child: Text(
-                  _priceSummary(),
-                  style: TextStyle(
-                    fontFamily: AppTextStyles.appFontFamily,
-                    fontSize: AppTextStyles.small,
-                    color: AppColors.textSecondary(isDarkMode),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 
@@ -1335,28 +1366,38 @@ class _FilterScreenState extends State<FilterScreenDestktop> {
     required bool selected,
     required VoidCallback onTap,
   }) {
-    return GestureDetector(
+    final dark = isDarkMode;
+
+    return InkWell(
       onTap: onTap,
-      child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 8.h),
+      borderRadius: _radius,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 10.h),
         decoration: BoxDecoration(
-          color: selected ? AppColors.primary : AppColors.surface(isDarkMode),
-          borderRadius: BorderRadius.circular(10.r),
-          border: Border.all(color: AppColors.border(isDarkMode), width: 0.6),
+          color: selected ? AppColors.primary : AppColors.surface(dark),
+          borderRadius: _radius,
+          border: Border.all(
+            color: selected ? AppColors.primary : AppColors.border(dark),
+            width: 0.9,
+          ),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (selected) ...[
-              const Icon(Icons.check, size: 16, color: Colors.white),
-              SizedBox(width: 6.w),
-            ],
+            Icon(
+              selected ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+              size: 18.w,
+              color: selected ? Colors.white : AppColors.textSecondary(dark),
+            ),
+            SizedBox(width: 8.w),
             Text(
               label,
               style: TextStyle(
                 fontFamily: AppTextStyles.appFontFamily,
-                fontSize: AppTextStyles.medium,
-                color: selected ? Colors.white : AppColors.textPrimary(isDarkMode),
+                fontSize: AppTextStyles.small,
+                fontWeight: FontWeight.w800,
+                color: selected ? Colors.white : AppColors.textPrimary(dark),
               ),
             ),
           ],
@@ -1425,6 +1466,174 @@ class _FilterScreenState extends State<FilterScreenDestktop> {
       ..text = newText
       ..selection = TextSelection.fromPosition(TextPosition(offset: newText.length));
     setState(() {});
+  }
+
+  // ==================== الموقع الجغرافي ====================
+  Widget _buildLocationFilterSection(bool isDarkMode) {
+    final currentLocation = LatLng(
+      _adsController.latitude.value ?? DEFAULT_LOCATION.latitude,
+      _adsController.longitude.value ?? DEFAULT_LOCATION.longitude,
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionHeader(
+          title: 'الموقع الجغرافي'.tr,
+          icon: Icons.my_location_rounded,
+          subtitle: 'حدد موقعك والمسافة لعرض القريب منك.'.tr,
+        ),
+        Container(
+          height: 200.h,
+          decoration: BoxDecoration(
+            color: AppColors.surface(isDarkMode),
+            borderRadius: _radius,
+            border: Border.all(color: AppColors.border(isDarkMode), width: 0.8),
+          ),
+          child: ClipRRect(
+            borderRadius: _radius,
+            child: Stack(
+              children: [
+                FlutterMap(
+                  mapController: _mapController,
+                  options: MapOptions(
+                    initialCenter: currentLocation,
+                    initialZoom: 15,
+                    interactionOptions: const InteractionOptions(flags: InteractiveFlag.none),
+                  ),
+                  children: [
+                    TileLayer(
+                      urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      subdomains: const ['a', 'b', 'c'],
+                      userAgentPackageName: 'com.stay_in_me_website',
+                    ),
+                    MarkerLayer(
+                      markers: [
+                        Marker(
+                          point: currentLocation,
+                          child: Icon(Icons.location_pin, size: 46.w, color: AppColors.primary),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                if (_locationLoading)
+                  Container(
+                    color: Colors.black26,
+                    child: Center(
+                      child: CircularProgressIndicator(
+                        color: AppColors.primary,
+                        strokeWidth: 2,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        SizedBox(height: 12.h),
+        _buildRefreshLocationButton(
+          onPressed: () async {
+            await _getCurrentLocation(moveMap: true);
+          },
+        ),
+        SizedBox(height: 14.h),
+        Text(
+          'المسافة من موقعك الحالي:'.tr,
+          style: TextStyle(
+            fontFamily: AppTextStyles.appFontFamily,
+            fontSize: AppTextStyles.small,
+            fontWeight: FontWeight.w800,
+            color: AppColors.textSecondary(isDarkMode),
+          ),
+        ),
+        SizedBox(height: 8.h),
+        _buildDistanceDropdown(isDarkMode),
+        SizedBox(height: 12.h),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: _applyLocationFilter,
+            icon: Icon(Icons.my_location_rounded, size: 18.w),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              padding: EdgeInsets.symmetric(vertical: 12.h),
+              shape: RoundedRectangleBorder(borderRadius: _radius),
+            ),
+            label: Text(
+              'حصر الإعلانات بالقرب مني'.tr,
+              style: TextStyle(
+                fontSize: AppTextStyles.medium,
+                fontWeight: FontWeight.bold,
+                fontFamily: AppTextStyles.appFontFamily,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRefreshLocationButton({required VoidCallback onPressed}) {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        onPressed: onPressed,
+        icon: Icon(Icons.refresh_rounded, size: 18.w),
+        label: Text(
+          'تحديث موقعك الحالي'.tr,
+          style: TextStyle(
+            fontSize: AppTextStyles.small,
+            fontFamily: AppTextStyles.appFontFamily,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.buttonAndLinksColor,
+          foregroundColor: Colors.white,
+          padding: EdgeInsets.symmetric(vertical: 12.h),
+          shape: RoundedRectangleBorder(borderRadius: _radius),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDistanceDropdown(bool isDarkMode) {
+    final values = radiusOptions.map((o) {
+      final double val = o['value'] as double;
+      final String label = o['label'] as String;
+      return _DDValue<double>(value: val, label: label);
+    }).toList();
+
+    return _niceDropdown<double>(
+      label: 'اختر المسافة'.tr,
+      values: values,
+      value: _selectedDistance,
+      enabled: true,
+      prefixIcon: Icons.social_distance_rounded,
+      hint: 'اختر المسافة'.tr,
+      onChanged: (value) {
+        if (value == null) return;
+        setState(() => _selectedDistance = value);
+        _adsController.selectedRadius.value = value;
+      },
+    );
+  }
+
+  void _applyLocationFilter() {
+    if (_selectedDistance == null || _adsController.latitude.value == null || _adsController.longitude.value == null) {
+      Get.snackbar(
+        'تحذير'.tr,
+        'يرجى تحديد المسافة والتأكد من تفعيل الموقع'.tr,
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.orange,
+      );
+      return;
+    }
+
+    _didApply = true;
+    _applyFilters();
   }
 
   // ==================== تطبيق الفلاتر ====================
@@ -1587,15 +1796,15 @@ class _FilterScreenState extends State<FilterScreenDestktop> {
     final localDark = themeController.isDarkMode.value;
 
     return Container(
-      padding: EdgeInsets.fromLTRB(16.w, 8.h, 16.w, 12.h),
+      padding: EdgeInsets.fromLTRB(16.w, 10.h, 16.w, 12.h),
       decoration: BoxDecoration(
         color: AppColors.card(localDark),
         border: Border(top: BorderSide(color: AppColors.divider(localDark), width: 0.6)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 6,
-            offset: const Offset(0, -2),
+            color: Colors.black.withOpacity(localDark ? 0.10 : 0.06),
+            blurRadius: 14,
+            offset: const Offset(0, -6),
           ),
         ],
       ),
@@ -1604,49 +1813,53 @@ class _FilterScreenState extends State<FilterScreenDestktop> {
         child: Row(
           children: [
             Expanded(
-              child: OutlinedButton(
+              child: OutlinedButton.icon(
                 onPressed: _isApplyingFilters ? null : _resetFilters,
+                icon: Icon(Icons.restart_alt_rounded, size: 18.w),
                 style: OutlinedButton.styleFrom(
-                  padding: EdgeInsets.symmetric(vertical: 10.h),
-                  side: BorderSide(color: AppColors.border(localDark), width: 0.9),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.r)),
+                  padding: EdgeInsets.symmetric(vertical: 12.h),
+                  side: BorderSide(color: AppColors.border(localDark), width: 1.0),
+                  shape: RoundedRectangleBorder(borderRadius: _radius),
+                  foregroundColor: AppColors.textPrimary(localDark),
                 ),
-                child: Text(
+                label: Text(
                   'مسح الفلاتر'.tr,
                   style: TextStyle(
                     fontFamily: AppTextStyles.appFontFamily,
                     fontSize: AppTextStyles.medium,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
               ),
             ),
             SizedBox(width: 12.w),
             Expanded(
-              child: ElevatedButton(
+              child: ElevatedButton.icon(
                 onPressed: _isApplyingFilters ? null : _applyFilters,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  padding: EdgeInsets.symmetric(vertical: 10.h),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.r)),
-                ),
-                child: _isApplyingFilters
+                icon: _isApplyingFilters
                     ? SizedBox(
-                        width: 20.w,
-                        height: 20.h,
+                        width: 18.w,
+                        height: 18.w,
                         child: const CircularProgressIndicator(
                           strokeWidth: 2.0,
                           valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                         ),
                       )
-                    : Text(
-                        'تطبيق الفلترة'.tr,
-                        style: TextStyle(
-                          fontFamily: AppTextStyles.appFontFamily,
-                          fontSize: AppTextStyles.medium,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                    : Icon(Icons.check_rounded, size: 18.w),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  padding: EdgeInsets.symmetric(vertical: 12.h),
+                  shape: RoundedRectangleBorder(borderRadius: _radius),
+                ),
+                label: Text(
+                  'تطبيق الفلترة'.tr,
+                  style: TextStyle(
+                    fontFamily: AppTextStyles.appFontFamily,
+                    fontSize: AppTextStyles.medium,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
               ),
             ),
           ],
@@ -1654,193 +1867,15 @@ class _FilterScreenState extends State<FilterScreenDestktop> {
       ),
     );
   }
+}
 
-  // ==================== الموقع الجغرافي ====================
-  Widget _buildLocationFilterSection(bool isDarkMode) {
-    final currentLocation = LatLng(
-      _adsController.latitude.value ?? DEFAULT_LOCATION.latitude,
-      _adsController.longitude.value ?? DEFAULT_LOCATION.longitude,
-    );
-
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 16.w),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'الموقع الجغرافي'.tr,
-            style: TextStyle(
-              fontSize: AppTextStyles.medium,
-              fontWeight: FontWeight.bold,
-              color: AppColors.primary,
-              fontFamily: AppTextStyles.appFontFamily,
-            ),
-          ),
-          SizedBox(height: 10.h),
-          Container(
-            height: 200.h,
-            decoration: BoxDecoration(
-              color: AppColors.surface(isDarkMode),
-              borderRadius: BorderRadius.circular(12.r),
-              border: Border.all(color: AppColors.border(isDarkMode), width: 0.6),
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(12.r),
-              child: Stack(
-                children: [
-                  FlutterMap(
-                    mapController: _mapController,
-                    options: MapOptions(
-                      initialCenter: currentLocation,
-                      initialZoom: 15,
-                      interactionOptions: const InteractionOptions(flags: InteractiveFlag.none),
-                    ),
-                    children: [
-                      TileLayer(
-                        urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                        subdomains: const ['a', 'b', 'c'],
-                        userAgentPackageName: 'com.stay_in_me_website',
-                      ),
-                      MarkerLayer(
-                        markers: [
-                          Marker(
-                            point: currentLocation,
-                            child: Icon(Icons.location_pin, size: 46.w, color: AppColors.primary),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  if (_locationLoading)
-                    Container(
-                      color: Colors.black26,
-                      child: Center(
-                        child: CircularProgressIndicator(
-                          color: AppColors.primary,
-                          strokeWidth: 2,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-          SizedBox(height: 14.h),
-          _buildRefreshLocationButton(
-            onPressed: () async {
-              await _getCurrentLocation(moveMap: true);
-            },
-          ),
-          SizedBox(height: 12.h),
-          Text(
-            'المسافة من موقعك الحالي:'.tr,
-            style: TextStyle(
-              fontSize: AppTextStyles.medium,
-              fontFamily: AppTextStyles.appFontFamily,
-              color: AppColors.textSecondary(isDarkMode),
-            ),
-          ),
-          SizedBox(height: 8.h),
-          _buildDistanceDropdown(isDarkMode),
-          SizedBox(height: 12.h),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: _applyLocationFilter,
-              icon: Icon(Icons.my_location_rounded, size: 18.w),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                padding: EdgeInsets.symmetric(vertical: 12.h),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.r)),
-              ),
-              label: Text(
-                'حصر الإعلانات بالقرب مني'.tr,
-                style: TextStyle(
-                  fontSize: AppTextStyles.medium,
-                  fontWeight: FontWeight.bold,
-                  fontFamily: AppTextStyles.appFontFamily,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRefreshLocationButton({required VoidCallback onPressed}) {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton.icon(
-        onPressed: onPressed,
-        icon: Icon(Icons.refresh_rounded, size: 18.w),
-        label: Text(
-          'تحديث موقعك الحالي'.tr,
-          style: TextStyle(
-            fontSize: AppTextStyles.small,
-            fontFamily: AppTextStyles.appFontFamily,
-          ),
-        ),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.buttonAndLinksColor,
-          foregroundColor: Colors.white,
-          padding: EdgeInsets.symmetric(vertical: 10.h),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.r)),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDistanceDropdown(bool isDarkMode) {
-    return DropdownButtonFormField<double>(
-      value: _selectedDistance,
-      decoration: InputDecoration(
-        labelText: 'اختر المسافة'.tr,
-        labelStyle: TextStyle(fontSize: AppTextStyles.small, color: AppColors.textSecondary(isDarkMode)),
-        filled: true,
-        fillColor: AppColors.surface(isDarkMode),
-        contentPadding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10.r),
-          borderSide: BorderSide(color: AppColors.border(isDarkMode), width: 0.6),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10.r),
-          borderSide: BorderSide(color: AppColors.border(isDarkMode), width: 0.6),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10.r),
-          borderSide: BorderSide(color: AppColors.primary, width: 1.1),
-        ),
-      ),
-      items: radiusOptions.map((option) {
-        final double val = option['value'] as double;
-        final String label = option['label'] as String;
-        return DropdownMenuItem<double>(value: val, child: Text(label));
-      }).toList(),
-      onChanged: (value) {
-        if (value == null) return;
-        setState(() => _selectedDistance = value);
-        _adsController.selectedRadius.value = value;
-      },
-    );
-  }
-
-  void _applyLocationFilter() {
-    if (_selectedDistance == null || _adsController.latitude.value == null || _adsController.longitude.value == null) {
-      Get.snackbar(
-        'تحذير'.tr,
-        'يرجى تحديد المسافة والتأكد من تفعيل الموقع'.tr,
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.orange,
-      );
-      return;
-    }
-
-    _didApply = true;
-    _applyFilters();
-  }
+// ============================================================
+// ✅ Helper model for dropdown values
+// ============================================================
+class _DDValue<T> {
+  final T value;
+  final String label;
+  const _DDValue({required this.value, required this.label});
 }
 
 /// ============================================================
@@ -1903,9 +1938,7 @@ class _MultiOptionsDropdownState extends State<_MultiOptionsDropdown> {
     _openDown = availableBelow >= 220 || availableBelow >= availableAbove;
 
     final available = max(0.0, _openDown ? availableBelow : availableAbove);
-
-    final maxHeight = max(180.0, min(360.0, available));
-    _maxHeight = maxHeight;
+    _maxHeight = max(180.0, min(360.0, available));
 
     final current = Set<int>.from(widget.selectedIds);
     final searchCtrl = TextEditingController();
@@ -1944,12 +1977,12 @@ class _MultiOptionsDropdownState extends State<_MultiOptionsDropdown> {
                         decoration: BoxDecoration(
                           color: AppColors.card(widget.isDarkMode),
                           borderRadius: BorderRadius.circular(12.r),
-                          border: Border.all(color: AppColors.border(widget.isDarkMode), width: 0.8),
+                          border: Border.all(color: AppColors.border(widget.isDarkMode), width: 0.9),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.12),
-                              blurRadius: 16,
-                              offset: const Offset(0, 8),
+                              color: Colors.black.withOpacity(0.14),
+                              blurRadius: 18,
+                              offset: const Offset(0, 10),
                             ),
                           ],
                         ),
@@ -1971,7 +2004,7 @@ class _MultiOptionsDropdownState extends State<_MultiOptionsDropdown> {
                                         style: TextStyle(
                                           fontFamily: AppTextStyles.appFontFamily,
                                           fontSize: AppTextStyles.medium,
-                                          fontWeight: FontWeight.w700,
+                                          fontWeight: FontWeight.w900,
                                           color: AppColors.textPrimary(widget.isDarkMode),
                                         ),
                                         overflow: TextOverflow.ellipsis,
@@ -1996,10 +2029,11 @@ class _MultiOptionsDropdownState extends State<_MultiOptionsDropdown> {
                                     prefixIcon: Icon(Icons.search_rounded, size: 18.w),
                                     filled: true,
                                     fillColor: AppColors.surface(widget.isDarkMode),
-                                    contentPadding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
+                                    isDense: true,
+                                    contentPadding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 12.h),
                                     border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(10.r),
-                                      borderSide: BorderSide(color: AppColors.border(widget.isDarkMode), width: 0.6),
+                                      borderRadius: BorderRadius.circular(12.r),
+                                      borderSide: BorderSide(color: AppColors.border(widget.isDarkMode), width: 0.8),
                                     ),
                                   ),
                                 ),
@@ -2032,7 +2066,7 @@ class _MultiOptionsDropdownState extends State<_MultiOptionsDropdown> {
                                         textStyle: TextStyle(
                                           fontFamily: AppTextStyles.appFontFamily,
                                           fontSize: AppTextStyles.small,
-                                          fontWeight: FontWeight.w700,
+                                          fontWeight: FontWeight.w900,
                                         ),
                                       ),
                                     ),
@@ -2046,7 +2080,7 @@ class _MultiOptionsDropdownState extends State<_MultiOptionsDropdown> {
                                           color: Colors.redAccent,
                                           fontFamily: AppTextStyles.appFontFamily,
                                           fontSize: AppTextStyles.small,
-                                          fontWeight: FontWeight.w700,
+                                          fontWeight: FontWeight.w900,
                                         ),
                                       ),
                                     ),
@@ -2090,17 +2124,25 @@ class _MultiOptionsDropdownState extends State<_MultiOptionsDropdown> {
                                                   }
                                                 });
                                               },
-                                              title: Text(
-                                                o.value.toString(),
-                                                style: TextStyle(
-                                                  fontFamily: AppTextStyles.appFontFamily,
-                                                  fontSize: AppTextStyles.small,
-                                                  color: AppColors.textPrimary(widget.isDarkMode),
+                                              title: Tooltip(
+                                                message: o.value.toString(),
+                                                waitDuration: const Duration(milliseconds: 250),
+                                                child: Text(
+                                                  o.value.toString(),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                  style: TextStyle(
+                                                    fontFamily: AppTextStyles.appFontFamily,
+                                                    fontSize: AppTextStyles.small,
+                                                    fontWeight: FontWeight.w700,
+                                                    color: AppColors.textPrimary(widget.isDarkMode),
+                                                  ),
                                                 ),
                                               ),
                                               controlAffinity: ListTileControlAffinity.leading,
                                               activeColor: AppColors.primary,
                                               dense: true,
+                                              visualDensity: const VisualDensity(horizontal: -2, vertical: -2),
                                             );
                                           },
                                         ),
@@ -2115,12 +2157,15 @@ class _MultiOptionsDropdownState extends State<_MultiOptionsDropdown> {
                                       child: OutlinedButton(
                                         onPressed: _closeOverlay,
                                         style: OutlinedButton.styleFrom(
-                                          side: BorderSide(color: AppColors.border(widget.isDarkMode), width: 0.9),
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.r)),
+                                          side: BorderSide(color: AppColors.border(widget.isDarkMode), width: 1.0),
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
                                         ),
                                         child: Text(
                                           'إلغاء'.tr,
-                                          style: TextStyle(fontFamily: AppTextStyles.appFontFamily),
+                                          style: TextStyle(
+                                            fontFamily: AppTextStyles.appFontFamily,
+                                            fontWeight: FontWeight.w800,
+                                          ),
                                         ),
                                       ),
                                     ),
@@ -2135,13 +2180,13 @@ class _MultiOptionsDropdownState extends State<_MultiOptionsDropdown> {
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor: AppColors.primary,
                                           foregroundColor: Colors.white,
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.r)),
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
                                         ),
                                         child: Text(
                                           'تطبيق'.tr,
                                           style: TextStyle(
                                             fontFamily: AppTextStyles.appFontFamily,
-                                            fontWeight: FontWeight.w800,
+                                            fontWeight: FontWeight.w900,
                                           ),
                                         ),
                                       ),
@@ -2188,15 +2233,15 @@ class _MultiOptionsDropdownState extends State<_MultiOptionsDropdown> {
           link: _link,
           child: InkWell(
             key: _targetKey,
-            borderRadius: BorderRadius.circular(10.r),
+            borderRadius: BorderRadius.circular(12.r),
             onTap: _toggleOverlay,
             child: Container(
               width: double.infinity,
               padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 12.h),
               decoration: BoxDecoration(
                 color: AppColors.surface(widget.isDarkMode),
-                borderRadius: BorderRadius.circular(10.r),
-                border: Border.all(color: AppColors.border(widget.isDarkMode), width: 0.6),
+                borderRadius: BorderRadius.circular(12.r),
+                border: Border.all(color: AppColors.border(widget.isDarkMode), width: 0.9),
               ),
               child: Row(
                 children: [
@@ -2204,16 +2249,21 @@ class _MultiOptionsDropdownState extends State<_MultiOptionsDropdown> {
                       size: 18.w, color: AppColors.textSecondary(widget.isDarkMode)),
                   SizedBox(width: 10.w),
                   Expanded(
-                    child: Text(
-                      selectedText,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontFamily: AppTextStyles.appFontFamily,
-                        fontSize: AppTextStyles.small,
-                        color: selectedItems.isEmpty
-                            ? AppColors.textSecondary(widget.isDarkMode)
-                            : AppColors.textPrimary(widget.isDarkMode),
+                    child: Tooltip(
+                      message: selectedText,
+                      waitDuration: const Duration(milliseconds: 250),
+                      child: Text(
+                        selectedText,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontFamily: AppTextStyles.appFontFamily,
+                          fontSize: AppTextStyles.small,
+                          fontWeight: FontWeight.w700,
+                          color: selectedItems.isEmpty
+                              ? AppColors.textSecondary(widget.isDarkMode)
+                              : AppColors.textPrimary(widget.isDarkMode),
+                        ),
                       ),
                     ),
                   ),
@@ -2241,18 +2291,23 @@ class _MultiOptionsDropdownState extends State<_MultiOptionsDropdown> {
                 padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 6.h),
                 decoration: BoxDecoration(
                   color: AppColors.card(widget.isDarkMode),
-                  borderRadius: BorderRadius.circular(20.r),
-                  border: Border.all(color: AppColors.border(widget.isDarkMode), width: 0.6),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: AppColors.border(widget.isDarkMode), width: 0.8),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      item.value.toString(),
-                      style: TextStyle(
-                        fontFamily: AppTextStyles.appFontFamily,
-                        fontSize: AppTextStyles.small,
-                        color: AppColors.textPrimary(widget.isDarkMode),
+                    Tooltip(
+                      message: item.value.toString(),
+                      waitDuration: const Duration(milliseconds: 250),
+                      child: Text(
+                        item.value.toString(),
+                        style: TextStyle(
+                          fontFamily: AppTextStyles.appFontFamily,
+                          fontSize: AppTextStyles.small,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary(widget.isDarkMode),
+                        ),
                       ),
                     ),
                     SizedBox(width: 6.w),

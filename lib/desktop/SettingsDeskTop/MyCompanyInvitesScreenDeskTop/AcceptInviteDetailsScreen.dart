@@ -51,7 +51,7 @@ class _AcceptInviteDetailsScreenDeskTopState
   final _waCallCtrl = TextEditingController();
 
   // === أفاتار العضو (اختياري) ===
-  static const String _root = "https://stayinme.arabiagroup.net/lar_stayInMe/public/api";
+  static const String _root = "https://taapuu.com/api";
   static const String _uploadApi = "$_root/upload";
 
   File? _avatarFile;

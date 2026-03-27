@@ -6,7 +6,7 @@ import '../core/data/model/PopularHistory.dart';
 import '../core/localization/changelanguage.dart';
 
 class PopularHistoryController extends GetxController {
-  static const _baseUrl = 'https://stayinme.arabiagroup.net/lar_stayInMe/public/api';
+  static const _baseUrl = 'https://taapuu.com/api';
 RxBool isGetFirstTime = false.obs;
 
   

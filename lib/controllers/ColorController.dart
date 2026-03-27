@@ -6,7 +6,7 @@ import 'package:http/http.dart' as http;
 import '../core/data/model/AppColor.dart';
 
 class ColorController extends GetxController {
-  static const _baseUrl = 'https://stayinme.arabiagroup.net/lar_stayInMe/public/api';
+  static const _baseUrl = 'https://taapuu.com/api';
    
   // اللون الأساسي التفاعلي
   final Rx<Color> primaryColor = const Color(0xFF2D5E8C).obs;

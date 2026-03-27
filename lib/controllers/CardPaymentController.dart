@@ -7,7 +7,7 @@ import 'package:http/http.dart' as http;
 import '../core/data/model/CardPaymentSettingModel.dart';
 
 class CardPaymentController extends GetxController {
-  static const String _baseUrl = 'https://stayinme.arabiagroup.net/lar_stayInMe/public/api';
+  static const String _baseUrl = 'https://taapuu.com/api';
 
   // الحالة العامة
   final isLoading = false.obs;

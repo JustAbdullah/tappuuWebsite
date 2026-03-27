@@ -56,7 +56,7 @@ class FontService {
   static final FontService instance = FontService._private();
 
   // Point to your API base
-  static const _baseUrl = 'https://stayinme.arabiagroup.net/lar_stayInMe/public/api';
+  static const _baseUrl = 'https://taapuu.com/api';
 
   // prefs keys
   static const _kPrefsKeyFontMap = 'font_family_local_map';

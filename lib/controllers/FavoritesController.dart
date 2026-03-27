@@ -11,7 +11,7 @@ import 'LoadingController.dart';
 
 class FavoritesController extends GetxController {
   final LoadingController _loadingController = Get.find<LoadingController>();
-  static const _baseUrl = 'https://stayinme.arabiagroup.net/lar_stayInMe/public/api/favorites';
+  static const _baseUrl = 'https://taapuu.com/api/favorites';
   var viewMode = 'vertical_simple'.obs;
   void changeViewMode(String mode) => viewMode.value = mode;
   var favorites = <Ad>[].obs;

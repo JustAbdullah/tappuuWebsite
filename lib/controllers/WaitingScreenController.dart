@@ -10,7 +10,7 @@ import '../core/services/appservices.dart';
 
 class WaitingScreenController extends GetxController {
   final AppServices appServices = Get.find<AppServices>();
-  final String _baseUrl = 'https://stayinme.arabiagroup.net/lar_stayInMe/public/api';
+  final String _baseUrl = 'https://taapuu.com/api';
 
   // المخرجات (observables)
   final RxString imageUrl = ''.obs;

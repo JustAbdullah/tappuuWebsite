@@ -9,7 +9,7 @@ import '../core/localization/changelanguage.dart';
 enum SnackType { success, error, info }
 
 class TermsAndConditionsController extends GetxController {
-  static const _baseUrl = 'https://stayinme.arabiagroup.net/lar_stayInMe/public/api';
+  static const _baseUrl = 'https://taapuu.com/api';
 
   // الحالة العامة
   final isLoading = false.obs;

@@ -9,7 +9,7 @@ import 'areaController.dart';  // لتحليل الـ JSON إلى قائمة Ad
 
 class FavoriteSellerController extends GetxController {
   // عدّل هذا حسب عنوان الـ API عندك
-  final String _baseUrl = 'https://stayinme.arabiagroup.net/lar_stayInMe/public/api';
+  final String _baseUrl = 'https://taapuu.com/api';
 
   // لائحة المعلنين المفضلين
   var favoriteList       = <FavoriteSeller>[].obs;

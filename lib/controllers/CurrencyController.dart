@@ -6,7 +6,7 @@ import '../core/services/appservices.dart';
 
 class CurrencyController extends GetxController {
   final String _baseUrl =
-      "https://stayinme.arabiagroup.net/lar_stayInMe/public/api/v1";
+      "https://taapuu.com/api/v1";
 
   /// كل العملات من السيرفر
   var currencies = <Map<String, dynamic>>[].obs;

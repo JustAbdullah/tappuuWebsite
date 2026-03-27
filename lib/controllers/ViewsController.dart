@@ -18,7 +18,7 @@ var currentAttributes = <Map<String, dynamic>>[].obs;
 
 
   /// يجلب قائمة المشاهدات مع فلترة وزمن وصفحة
-  static const _baseUrl = 'https://stayinme.arabiagroup.net/lar_stayInMe/public/api/views';
+  static const _baseUrl = 'https://taapuu.com/api/views';
   var views = <Ad>[].obs;
   RxBool isLoading = false.obs;
 

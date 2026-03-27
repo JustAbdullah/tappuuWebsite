@@ -124,8 +124,8 @@ class ContactUsScreenDesktop extends StatelessWidget {
                       _buildContactCardDesktop(
                         icon: Icons.language,
                         title: 'الموقع الإلكتروني'.tr,
-                        value: 'www.stayinme.com',
-                        onTap: () => _launchURL('https://www.stayinme.com'),
+                        value: 'www.taapuu.com',
+                        onTap: () => _launchURL('https://taapuu.com/'),
                         isDarkMode: isDarkMode,
                       ),
                       _buildContactCardDesktop(

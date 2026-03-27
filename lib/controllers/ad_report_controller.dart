@@ -8,7 +8,7 @@ import 'package:http/http.dart' as http;
 import '../core/data/model/ad_report_model.dart';
 
 class AdReportController extends GetxController {
-  final String _baseUrl = 'https://stayinme.arabiagroup.net/lar_stayInMe/public/api';
+  final String _baseUrl = 'https://taapuu.com/api';
 
   RxList<AdReportModel> reports = <AdReportModel>[].obs;
   RxBool isLoadingReports = false.obs;

@@ -6,7 +6,7 @@ import '../core/data/model/TermsAndConditions.dart';
 import '../core/localization/changelanguage.dart';
 
 class TermsAndConditionsController extends GetxController {
-  static const _baseUrl = 'https://stayinme.arabiagroup.net/lar_stayInMe/public/api';
+  static const _baseUrl = 'https://taapuu.com/api';
   RxBool isGetFirstTime = false.obs;
   
   final Rxn<TermsAndConditions> terms = Rxn<TermsAndConditions>();

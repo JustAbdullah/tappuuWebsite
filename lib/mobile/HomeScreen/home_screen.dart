@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:tappuu_website/controllers/CurrencyController.dart';
 import 'package:tappuu_website/controllers/LoadingController.dart';
+import 'package:tappuu_website/controllers/AboutUsController.dart';
 import '../../controllers/AdsManageSearchController.dart';
 import '../../controllers/BrowsingHistoryController.dart';
 import '../../controllers/PopularHistoryController.dart';
@@ -23,6 +24,9 @@ import '../UserSettings/itemsUserSettings/UserInfoPage.dart';
 import '../urgent/MainCategoriesWithUrgentScreen.dart';
 import '../viewAdsScreen/AdItem.dart';
 import '../viewAdsScreen/AdsScreen.dart';
+import '../ServicesDrawer/servicesItems/AboutUsScreen.dart';
+import '../ServicesDrawer/servicesItems/TermsAndConditionsScreen.dart';
+import '../ServicesDrawer/servicesItems/ContactUsScreen.dart';
 import 'homeItems/LoginPopup.dart';
 import 'homeItems/MainCategories/mainCategoriesScreen.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -62,6 +66,7 @@ final RxBool isFavoritesExpanded = false.obs;
   final PopularHistoryController popularHistoryController = Get.put(PopularHistoryController());
     final BrowsingHistoryController _browsingHistoryController = Get.put(BrowsingHistoryController());
 final CurrencyController currencyController = Get.put(CurrencyController());
+final AboutUsController aboutUsController = Get.put(AboutUsController());
  @override
 void initState() {
   super.initState();
@@ -127,9 +132,11 @@ void initState() {
 
               pinned: true,
               floating: false,
-              expandedHeight: 0,
-              toolbarHeight:56.h,
-              backgroundColor: AppColors.appBar(isDarkMode),
+              expandedHeight: 70.h,
+              toolbarHeight:70.h,
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              surfaceTintColor: Colors.transparent,
               flexibleSpace:  Directionality(
           textDirection: TextDirection.ltr, // نجبر اتجاه اليسار - يمين هنا فقط
         child: _buildAppBar(isDarkMode)),
@@ -166,6 +173,8 @@ void initState() {
                 
                               
   PopularTagsSection(),
+  _buildFooterSection(isDarkMode),
+  SizedBox(height: 24.h),
             
               ]),
             ),
@@ -177,22 +186,22 @@ void initState() {
 
        floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
           floatingActionButton: FloatingActionButton(
-            onPressed: () {
-               if (loadingController.currentUser != null) {
-  Get.to(() => AddAdScreen(
-                  
-                  ));                  } else {
-                    Get.dialog(
-                      LoginPopup(),
-                      barrierDismissible: true,
-                    );
-                  }
-            
-            },
+            onPressed: _openAddAd,
             backgroundColor: AppColors.primary,
             child: Icon(Icons.add, color: Colors.white, size: 28.w),
           ),
     );
+  }
+
+  void _openAddAd() {
+    if (loadingController.currentUser != null) {
+      Get.to(() => AddAdScreen());
+    } else {
+      Get.dialog(
+        LoginPopup(),
+        barrierDismissible: true,
+      );
+    }
   }
 
   // ==================== ويدجت قسم الإعلانات المميزة (معدلة بشكل طولي) ====================
@@ -791,75 +800,90 @@ Widget _buildSearchField(bool isDarkMode) {
     );
   }
   Widget _buildAppBar(bool isDarkMode) {
-
     final WaitingScreenController waiting =
       Get.put(WaitingScreenController(), permanent: true);
-        final waitingImage = waiting.imageUrl.value;
-  return   Directionality(
-          textDirection: TextDirection.rtl, // نجبر اتجاه اليسار - يمين هنا فقط
-          child:  Container(
-      height: 56.h,
-      padding: EdgeInsets.symmetric(horizontal: 12.w,vertical: 5.h),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          // القائمة (Drawer) ثابتة على اليسار مهما كانت اللغة
-          Directionality(
-            textDirection: TextDirection.rtl, // نجبر اتجاه اليسار - يمين هنا فقط
-            child: InkWell(
-              onTap: () { print(waitingImage.toString());
+    final waitingImage = waiting.imageUrl.value;
+    final primary = AppColors.primary;
+    final endColor = Color.lerp(primary, Colors.black, isDarkMode ? 0.16 : 0.08)!;
+
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Container(
+        height: 70.h,
+        padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topRight,
+            end: Alignment.bottomLeft,
+            colors: [primary, endColor],
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(isDarkMode ? 0.28 : 0.14),
+              blurRadius: 14,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            _buildAppBarAction(
+              icon: Icons.menu,
+              size: 22.w,
+              isDarkMode: isDarkMode,
+              onTap: () {
+                print(waitingImage.toString());
                 _scaffoldKey.currentState?.openDrawer();
               },
-              child: Icon(
-               Icons.menu,
-                size: 32.w,
-                color: Colors.white,
+            ),
+            SizedBox(width: 10.w),
+            _buildLogoBadge(isDarkMode, size: 34),
+            SizedBox(width: 10.w),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  EditableTextWidget(
+                    keyName: 'mainTitle',
+                    textAlign: TextAlign.start,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  SizedBox(height: 2.h),
+                  Text(
+                    'سوق الإعلانات المبوبة'.tr,
+                    style: TextStyle(
+                      fontFamily: AppTextStyles.appFontFamily,
+                      fontSize: AppTextStyles.small,
+                      color: Colors.white.withOpacity(0.85),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ),  SizedBox(width: 15.w),
-      Padding(
-                  padding:  EdgeInsets.only(top: 0.h),
-                  child:EditableTextWidget(
-  keyName: 'mainTitle',
-  textAlign: TextAlign.center,
-  fontWeight: FontWeight.w500,
-),
-                ),
-          SizedBox(width: 0.w),
-    
-          // باقي العناصر يمكنهم الالتزام باتجاه النص الافتراضي (اللي ممكن يكون rtl أو ltr)
-          Expanded(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.center,
+            Row(
               children: [
-                  SizedBox(width: 0.w),
-              
-    
-                SizedBox(width: 00.w),
-    
-                Row(
-                  children: [
-                    InkWell(
-                      onTap: () {
-                        if (loadingController.currentUser != null) {
-                          Get.to(() => ConversationsListScreen());
-                        } else {
-                          Get.dialog(
-                            LoginPopup(),
-                            barrierDismissible: true,
-                          );
-                        }
-                      },
-                      child: Icon(
-                        Icons.email,
-                        size: 22.w,
-                        color: Colors.white,
-                      ),
-                    ),  SizedBox(width:10.w),
-    
-                InkWell(
+                _buildAppBarAction(
+                  icon: Icons.email,
+                  size: 20.w,
+                  isDarkMode: isDarkMode,
+                  onTap: () {
+                    if (loadingController.currentUser != null) {
+                      Get.to(() => ConversationsListScreen());
+                    } else {
+                      Get.dialog(
+                        LoginPopup(),
+                        barrierDismissible: true,
+                      );
+                    }
+                  },
+                ),
+                SizedBox(width: 8.w),
+                _buildAppBarAction(
+                  icon: Icons.person,
+                  size: 20.w,
+                  isDarkMode: isDarkMode,
                   onTap: () {
                     if (loadingController.currentUser != null) {
                       Get.to(() => UserInfoPage());
@@ -870,24 +894,306 @@ Widget _buildSearchField(bool isDarkMode) {
                       );
                     }
                   },
-                  child: Icon(
-                    Icons.person,
-                    size: 22.w,
-                    color: Colors.white,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAppBarAction({
+    required IconData icon,
+    required double size,
+    required bool isDarkMode,
+    required VoidCallback onTap,
+  }) {
+    final bg = Colors.white.withOpacity(isDarkMode ? 0.16 : 0.2);
+    return Material(
+      color: bg,
+      borderRadius: BorderRadius.circular(12.r),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12.r),
+        child: SizedBox(
+          width: 38.w,
+          height: 38.w,
+          child: Icon(
+            icon,
+            color: Colors.white,
+            size: size,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLogoBadge(bool isDarkMode, {required double size}) {
+    final logo = ImagesPath.logo;
+    final uri = Uri.tryParse(logo);
+    final isNetwork = uri != null && (uri.scheme == 'http' || uri.scheme == 'https');
+    return Container(
+      width: size.w,
+      height: size.w,
+      padding: EdgeInsets.all(6.w),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(isDarkMode ? 0.16 : 0.22),
+        borderRadius: BorderRadius.circular(12.r),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.25),
+          width: 0.6,
+        ),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(6.r),
+        child: isNetwork
+            ? Image.network(
+                logo,
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => Image.asset(
+                  ImagesPath.logo,
+                  fit: BoxFit.contain,
+                ),
+              )
+            : Image.asset(
+                logo,
+                fit: BoxFit.contain,
+              ),
+      ),
+    );
+  }
+
+  Widget _buildFooterSection(bool isDarkMode) {
+    return Obx(() {
+      final about = aboutUsController.aboutUs.value;
+      final description = (about?.description != null && about!.description!.trim().isNotEmpty)
+          ? about.description!.trim()
+          : 'منصة للإعلانات المبوبة في سوريا، مع تركيز خاص على المركبات والعقارات.'.tr;
+
+      return Container(
+        margin: EdgeInsets.only(top: 12.h),
+        padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 20.h),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              AppColors.surface(isDarkMode),
+              AppColors.background(isDarkMode),
+            ],
+          ),
+          border: Border(
+            top: BorderSide(
+              color: AppColors.border(isDarkMode).withOpacity(0.35),
+              width: 1,
+            ),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildLogoBadge(isDarkMode, size: 44),
+                SizedBox(width: 12.w),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      EditableTextWidget(
+                        keyName: 'mainTitle',
+                        textAlign: TextAlign.start,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      SizedBox(height: 4.h),
+                      Text(
+                        description,
+                        style: TextStyle(
+                          fontFamily: AppTextStyles.appFontFamily,
+                          fontSize: AppTextStyles.small,
+                          height: 1.5,
+                          color: AppColors.textSecondary(isDarkMode),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                  ],
-                ),
-    
-              
               ],
+            ),
+            SizedBox(height: 16.h),
+            Text(
+              'روابط سريعة'.tr,
+              style: TextStyle(
+                fontFamily: AppTextStyles.appFontFamily,
+                fontSize: AppTextStyles.medium,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary(isDarkMode),
+              ),
+            ),
+            SizedBox(height: 8.h),
+            Wrap(
+              spacing: 8.w,
+              runSpacing: 8.h,
+              children: [
+                _buildFooterLinkChip(
+                  label: 'من نحن'.tr,
+                  icon: Icons.info_outline,
+                  isDarkMode: isDarkMode,
+                  onTap: () => Get.to(() => AboutUsScreen()),
+                ),
+                _buildFooterLinkChip(
+                  label: 'الشروط والأحكام'.tr,
+                  icon: Icons.description_outlined,
+                  isDarkMode: isDarkMode,
+                  onTap: () => Get.to(() => TermsAndConditionsScreen()),
+                ),
+                _buildFooterLinkChip(
+                  label: 'اتصل بنا'.tr,
+                  icon: Icons.support_agent_outlined,
+                  isDarkMode: isDarkMode,
+                  onTap: () => Get.to(() => ContactUsScreen()),
+                ),
+                _buildFooterLinkChip(
+                  label: 'أضف إعلان'.tr,
+                  icon: Icons.add_circle_outline,
+                  isDarkMode: isDarkMode,
+                  onTap: _openAddAd,
+                ),
+              ],
+            ),
+            SizedBox(height: 16.h),
+            Text(
+              'تواصل معنا'.tr,
+              style: TextStyle(
+                fontFamily: AppTextStyles.appFontFamily,
+                fontSize: AppTextStyles.medium,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary(isDarkMode),
+              ),
+            ),
+            SizedBox(height: 8.h),
+            if (about?.contactNumber != null && about!.contactNumber!.trim().isNotEmpty)
+              _buildFooterInfoRow(
+                icon: Icons.phone,
+                text: about.contactNumber!.trim(),
+                isDarkMode: isDarkMode,
+              ),
+            if (about?.contactEmail != null && about!.contactEmail!.trim().isNotEmpty)
+              _buildFooterInfoRow(
+                icon: Icons.email,
+                text: about.contactEmail!.trim(),
+                isDarkMode: isDarkMode,
+              ),
+            _buildFooterInfoRow(
+              icon: Icons.access_time,
+              text: 'خدمة عملاء متاحة 24/7'.tr,
+              isDarkMode: isDarkMode,
+            ),
+            SizedBox(height: 12.h),
+            Divider(
+              color: AppColors.border(isDarkMode).withOpacity(0.4),
+              thickness: 1,
+            ),
+            SizedBox(height: 8.h),
+            Center(
+              child: Text(
+                'جميع الحقوق محفوظة'.tr,
+                style: TextStyle(
+                  fontFamily: AppTextStyles.appFontFamily,
+                  fontSize: AppTextStyles.small,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textSecondary(isDarkMode),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    });
+  }
+
+  Widget _buildFooterLinkChip({
+    required String label,
+    required IconData icon,
+    required bool isDarkMode,
+    required VoidCallback onTap,
+  }) {
+    final bg = AppColors.card(isDarkMode);
+    return Material(
+      color: bg,
+      borderRadius: BorderRadius.circular(999.r),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999.r),
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 16.w,
+                color: AppColors.primary,
+              ),
+              SizedBox(width: 6.w),
+              Text(
+                label,
+                style: TextStyle(
+                  fontFamily: AppTextStyles.appFontFamily,
+                  fontSize: AppTextStyles.small,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary(isDarkMode),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFooterInfoRow({
+    required IconData icon,
+    required String text,
+    required bool isDarkMode,
+  }) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: 8.h),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 26.w,
+            height: 26.w,
+            decoration: BoxDecoration(
+              color: AppColors.buttonAndLinksColor.withOpacity(
+                isDarkMode ? 0.22 : 0.14,
+              ),
+              borderRadius: BorderRadius.circular(8.r),
+            ),
+            child: Icon(
+              icon,
+              size: 14.w,
+              color: AppColors.primary,
+            ),
+          ),
+          SizedBox(width: 8.w),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                fontFamily: AppTextStyles.appFontFamily,
+                fontSize: AppTextStyles.small,
+                color: AppColors.textPrimary(isDarkMode),
+              ),
             ),
           ),
         ],
       ),
-    ),
-  );
-}
+    );
+  }
 
 
   

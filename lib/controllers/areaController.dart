@@ -23,7 +23,7 @@ class AreaController extends GetxController {
   final Map<String, List<Area>> _cache = {};
 
   // غيّر إلى الـ base URL عندك
-  final String baseUrl = 'https://stayinme.arabiagroup.net/lar_stayInMe/public/api';
+  final String baseUrl = 'https://taapuu.com/api';
 
   // (اختياري) توكن المصادقة إذا مطلوب
   String? authToken;

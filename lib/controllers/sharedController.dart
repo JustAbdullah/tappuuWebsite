@@ -16,7 +16,7 @@ import '../mobile/viewAdsScreen/AdsScreen.dart';
 // عدّل المسار إذا كان مختلفًا في مشروعك
 
 class SharedController extends GetxController {
-  final String _baseUrl = 'https://stayinme.arabiagroup.net/lar_stayInMe/public/api';
+  final String _baseUrl = 'https://taapuu.com/api';
   RxBool isNavigatingToAd = false.obs; // إضافة جديدة لمنع التداخل
 
   // بيانات الإعلان المفصّل (قابلة للملاحظة)

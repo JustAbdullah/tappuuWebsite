@@ -18,7 +18,7 @@ import '../core/data/model/EditableTextModel.dart';
 class EditableTextController extends GetxController {
   // عدّل الـ baseUrl بحسب بيئتك إذا احتجت
   static const String _baseUrl =
-      'https://stayinme.arabiagroup.net/lar_stayInMe/public/api';
+      'https://taapuu.com/api';
 
   // الحالة والبيانات
   RxList<EditableTextModel> items = <EditableTextModel>[].obs;

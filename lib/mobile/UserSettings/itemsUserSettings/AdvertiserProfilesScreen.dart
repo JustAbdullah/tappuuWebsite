@@ -29,7 +29,7 @@ class _AdvertiserProfilesScreenState extends State<AdvertiserProfilesScreen> {
   final LoadingController loadingC = Get.find<LoadingController>();
 
   // لرفع أفاتار العضو في شاشة التعديل
-  static const String _root = "https://stayinme.arabiagroup.net/lar_stayInMe/public/api";
+  static const String _root = "https://taapuu.com/api";
   static const String _uploadApi = "$_root/upload";
 
   @override
@@ -640,7 +640,7 @@ class _ProfileAndMemberCard extends StatelessWidget {
     }
 
     // لو السيرفر يرجّع مسار نسبي مثل "uploads/advertisers/logo.png"
-    return 'https://stayinme.arabiagroup.net/$trimmed';
+    return 'https://taapuu.com/api/$trimmed';
   }
 
   @override
